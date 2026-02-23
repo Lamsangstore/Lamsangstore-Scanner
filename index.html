@@ -200,14 +200,15 @@
 // ============================================================
 // ⚙️ CONFIG: เปลี่ยนแค่บรรทัดนี้บรรทัดเดียว!
 // ============================================================
-const GAS_URL = "https://script.google.com/macros/s/AKfycbyl-REPGAl3yUvDgCOVjtzl_vLdOpg9roOZ9ZZAhV7lkwz-e5bkoqC46RGFiXShgMQk6g/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxjEDvYlm6BuNnBKuUeUfkZOSVDuz8J0t9-JKb8YgI0pZlckv0o4j9jLhh20o5bO0REYQ/exec";
 // ============================================================
 
+// col index = เลข column - 1 (เริ่มจาก 0)
 const colMappings = {
-  'tiktok':  { tracking: 35, sku: 6 },
-  'shopee':  { tracking: 13, sku: 18 },
-  'lazada':  { tracking: 58, sku: 5 },
-  'page365': { tracking: 11, sku: 24 }
+  'tiktok':  { tracking: 35, sku: 6,  qty: 9,  headerRows: 1 }, // AJ=36, G=7, J=10
+  'shopee':  { tracking: 13, sku: 18, qty: 22, headerRows: 1 }, // N=14, S=19, W=23
+  'lazada':  { tracking: 58, sku: 5,  qty: -1, headerRows: 1 }, // BG=59, F=6, ไม่มี qty (1row=1ชิ้น)
+  'page365': { tracking: 11, sku: 24, qty: 28, headerRows: 1, isCsv: true } // L=12, Y=25, AC=29
 };
 
 // --- ตัวแปรหลัก ---
@@ -609,34 +610,77 @@ async function processFileUpload() {
   Swal.fire({ title: 'กำลังประมวลผล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
   const file = fileInput.files[0];
-  const reader = new FileReader();
-  reader.onload = async function(e) {
-    try {
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
-      const map = colMappings[marketplace];
-      let extractData = [];
-      for (let i = 1; i < rows.length; i++) {
-        let row = rows[i];
-        if (!row || !row[map.tracking] || !row[map.sku]) continue;
-        extractData.push({ marketplace, tracking: String(row[map.tracking]).trim().toUpperCase(), sku: String(row[map.sku]).trim().toUpperCase(), qty: 1 });
-      }
-      if (extractData.length === 0) { Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูล กรุณาตรวจสอบ Marketplace ให้ตรงกับไฟล์', 'warning'); return; }
+  const map = colMappings[marketplace];
 
-      const response = await callGAS("saveMarketplaceData", { data: extractData });
-      if (response && response.success) {
-        Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${response.count} รายการ`, 'success');
-        bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
-        document.getElementById('fileInput').value = "";
-      } else {
-        Swal.fire('ข้อผิดพลาด', 'บันทึกไม่สำเร็จ', 'error');
-      }
-    } catch (err) {
-      Swal.fire('ข้อผิดพลาด', 'อ่านไฟล์ไม่ได้: ' + err.message, 'error');
+  try {
+    let rows = [];
+
+    // Page365 เป็น CSV (Tab-separated, UTF-16)
+    if (map.isCsv) {
+      const text = await file.text();
+      const lines = text.split('\n').map(l => l.split('\t'));
+      rows = lines;
+    } else {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+      rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, raw: false });
     }
-  };
-  reader.readAsArrayBuffer(file);
+
+    let extractData = [];
+    const startRow = map.headerRows || 1;
+
+    if (marketplace === 'lazada') {
+      // Lazada: 1 row = 1 ชิ้น ไม่มี qty column — group by tracking
+      const trackingMap = {};
+      for (let i = startRow; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row) continue;
+        const tracking = String(row[map.tracking] || '').trim().toUpperCase();
+        const sku      = String(row[map.sku]      || '').trim().toUpperCase();
+        if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
+        const key = tracking + '|' + sku;
+        trackingMap[key] = (trackingMap[key] || 0) + 1;
+      }
+      for (const key in trackingMap) {
+        const [tracking, sku] = key.split('|');
+        extractData.push({ marketplace, tracking, sku, qty: trackingMap[key] });
+      }
+    } else {
+      for (let i = startRow; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row) continue;
+        const tracking = String(row[map.tracking] || '').trim().toUpperCase();
+        const sku      = String(row[map.sku]      || '').trim().toUpperCase();
+        const qty      = parseInt(row[map.qty]) || 1;
+        if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
+        if (!tracking.match(/^[A-Z0-9]{5,}$/) && !tracking.match(/^\d{10,}$/)) continue; // กรองแถวที่ไม่ใช่ tracking
+        extractData.push({ marketplace, tracking, sku, qty });
+      }
+    }
+
+    if (extractData.length === 0) {
+      Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูล\nกรุณาตรวจสอบว่าเลือก Marketplace ให้ตรงกับไฟล์', 'warning');
+      return;
+    }
+
+    // ส่งไป GAS พร้อมชื่อไฟล์เพื่อป้องกัน duplicate
+    const response = await callGAS("saveMarketplaceData", {
+      data: extractData,
+      fileName: file.name,  // ส่งชื่อไฟล์ไปตรวจ duplicate
+      marketplace
+    });
+
+    if (response && response.success) {
+      const dupMsg = response.duplicateSkipped > 0 ? `\n(ข้ามซ้ำ ${response.duplicateSkipped} รายการ)` : '';
+      Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${response.count} รายการ${dupMsg}`, 'success');
+      bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
+      document.getElementById('fileInput').value = "";
+    } else {
+      Swal.fire('ข้อผิดพลาด', 'บันทึกไม่สำเร็จ: ' + (response?.error || ''), 'error');
+    }
+  } catch (err) {
+    Swal.fire('ข้อผิดพลาด', 'อ่านไฟล์ไม่ได้: ' + err.message, 'error');
+  }
 }
 
 // --- Search ---
