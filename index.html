@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Permissions-Policy" content="camera=*">
+  <title>Scanner PRO 2.5</title>
+  <link rel="icon" type="image/png" href="https://i.postimg.cc/SN96rHc6/icons8-barcode-scanner-100.png">
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --primary-pink: #ff69b4;
+      --soft-pink: #ffd6e8;
+      --bg-color: #fdf6ff;
+      --accent-blue: #74b9ff;
+    }
+    body { background: var(--bg-color); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #2d3436; }
+    .tab-bar { display: flex; justify-content: space-around; background: white; padding: 8px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); margin-bottom: 25px; }
+    .tab-btn { border: none; background: transparent; padding: 12px 20px; border-radius: 15px; font-weight: 600; color: #b2bec3; transition: all 0.3s ease; }
+    .tab-btn.active { background: var(--primary-pink); color: white; box-shadow: 0 5px 15px rgba(255,105,180,0.3); }
+    .card { border-radius: 30px; border: none; background: white; box-shadow: 0 15px 35px rgba(0,0,0,0.05); }
+    #reader, #search-reader { width: 100%; max-width: 450px; margin: auto; border-radius: 25px; overflow: hidden; border: 8px solid white; box-shadow: 0 0 0 4px var(--soft-pink); }
+    .btn-custom { border-radius: 20px; padding: 15px; font-weight: 700; border: none; transition: all 0.2s; }
+    .btn-main { background: linear-gradient(135deg, #74b9ff, #0984e3); color: white; }
+    .btn-save { background: linear-gradient(135deg, #ff7675, #d63031); color: white; }
+    .btn-cancel { background: #636e72; color: white; }
+    .status-badge { display: inline-block; padding: 10px 20px; border-radius: 50px; font-size: 0.9rem; font-weight: bold; margin-top: 10px; }
+    #rec-ui { min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    #video-preview { display: none; }
+    .rec-indicator { display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; }
+    .rec-dot { width: 12px; height: 12px; background: red; border-radius: 50%; margin-right: 10px; animation: blink 1s infinite; }
+    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
+    .list-group-item { border: none; background: #f8f9fa; margin-bottom: 10px; border-radius: 18px !important; padding: 15px; }
+    .btn-edit-inline { padding: 2px 8px; font-size: 0.75rem; border-radius: 10px; margin-left: 8px; vertical-align: middle; border: 1px solid #ddd; background: #fdfdfd; color: #666; }
+    .btn-edit-inline:hover { background: #eee; }
+    .order-checklist { background: #fff; border-radius: 15px; padding: 15px; border: 2px dashed var(--accent-blue); margin-top: 15px; display: none; }
+    .checklist-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 0.95rem; }
+    .checklist-item.matched { background-color: #e8f8f5; color: #27ae60; font-weight: bold; border-left: 4px solid #2ecc71; }
+    .checklist-item.over { background-color: #fce4e4; color: #c0392b; font-weight: bold; border-left: 4px solid #e74c3c; }
+    .btn-upload-head { position: absolute; top: 0px; right: 0px; border-radius: 20px; font-weight: bold; background-color: white; }
+  </style>
+</head>
+<body>
+<canvas id="overlayCanvas" style="display:none;"></canvas>
+
+<div class="container mt-4 pb-5">
+  <div id="app-header" class="text-center mb-4 animate__animated animate__fadeIn" style="position: relative;">
+    <button class="btn btn-outline-primary btn-sm btn-upload-head shadow-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">📥 อัปโหลดออเดอร์</button>
+    <h2 class="fw-bold" style="color: var(--primary-pink)">🌸 Scanner PRO 2.5</h2>
+    <p class="text-muted small">ระบบแพ็กสินค้า (GitHub Pages Edition)</p>
+  </div>
+
+  <div id="app-tabs" class="tab-bar animate__animated animate__fadeInDown">
+    <button class="tab-btn active" onclick="openTab('scan', this)">📷 สแกน</button>
+    <button class="tab-btn" onclick="openTab('search', this)">🔍 ค้นหา</button>
+    <button class="tab-btn" onclick="openTab('dash', this)">📊 รายงาน</button>
+  </div>
+
+  <!-- TAB: SCAN -->
+  <div id="scan" class="animate__animated animate__fadeIn">
+    <div class="card p-4 text-center">
+      <div id="rec-ui" class="mb-3 p-2 border rounded-4 bg-light shadow-sm">
+        <div id="rec-status">
+          <span id="rec-label" class="text-muted small fw-bold">🔴 ระบบพร้อมทำงาน (เริ่มระบบเพื่อเริ่มสแกน)</span>
+        </div>
+        <video id="video-preview" autoplay playsinline muted></video>
+      </div>
+
+      <button id="startBtn" onclick="initScanner()" class="btn-custom btn-main mb-3 w-100 shadow">🚀 เริ่มระบบ / โหลดข้อมูลสินค้า</button>
+      <div id="reader" style="display:none"></div>
+
+      <div id="orderChecklistPanel" class="order-checklist text-start shadow-sm mb-3">
+        <h6 class="fw-bold text-primary mb-2">📦 รายการสินค้าที่ต้องแพ็ก:</h6>
+        <div id="checklistContent"></div>
+        <div id="orderStatusAlert" class="alert mt-2 mb-0 py-2" style="display:none; font-size: 0.85rem;"></div>
+      </div>
+
+      <div class="mt-4 p-3 bg-light rounded-4 border">
+        <div class="row align-items-center">
+          <div class="col-7 text-start border-end">
+            <h6 class="text-muted mb-1 small fw-bold">📦 พัสดุใบปัจจุบัน</h6>
+            <div class="d-flex align-items-center">
+              <h5 id="parcelId" class="text-primary mb-0 fw-bold">-</h5>
+              <button id="editParcelBtn" onclick="editParcelId()" class="btn btn-edit-inline" style="display:none">✏️ แก้ไข</button>
+            </div>
+          </div>
+          <div class="col-5">
+            <h6 class="text-muted mb-1 small fw-bold">🧾 จำนวน</h6>
+            <h4 id="count" class="mb-0 fw-bold">0</h4>
+          </div>
+        </div>
+      </div>
+
+      <div id="statusLabel" class="status-badge bg-light text-muted">รอเริ่มระบบ...</div>
+
+      <div class="mt-3 text-start">
+        <h6 class="fw-bold ms-2 mb-2">รายการสินค้าในกล่องนี้:</h6>
+        <ul id="itemList" class="list-group"></ul>
+      </div>
+
+      <div id="action-buttons" class="mt-4" style="display:none">
+        <div class="row g-2">
+          <div class="col-8">
+            <button id="saveBtn" onclick="finishWork(true)" class="btn-custom btn-save w-100 shadow">💾 จบงานและบันทึก</button>
+          </div>
+          <div class="col-4">
+            <button id="cancelBtn" onclick="cancelWork()" class="btn-custom btn-cancel w-100 shadow">✖ ยกเลิก</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: SEARCH -->
+  <div id="search" style="display:none" class="animate__animated animate__fadeIn">
+    <div class="card p-4">
+      <div class="mb-3">
+        <div id="search-reader" style="display:none; margin-bottom: 15px;"></div>
+        <div class="input-group">
+          <input id="searchInput" class="form-control rounded-start-4 p-3" placeholder="พิมพ์หรือสแกนรหัสพัสดุ..." onkeypress="handleEnter(event)">
+          <button class="btn btn-primary px-3" onclick="startSearchScan()" title="สแกนด้วยกล้อง">📷</button>
+          <button class="btn btn-success rounded-end-4 px-4" onclick="runSearch()">ค้นหา</button>
+        </div>
+        <div class="form-text text-muted ms-2 small">💡 ค้นหาได้ทั้งตัวพิมพ์เล็กและใหญ่</div>
+      </div>
+      <div id="loadingSearch" class="text-center my-3" style="display:none">
+        <div class="spinner-border text-primary"></div>
+        <p class="small text-muted mt-2">กำลังค้นหา...</p>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover small">
+          <thead id="tableHead" class="table-light"></thead>
+          <tbody id="resultBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: DASHBOARD -->
+  <div id="dash" style="display:none" class="animate__animated animate__fadeIn">
+    <div class="row g-3 text-center">
+      <div class="col-6">
+        <div class="card p-4 border-bottom border-primary border-5">
+          <h6 class="text-muted">📦 กล่องในรอบนี้</h6>
+          <h1 id="d-box" class="display-4 fw-bold text-primary">0</h1>
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="card p-4 border-bottom border-success border-5">
+          <h6 class="text-muted">🧾 สินค้าในรอบนี้</h6>
+          <h1 id="d-item" class="display-4 fw-bold text-success">0</h1>
+        </div>
+      </div>
+    </div>
+    <div class="mt-4 text-center">
+      <button class="btn btn-outline-secondary btn-sm" onclick="resetSession()">ล้างสถิติรอบนี้</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal อัปโหลดไฟล์ -->
+<div class="modal fade" id="uploadModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content" style="border-radius: 20px;">
+      <div class="modal-header" style="background: linear-gradient(135deg, var(--primary-pink), var(--accent-blue)); color: white; border-radius: 20px 20px 0 0;">
+        <h5 class="modal-title fw-bold">📥 อัปโหลดไฟล์รายการสั่งซื้อ</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-bold">เลือกช่องทาง (Marketplace)</label>
+          <select id="marketplaceSelect" class="form-select border-primary">
+            <option value="tiktok">Tiktok (Tracking=AJ, SKU=G)</option>
+            <option value="shopee">Shopee (Tracking=N, SKU=S)</option>
+            <option value="lazada">Lazada (Tracking=BG, SKU=F)</option>
+            <option value="page365">Page365 (Tracking=L, SKU=Y)</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold">เลือกไฟล์ (.xlsx, .csv)</label>
+          <input type="file" id="fileInput" class="form-control" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" style="border-radius: 10px;" data-bs-dismiss="modal">ยกเลิก</button>
+        <button type="button" class="btn btn-primary" style="border-radius: 10px; background-color: var(--primary-pink); border: none;" onclick="processFileUpload()">อัปโหลดข้อมูล</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ============================================================
+// ⚙️ CONFIG: เปลี่ยนแค่บรรทัดนี้บรรทัดเดียว!
+// ============================================================
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzN4gs2Z6exI5FIyHVkQaeWQwhvjToVGzfFUS-bIKQjJOhKms6RDFJHicYUCIeg7SBT9g/exec";
+// ============================================================
+
+const colMappings = {
+  'tiktok':  { tracking: 35, sku: 6 },
+  'shopee':  { tracking: 13, sku: 18 },
+  'lazada':  { tracking: 58, sku: 5 },
+  'page365': { tracking: 11, sku: 24 }
+};
+
+// --- ตัวแปรหลัก ---
+let productMap = {}, currentP = "", items = [], scanner, searchScanner, lastScanTime = 0;
+let sessionParcels = {}, scanBuffer = [], bufferTimeout = null, isFinishing = false, isEditingId = false;
+let expectedItemsArray = [], scannedItemsMap = {}, isStrictValidationMode = false;
+let mediaRecorder, recordedChunks = [], cameraStream = null, isRecording = false;
+
+// --- API Helper: แทนที่ google.script.run ทั้งหมด ---
+async function callGAS(action, payload = {}) {
+  const res = await fetch(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({ action, ...payload })
+  });
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { return text; }
+}
+
+// --- Speech ---
+function speak(t, priority = true) {
+  if (!window.speechSynthesis) return;
+  if (priority) speechSynthesis.cancel();
+  const m = new SpeechSynthesisUtterance(t);
+  m.lang = "th-TH"; m.rate = 1.3;
+  speechSynthesis.speak(m);
+}
+
+// --- กล้องและวิดีโอ ---
+async function startCameraRecording() {
+  if (isRecording) return;
+  const videoEl = document.getElementById('video-preview');
+  const canvas = document.getElementById('overlayCanvas');
+  const ctx = canvas.getContext('2d');
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+    videoEl.srcObject = cameraStream;
+    await videoEl.play();
+    canvas.width = videoEl.videoWidth || 640;
+    canvas.height = videoEl.videoHeight || 480;
+    recordedChunks = [];
+
+    function drawOverlay() {
+      if (!isRecording && !cameraStream) return;
+      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+      const overlayHeight = 160 + items.length * 26;
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "22px sans-serif";
+      const now = new Date().toLocaleString("th-TH");
+      let y = canvas.height - overlayHeight + 30;
+      ctx.fillText("📅 " + now, 20, y); y += 30;
+      ctx.fillText("📦 พัสดุ: " + (currentP || "-"), 20, y); y += 30;
+      ctx.fillText("🧾 จำนวนสินค้า: " + items.length + " ชิ้น", 20, y);
+      ctx.font = "20px sans-serif";
+      items.forEach(sku => { y += 26; ctx.fillText("- " + (productMap[sku] || sku), 40, y); });
+      requestAnimationFrame(drawOverlay);
+    }
+    drawOverlay();
+
+    const canvasStream = canvas.captureStream(30);
+    mediaRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 2500000 });
+    mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.start();
+    isRecording = true;
+    document.getElementById('rec-label').innerHTML = '<div class="rec-indicator"><span class="rec-dot"></span> กำลังบันทึกวิดีโอพร้อมข้อมูลกำกับ</div>';
+  } catch (err) {
+    console.error("Camera error:", err);
+    document.getElementById('rec-label').innerText = "⚠️ ไม่สามารถเปิดกล้องได้: " + err.message;
+  }
+}
+
+function stopCameraRecording() {
+  return new Promise((resolve) => {
+    if (!mediaRecorder || mediaRecorder.state === "inactive") {
+      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+      resolve([]); return;
+    }
+    mediaRecorder.addEventListener('stop', () => {
+      isRecording = false;
+      const snapshot = [...recordedChunks];
+      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+      document.getElementById('rec-label').innerText = "🔴 สิ้นสุดการบันทึกแล้ว";
+      resolve(snapshot);
+    }, { once: true });
+    mediaRecorder.stop();
+  });
+}
+
+async function convertChunksToBase64(chunks) {
+  if (!chunks || chunks.length === 0) return "";
+  const blob = new Blob(chunks, { type: 'video/webm' });
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (!reader.result || typeof reader.result !== 'string') { resolve(""); return; }
+      const idx = reader.result.indexOf(',');
+      resolve(idx > -1 ? reader.result.slice(idx + 1) : "");
+    };
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(blob);
+  });
+}
+
+// --- เริ่มระบบ ---
+async function initScanner() {
+  const btn = document.getElementById("startBtn");
+  btn.innerText = "⏳ โหลดข้อมูล...";
+  btn.disabled = true;
+  try {
+    const res = await callGAS("getProductData");
+    productMap = res || {};
+    document.getElementById("app-header").style.display = "none";
+    document.getElementById("app-tabs").style.display = "none";
+    btn.style.display = "none";
+    document.getElementById("action-buttons").style.display = "block";
+    speak("ระบบพร้อมแล้วค่ะ เริ่มสแกนพัสดุได้เลย");
+    startScan();
+  } catch (err) {
+    btn.innerText = "❌ โหลดไม่สำเร็จ กดเพื่อลองใหม่";
+    btn.disabled = false;
+    Swal.fire('เชื่อมต่อไม่สำเร็จ', 'กรุณาตรวจสอบ GAS_URL ใน index.html\n\n' + err.message, 'error');
+  }
+}
+
+function startScan() {
+  document.getElementById("reader").style.display = "block";
+  if (!scanner) {
+    scanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: { width: 300, height: 350 }, rememberLastUsedCamera: true });
+    scanner.render((text, result) => onScanBuffer(text, result));
+  }
+}
+
+function onScanBuffer(text, result) {
+  const now = Date.now();
+  if (isFinishing || now - lastScanTime < 2500) return;
+  let yPos = 9999;
+  if (result && result.result && result.result.location) yPos = result.result.location.topLeftCorner.y;
+  scanBuffer.push({ text, y: yPos });
+  if (!bufferTimeout) {
+    bufferTimeout = setTimeout(() => {
+      scanBuffer.sort((a, b) => a.y - b.y);
+      processFinalScan(scanBuffer[0].text);
+      scanBuffer = []; bufferTimeout = null;
+    }, 300);
+  }
+}
+
+async function processFinalScan(text) {
+  const upperText = text.trim().toUpperCase();
+  const isFlash = upperText.startsWith("TH") && (upperText.length === 15 || upperText.length === 14);
+  const isJT = /^\d{12}$/.test(upperText) || /^(81|82|83|86|JET)/.test(upperText);
+  const isProduct = upperText.startsWith("B");
+
+  if (isProduct) {
+    if (!currentP && !isEditingId) { speak("กรุณาสแกนรหัสพัสดุก่อนนะคะ"); return; }
+    if (isStrictValidationMode) {
+      let reqItem = expectedItemsArray.find(i => i.sku === upperText);
+      let currentScannedQty = scannedItemsMap[upperText] || 0;
+      if (!reqItem) speak("สินค้าผิดรายการค่ะ");
+      else if (currentScannedQty >= reqItem.qty) speak("สินค้าเกินจำนวนค่ะ");
+      scannedItemsMap[upperText] = currentScannedQty + 1;
+    }
+    lastScanTime = Date.now();
+    items.push(upperText);
+    document.getElementById("count").innerText = items.length;
+    renderList();
+    if (isStrictValidationMode) updateChecklistUI();
+    speak(productMap[upperText] || upperText);
+    setStatus("✔ เพิ่มสินค้า: " + upperText, "success");
+  } else if (isFlash || isJT) {
+    lastScanTime = Date.now();
+    const carrier = isFlash ? "แฟลช" : "เจ แอนด์ ที";
+    if (sessionParcels[upperText] && !isEditingId) {
+      speak("พัสดุใบนี้สแกนปิดงานไปแล้วค่ะ");
+      setStatus("❌ พัสดุ " + upperText + " ปิดงานไปแล้ว", "danger"); return;
+    }
+    if (upperText === currentP && !isEditingId) {
+      if (items.length === 0) { speak("กล่องยังไม่มีสินค้าค่ะ"); setStatus("⚠️ กล่องว่าง", "warning"); return; }
+      speak("สแกนปิดงานเรียบร้อยค่ะ กำลังบันทึกแบบเบื้องหลัง");
+      finishWork(false); return;
+    }
+    if (currentP && upperText !== currentP && !isEditingId) {
+      speak("กรุณาสแกนรหัสพัสดุเดิมเพื่อปิดงานก่อนค่ะ");
+      setStatus("❌ ต้องสแกนปิดงานใบเดิมก่อน", "danger"); return;
+    }
+    processNewParcel(upperText, carrier);
+  } else {
+    lastScanTime = Date.now();
+    speak("รูปแบบรหัสไม่ถูกต้องค่ะ");
+    setStatus("⚠️ รูปแบบรหัสไม่ถูกต้อง", "warning");
+  }
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById("statusLabel");
+  el.innerText = msg;
+  const map = { success: "bg-success text-white", danger: "bg-danger text-white", warning: "bg-warning text-dark", primary: "bg-primary text-white", info: "bg-info text-white" };
+  el.className = "status-badge " + (map[type] || "bg-light text-muted");
+}
+
+function editParcelId() {
+  speak("เตรียมสแกนรหัสพัสดุที่ถูกต้องนะคะ");
+  isEditingId = true; currentP = "";
+  document.getElementById("parcelId").innerText = "รอสแกนรหัสใหม่...";
+  setStatus("✏️ กำลังแก้ไขรหัสพัสดุ...", "info");
+  document.getElementById("editParcelBtn").style.display = "none";
+}
+
+async function processNewParcel(text, carrier) {
+  const wasEditing = isEditingId;
+  currentP = text;
+  if (!wasEditing) items = [];
+  isEditingId = false;
+  document.getElementById("parcelId").innerText = text;
+  document.getElementById("count").innerText = items.length;
+  renderList();
+  setStatus((wasEditing ? "✏️ แก้ไขรหัสพัสดุเป็น: " : `📦 พัสดุ ${carrier}: `) + text, "primary");
+  document.getElementById("editParcelBtn").style.display = "inline-block";
+  const lastFour = text.length >= 4 ? text.slice(-4) : text;
+  if (wasEditing) speak(`แก้ไขเป็นรหัส ${lastFour.split('').join(' ')} เรียบร้อยค่ะ`);
+  else { speak(`พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`); startCameraRecording(); }
+  checkExpectedItems(text);
+}
+
+async function cancelWork() {
+  if (!currentP && items.length === 0) { await closeAppCompletely(); return; }
+  if (confirm("ยืนยันการยกเลิกงานนี้? (ข้อมูลและวิดีโอจะไม่ถูกบันทึก)")) {
+    isFinishing = true;
+    speak("ยกเลิกงานและไม่บันทึกข้อมูลค่ะ");
+    await stopCameraRecording();
+    recordedChunks = [];
+    await resetAppForNext();
+    isFinishing = false;
+    setStatus("✖ ยกเลิกงานเรียบร้อย", "secondary");
+  }
+}
+
+async function finishWork(isManual = false) {
+  const pId = currentP;
+  if (!pId) { if (isManual) speak("กรุณาสแกนรหัสพัสดุก่อนนะคะ"); return; }
+  if (isStrictValidationMode && !validateCurrentOrder()) {
+    Swal.fire('ยังปิดงานไม่ได้!', 'สินค้าไม่ครบ หรือมีสินค้าผิด/เกินจากที่ระบบกำหนด', 'error');
+    speak("กรุณาตรวจสอบสินค้าใหม่ค่ะ"); return;
+  }
+  isFinishing = true;
+  const snapshotItems = [...items];
+  const snapshotParcelId = pId;
+  const videoChunks = await stopCameraRecording();
+  const count = snapshotItems.length;
+  const summaryMsg = count > 0 ? `บันทึกสินค้า ${count} ชิ้น เรียบร้อยค่ะ` : `บันทึกพัสดุเบื้องหลังเรียบร้อยค่ะ`;
+
+  if (isManual) {
+    await closeAppCompletely();
+    speak(summaryMsg, false);
+    setTimeout(() => { isFinishing = false; }, 1500);
+  } else {
+    await resetAppForNext();
+    speak(summaryMsg + " สแกนพัสดุใบถัดไปได้เลยค่ะ", false);
+    setStatus("⏳ กำลังเตรียมรับใบถัดไป...", "light");
+    setTimeout(() => {
+      isFinishing = false;
+      lastScanTime = Date.now();
+      setStatus("✔ พร้อมรับพัสดุใบถัดไป", "success");
+    }, 1500);
+  }
+
+  sessionParcels[snapshotParcelId] = count;
+  processBackgroundUpload(snapshotParcelId, snapshotItems, videoChunks);
+}
+
+async function processBackgroundUpload(pId, itemsArr, chunks) {
+  try {
+    const videoData = await convertChunksToBase64(chunks);
+    await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video" });
+    console.log(`[Background] บันทึก ${pId} สำเร็จ`);
+  } catch (err) {
+    console.error(`[Background Error] ${pId}:`, err);
+  }
+}
+
+async function resetAppForNext() {
+  currentP = ""; items = []; isEditingId = false;
+  expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
+  document.getElementById("orderChecklistPanel").style.display = "none";
+  document.getElementById("parcelId").innerText = "-";
+  document.getElementById("count").innerText = "0";
+  document.getElementById("itemList").innerHTML = "";
+  document.getElementById("editParcelBtn").style.display = "none";
+  setStatus("รอพัสดุใบใหม่...", "light");
+  document.getElementById("rec-label").innerText = "🔴 ระบบพร้อมทำงาน (สแกนพัสดุใบถัดไปได้เลย)";
+}
+
+async function closeAppCompletely() {
+  if (scanner) { await scanner.clear(); scanner = null; }
+  document.getElementById("app-header").style.display = "block";
+  document.getElementById("app-tabs").style.display = "flex";
+  currentP = ""; items = []; isEditingId = false;
+  expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
+  document.getElementById("orderChecklistPanel").style.display = "none";
+  document.getElementById("reader").style.display = "none";
+  document.getElementById("parcelId").innerText = "-";
+  document.getElementById("count").innerText = "0";
+  document.getElementById("itemList").innerHTML = "";
+  document.getElementById("editParcelBtn").style.display = "none";
+  setStatus("จบงานแล้ว รอเริ่มใหม่...", "light");
+  const startBtn = document.getElementById("startBtn");
+  startBtn.style.display = "block"; startBtn.disabled = false;
+  startBtn.innerText = "🚀 เริ่มระบบ / โหลดข้อมูลสินค้า";
+  document.getElementById("action-buttons").style.display = "none";
+}
+
+function renderList() {
+  let ul = document.getElementById("itemList");
+  ul.innerHTML = "";
+  [...items].reverse().forEach((c, i) => {
+    let li = document.createElement("li");
+    li.className = "list-group-item d-flex justify-content-between align-items-center animate__animated animate__slideInLeft";
+    li.innerHTML = `<span>🌸 ${productMap[c] || c}</span> <button class="btn btn-sm text-danger" onclick="removeItem(${items.length - 1 - i})">✕</button>`;
+    ul.appendChild(li);
+  });
+}
+
+function removeItem(idx) {
+  if (isStrictValidationMode) {
+    let sku = items[idx];
+    if (scannedItemsMap[sku] > 0) scannedItemsMap[sku]--;
+  }
+  items.splice(idx, 1);
+  document.getElementById("count").innerText = items.length;
+  renderList();
+  if (isStrictValidationMode) updateChecklistUI();
+  speak("ลบรายการแล้วค่ะ");
+}
+
+// --- Checklist ---
+async function checkExpectedItems(tracking) {
+  document.getElementById("orderChecklistPanel").style.display = "none";
+  try {
+    const expectedData = await callGAS("getExpectedOrderDetails", { trackingNo: tracking });
+    if (expectedData && expectedData.length > 0) {
+      isStrictValidationMode = true;
+      expectedItemsArray = expectedData;
+      scannedItemsMap = {};
+      items.forEach(sku => { scannedItemsMap[sku] = (scannedItemsMap[sku] || 0) + 1; });
+      document.getElementById("orderChecklistPanel").style.display = "block";
+      updateChecklistUI();
+      speak("กรุณาสแกนสินค้าให้ครบตามรายการในระบบค่ะ", false);
+    } else {
+      isStrictValidationMode = false; expectedItemsArray = []; scannedItemsMap = {};
+    }
+  } catch (e) {
+    isStrictValidationMode = false;
+  }
+}
+
+function updateChecklistUI() {
+  let html = ""; let isAllMatched = true; let hasOverScan = false;
+  expectedItemsArray.forEach(item => {
+    let scanQty = scannedItemsMap[item.sku] || 0;
+    let statusClass = "", icon = "⏳";
+    if (scanQty === item.qty) { statusClass = "matched"; icon = "✅"; }
+    else if (scanQty > item.qty) { statusClass = "over"; icon = "❌"; isAllMatched = false; hasOverScan = true; }
+    else { isAllMatched = false; }
+    html += `<div class="checklist-item ${statusClass}"><span>${icon} ${productMap[item.sku] || item.sku}</span><span class="badge bg-${scanQty === item.qty ? 'success' : (scanQty > item.qty ? 'danger' : 'secondary')} rounded-pill">${scanQty} / ${item.qty}</span></div>`;
+  });
+  for (let sSku in scannedItemsMap) {
+    if (!expectedItemsArray.find(ex => ex.sku === sSku) && scannedItemsMap[sSku] > 0) {
+      html += `<div class="checklist-item over"><span>❌ ${productMap[sSku] || sSku} (ส่วนเกิน!)</span><span class="badge bg-danger rounded-pill">${scannedItemsMap[sSku]}</span></div>`;
+      isAllMatched = false; hasOverScan = true;
+    }
+  }
+  document.getElementById('checklistContent').innerHTML = html;
+  const alertBox = document.getElementById('orderStatusAlert');
+  alertBox.style.display = 'block';
+  if (isAllMatched && !hasOverScan) { alertBox.className = "alert alert-success mt-2 mb-0 py-2"; alertBox.innerHTML = "<strong>สมบูรณ์!</strong> สินค้าครบถ้วน"; }
+  else if (hasOverScan) { alertBox.className = "alert alert-danger mt-2 mb-0 py-2"; alertBox.innerHTML = "<strong>ระวัง!</strong> สินค้าผิดรายการ หรือ เกินจำนวน"; }
+  else { alertBox.className = "alert alert-warning mt-2 mb-0 py-2"; alertBox.innerHTML = "<strong>กำลังแพ็ก...</strong> ยังขาดสินค้าอยู่"; }
+}
+
+function validateCurrentOrder() {
+  if (!isStrictValidationMode) return true;
+  for (let item of expectedItemsArray) { if ((scannedItemsMap[item.sku] || 0) !== item.qty) return false; }
+  for (let sSku in scannedItemsMap) {
+    let reqItem = expectedItemsArray.find(ex => ex.sku === sSku);
+    if (!reqItem || scannedItemsMap[sSku] > reqItem.qty) return false;
+  }
+  return true;
+}
+
+// --- Upload Marketplace ---
+async function processFileUpload() {
+  const fileInput = document.getElementById('fileInput');
+  const marketplace = document.getElementById('marketplaceSelect').value;
+  if (!fileInput.files.length) { Swal.fire('ข้อผิดพลาด', 'กรุณาเลือกไฟล์ก่อน', 'warning'); return; }
+
+  Swal.fire({ title: 'กำลังประมวลผล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+  const file = fileInput.files[0];
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+      const map = colMappings[marketplace];
+      let extractData = [];
+      for (let i = 1; i < rows.length; i++) {
+        let row = rows[i];
+        if (!row || !row[map.tracking] || !row[map.sku]) continue;
+        extractData.push({ marketplace, tracking: String(row[map.tracking]).trim().toUpperCase(), sku: String(row[map.sku]).trim().toUpperCase(), qty: 1 });
+      }
+      if (extractData.length === 0) { Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูล กรุณาตรวจสอบ Marketplace ให้ตรงกับไฟล์', 'warning'); return; }
+
+      const response = await callGAS("saveMarketplaceData", { data: extractData });
+      if (response && response.success) {
+        Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${response.count} รายการ`, 'success');
+        bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
+        document.getElementById('fileInput').value = "";
+      } else {
+        Swal.fire('ข้อผิดพลาด', 'บันทึกไม่สำเร็จ', 'error');
+      }
+    } catch (err) {
+      Swal.fire('ข้อผิดพลาด', 'อ่านไฟล์ไม่ได้: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// --- Search ---
+function openTab(tab, btn) {
+  document.querySelectorAll('#scan, #search, #dash').forEach(el => el.style.display = 'none');
+  document.getElementById(tab).style.display = 'block';
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (tab === 'dash') refreshDash();
+  if (tab !== 'search' && searchScanner) { searchScanner.clear(); document.getElementById("search-reader").style.display = "none"; }
+}
+
+function refreshDash() {
+  document.getElementById("d-box").innerText = Object.keys(sessionParcels).length;
+  document.getElementById("d-item").innerText = Object.values(sessionParcels).reduce((a, b) => a + b, 0);
+}
+
+function resetSession() {
+  if (confirm("ยืนยันการล้างสถิติ?")) { sessionParcels = {}; refreshDash(); }
+}
+
+function startSearchScan() {
+  const readerDiv = document.getElementById("search-reader");
+  readerDiv.style.display = "block";
+  if (searchScanner) searchScanner.clear();
+  searchScanner = new Html5QrcodeScanner("search-reader", { fps: 15, qrbox: { width: 250, height: 250 } });
+  searchScanner.render((text) => {
+    document.getElementById("searchInput").value = text;
+    speak("สแกนสำเร็จค่ะ");
+    searchScanner.clear().then(() => { readerDiv.style.display = "none"; runSearch(); });
+  });
+}
+
+function handleEnter(e) { if (e.key === "Enter") runSearch(); }
+
+async function runSearch() {
+  const q = document.getElementById("searchInput").value.trim();
+  if (!q) return;
+  document.getElementById("loadingSearch").style.display = "block";
+  document.getElementById("resultBody").innerHTML = "";
+  try {
+    const res = await callGAS("searchData", { query: q });
+    document.getElementById("loadingSearch").style.display = "none";
+    const tb = document.getElementById("resultBody"), th = document.getElementById("tableHead");
+    tb.innerHTML = ""; th.innerHTML = "";
+    if (!res || res.length === 0) {
+      tb.innerHTML = "<tr><td colspan='5' class='text-center py-4 text-muted'>❌ ไม่พบข้อมูล</td></tr>";
+      speak("ไม่พบข้อมูลค่ะ"); return;
+    }
+    const max = Math.max(...res.map(r => r.length));
+    let head = "<tr><th>วันที่</th><th>รหัสพัสดุ</th><th>วิดีโอ</th>";
+    for (let i = 3; i < max; i++) head += `<th>สินค้า ${i - 2}</th>`;
+    th.innerHTML = head + "</tr>";
+    res.forEach(row => {
+      let tr = "<tr>";
+      row.forEach(cell => { tr += `<td>${String(cell).includes("http") ? `<a href="${cell}" target="_blank" class="btn btn-sm btn-outline-primary">ดูคลิป</a>` : cell}</td>`; });
+      tb.innerHTML += tr + "</tr>";
+    });
+    const rawItems = res[0].slice(3).filter(i => i && !String(i).includes("http"));
+    if (rawItems.length > 0) speak(`จำนวนสินค้า ${rawItems.length} รายการค่ะ`);
+    else speak("พบข้อมูลแต่ไม่มีรายการสินค้าค่ะ");
+  } catch (err) {
+    document.getElementById("loadingSearch").style.display = "none";
+    Swal.fire('ค้นหาไม่สำเร็จ', err.message, 'error');
+  }
+}
+</script>
+</body>
+</html>
