@@ -1228,8 +1228,8 @@ async function runSearch() {
       speak("ไม่พบข้อมูลค่ะ"); return;
     }
     const max = Math.max(...res.map(r => r.length));
-    let head = "<tr><th>วันที่</th><th>รหัสพัสดุ</th><th>วิดีโอ</th>";
-    for (let i = 3; i < max; i++) head += `<th>สินค้า ${i - 2}</th>`;
+    let head = "<tr><th>วันที่</th><th>รหัสพัสดุ</th><th>วิดีโอ</th><th>หมายเหตุ</th><th>จำนวน</th>";
+    for (let i = 5; i < max; i++) head += `<th>สินค้า ${i - 4}</th>`;
     th.innerHTML = head + "</tr>";
     res.forEach(row => {
       let tr = "<tr>";
