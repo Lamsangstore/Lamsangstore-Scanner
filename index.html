@@ -1236,7 +1236,7 @@ async function runSearch() {
       row.forEach(cell => { tr += `<td>${String(cell).includes("http") ? `<a href="${cell}" target="_blank" class="btn btn-sm btn-outline-primary">ดูคลิป</a>` : cell}</td>`; });
       tb.innerHTML += tr + "</tr>";
     });
-    const rawItems = res[0].slice(3).filter(i => i && !String(i).includes("http"));
+    const rawItems = res[0].slice(5).filter(i => i && !String(i).includes("http"));
     if (rawItems.length > 0) speak(`จำนวนสินค้า ${rawItems.length} รายการค่ะ`);
     else speak("พบข้อมูลแต่ไม่มีรายการสินค้าค่ะ");
   } catch (err) {
