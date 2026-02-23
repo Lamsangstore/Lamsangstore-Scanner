@@ -44,6 +44,9 @@
     .checklist-item.matched { background-color: #e8f8f5; color: #27ae60; font-weight: bold; border-left: 4px solid #2ecc71; }
     .checklist-item.over { background-color: #fce4e4; color: #c0392b; font-weight: bold; border-left: 4px solid #e74c3c; }
     .btn-upload-head { position: absolute; top: 0px; right: 0px; border-radius: 20px; font-weight: bold; background-color: white; }
+    .remark-panel { background: #fff8e1; border-radius: 15px; padding: 12px; border: 2px solid #ffc107; margin-top: 10px; display: none; }
+    .remark-btn { border-radius: 20px; padding: 6px 14px; font-size: 0.82rem; font-weight: 600; margin: 3px; border: 2px solid #dee2e6; background: white; cursor: pointer; transition: all 0.2s; }
+    .remark-btn:hover, .remark-btn.selected { background: #ffc107; border-color: #ffc107; color: white; }
   </style>
 </head>
 <body>
@@ -80,6 +83,23 @@
         <h6 class="fw-bold text-primary mb-2">📦 รายการสินค้าที่ต้องแพ็ก:</h6>
         <div id="checklistContent"></div>
         <div id="orderStatusAlert" class="alert mt-2 mb-0 py-2" style="display:none; font-size: 0.85rem;"></div>
+
+        <!-- Remark Panel: แสดงเมื่อสินค้าไม่ครบ -->
+        <div id="remarkPanel" class="remark-panel">
+          <p class="mb-2 fw-bold small text-warning-emphasis">⚠️ สินค้าไม่ครบ — เลือกเหตุผล:</p>
+          <div id="remarkButtons">
+            <button class="remark-btn" onclick="selectRemark(this, 'สินค้าหมด')">📦 สินค้าหมด</button>
+            <button class="remark-btn" onclick="selectRemark(this, 'ลูกค้าแจ้งเปลี่ยนสี')">🎨 เปลี่ยนสี</button>
+            <button class="remark-btn" onclick="selectRemark(this, 'ลูกค้าแจ้งเปลี่ยนรุ่น')">🔄 เปลี่ยนรุ่น</button>
+            <button class="remark-btn" onclick="selectRemark(this, 'อื่นๆ')">✏️ อื่นๆ</button>
+          </div>
+          <div id="remarkOtherBox" style="display:none; margin-top:8px;">
+            <input id="remarkOtherInput" class="form-control form-control-sm" placeholder="ระบุเหตุผล..." style="border-radius:10px;">
+          </div>
+          <button onclick="confirmRemarkAndFinish()" class="btn btn-warning btn-sm mt-2 w-100 fw-bold" style="border-radius:15px;">
+            💾 บันทึกพร้อมหมายเหตุและจบงาน
+          </button>
+        </div>
       </div>
 
       <div class="mt-4 p-3 bg-light rounded-4 border">
@@ -201,7 +221,7 @@
 // ============================================================
 // ⚙️ CONFIG: เปลี่ยนแค่บรรทัดนี้บรรทัดเดียว!
 // ============================================================
-const GAS_URL = "https://script.google.com/macros/s/AKfycbwVVndHB42DJJRY0de_6Vu358o3kwFmxZsweCS3605CHDte68247qC4NxbSPGxo8y5WUg/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxhxmwhNE42vjMXE8FlaR-cZeDboDOmqfoiWuNiVRzA5dRcPfXp6BPTV_SlkfDqk56NJQ/exec";
 // ============================================================
 
 // col index = เลข column - 1 (เริ่มจาก 0)
@@ -216,6 +236,7 @@ const colMappings = {
 let productMap = {}, currentP = "", items = [], scanner, searchScanner, lastScanTime = 0;
 let sessionParcels = {}, scanBuffer = [], bufferTimeout = null, isFinishing = false, isEditingId = false;
 let expectedItemsArray = [], scannedItemsMap = {}, isStrictValidationMode = false;
+let currentRemark = ''; // หมายเหตุเมื่อสินค้าไม่ครบ
 let mediaRecorder, recordedChunks = [], cameraStream = null, isRecording = false;
 
 // --- API Helper: แทนที่ google.script.run ทั้งหมด ---
@@ -514,8 +535,23 @@ async function finishWork(isManual = false) {
   const pId = currentP;
   if (!pId) { if (isManual) speak("กรุณาสแกนรหัสพัสดุก่อนนะคะ"); return; }
   if (isStrictValidationMode && !validateCurrentOrder()) {
-    Swal.fire('ยังปิดงานไม่ได้!', 'สินค้าไม่ครบ หรือมีสินค้าผิด/เกินจากที่ระบบกำหนด', 'error');
-    speak("กรุณาตรวจสอบสินค้าใหม่ค่ะ"); return;
+    // มีสินค้าเกิน — ยังบล็อกอยู่
+    let hasOver = false;
+    for (let sSku in scannedItemsMap) {
+      const req = expectedItemsArray.find(ex => ex.sku === sSku);
+      if (!req || scannedItemsMap[sSku] > req.qty) { hasOver = true; break; }
+    }
+    if (hasOver) {
+      Swal.fire('ยังปิดงานไม่ได้!', 'มีสินค้าผิดรายการ หรือ เกินจำนวน กรุณาตรวจสอบก่อน', 'error');
+      speak("มีสินค้าเกินจำนวนค่ะ กรุณาตรวจสอบ"); return;
+    }
+    // สินค้าไม่ครบ — แสดง remark panel แทน
+    if (!currentRemark) {
+      document.getElementById('remarkPanel').style.display = 'block';
+      document.getElementById('orderChecklistPanel').scrollIntoView({ behavior: 'smooth' });
+      speak("สินค้าไม่ครบค่ะ กรุณาเลือกเหตุผลก่อนจบงาน", false);
+      return;
+    }
   }
   isFinishing = true;
   const snapshotItems = [...items];
@@ -540,13 +576,14 @@ async function finishWork(isManual = false) {
   }
 
   sessionParcels[snapshotParcelId] = count;
-  processBackgroundUpload(snapshotParcelId, snapshotItems, videoChunks);
+  const snapshotRemark = currentRemark;
+  processBackgroundUpload(snapshotParcelId, snapshotItems, videoChunks, snapshotRemark);
 }
 
-async function processBackgroundUpload(pId, itemsArr, chunks) {
+async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '') {
   try {
     const videoData = await convertChunksToBase64(chunks);
-    await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video" });
+    await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", remark: remarkNote || "" });
     console.log(`[Background] บันทึก ${pId} สำเร็จ`);
   } catch (err) {
     console.error(`[Background Error] ${pId}:`, err);
@@ -556,6 +593,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks) {
 async function resetAppForNext() {
   currentP = ""; items = []; isEditingId = false;
   expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
+  resetRemark();
   document.getElementById("orderChecklistPanel").style.display = "none";
   document.getElementById("parcelId").innerText = "-";
   document.getElementById("count").innerText = "0";
@@ -571,6 +609,7 @@ async function closeAppCompletely() {
   document.getElementById("app-tabs").style.display = "flex";
   currentP = ""; items = []; isEditingId = false;
   expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
+  resetRemark();
   document.getElementById("orderChecklistPanel").style.display = "none";
   document.getElementById("reader").style.display = "none";
   document.getElementById("parcelId").innerText = "-";
@@ -626,6 +665,40 @@ async function checkExpectedItems(tracking) {
   } catch (e) {
     isStrictValidationMode = false;
   }
+}
+
+// --- Remark Functions ---
+function selectRemark(btn, value) {
+  document.querySelectorAll('.remark-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  currentRemark = value;
+  const otherBox = document.getElementById('remarkOtherBox');
+  if (value === 'อื่นๆ') {
+    otherBox.style.display = 'block';
+    document.getElementById('remarkOtherInput').focus();
+  } else {
+    otherBox.style.display = 'none';
+  }
+}
+
+async function confirmRemarkAndFinish() {
+  if (!currentRemark) { speak("กรุณาเลือกเหตุผลก่อนค่ะ", false); return; }
+  if (currentRemark === 'อื่นๆ') {
+    const other = document.getElementById('remarkOtherInput').value.trim();
+    if (!other) { speak("กรุณาระบุเหตุผลด้วยค่ะ", false); return; }
+    currentRemark = other;
+  }
+  document.getElementById('remarkPanel').style.display = 'none';
+  speak(`บันทึกพร้อมหมายเหตุ ${currentRemark} ค่ะ`, false);
+  await finishWork(false); // เรียก finishWork อีกครั้ง ตอนนี้มี currentRemark แล้ว
+}
+
+function resetRemark() {
+  currentRemark = '';
+  document.querySelectorAll('.remark-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('remarkPanel').style.display = 'none';
+  document.getElementById('remarkOtherBox').style.display = 'none';
+  document.getElementById('remarkOtherInput').value = '';
 }
 
 function updateChecklistUI() {
