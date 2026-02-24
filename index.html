@@ -498,6 +498,16 @@
     .mp-label { display: flex; flex-direction: column; }
     .mp-name { font-weight: 600; font-size: 0.92rem; color: var(--text); }
     .mp-desc { font-size: 0.72rem; color: #b0889a; margin-top: 1px; }
+    .mp-guide-btn {
+      margin-left: auto; flex-shrink: 0;
+      font-size: 0.72rem; padding: 4px 10px;
+      border-radius: 12px; border: 1.5px solid var(--pink-light);
+      background: white; color: var(--pink);
+      text-decoration: none; font-family: 'Mitr', sans-serif;
+      transition: all 0.2s; white-space: nowrap;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .mp-guide-btn:hover { background: var(--pink); color: white; border-color: var(--pink); }
   </style>
 </head>
 <body>
@@ -748,6 +758,7 @@
                 <span class="mp-name">TikTok Shop</span>
                 <span class="mp-desc">Tracking=AJ · SKU=G · Qty=J</span>
               </div>
+              <a href="TTindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
             </label>
 
             <label class="mp-option" data-value="shopee" onclick="selectMarketplace('shopee', this)">
@@ -759,6 +770,7 @@
                 <span class="mp-name">Shopee</span>
                 <span class="mp-desc">Tracking=N · SKU=S · Qty=W</span>
               </div>
+              <a href="SPindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
             </label>
 
             <label class="mp-option" data-value="lazada" onclick="selectMarketplace('lazada', this)">
@@ -770,6 +782,7 @@
                 <span class="mp-name">Lazada</span>
                 <span class="mp-desc">Tracking=BG · SKU=F · (1 row = 1 ชิ้น)</span>
               </div>
+              <a href="LZindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
             </label>
 
             <label class="mp-option" data-value="page365" onclick="selectMarketplace('page365', this)">
@@ -781,6 +794,7 @@
                 <span class="mp-name">Page365</span>
                 <span class="mp-desc">Tracking=L · SKU=Y · Qty=AC</span>
               </div>
+              <a href="365index.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
             </label>
 
           </div>
