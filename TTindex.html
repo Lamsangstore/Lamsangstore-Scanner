@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>คู่มือการนำเข้าออเดอร์จาก TikTok Shop สู่ระบบ Lamsangstore Scanner</title>
+    <style>
+        :root {
+            --primary-color: #fe2c55; /* TikTok Pinkish-Red */
+            --secondary-color: #25f4ee; /* TikTok Cyan */
+            --bg-color: #f8fafc;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Sarabun', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        h1 {
+            color: var(--text-main);
+            font-size: 2.2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .step-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .step-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .step-number {
+            background: linear-gradient(135deg, var(--primary-color), #ff0050);
+            color: white;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 1.4rem;
+            color: var(--text-main);
+        }
+
+        .step-description {
+            margin-bottom: 1.5rem;
+            font-size: 1.05rem;
+        }
+
+        .highlight {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .image-container {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #f1f5f9;
+            text-align: center;
+        }
+
+        /* Styling for the actual images once users replace the placeholder */
+        .step-image {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* Specific styles for the placeholder images provided */
+        .placeholder-note {
+            background-color: #fffbeb;
+            border-left: 4px solid #f59e0b;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            color: #92400e;
+        }
+
+        .section-divider {
+            margin: 4rem 0 2rem 0;
+            text-align: center;
+            position: relative;
+        }
+
+        .section-divider::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background-color: var(--border-color);
+            z-index: 1;
+        }
+
+        .section-divider span {
+            background-color: var(--bg-color);
+            padding: 0 1rem;
+            position: relative;
+            z-index: 2;
+            font-weight: bold;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+        }
+
+        /* Import Thai Font */
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>คู่มือการจัดการออเดอร์</h1>
+            <p class="subtitle">วิธีดาวน์โหลดไฟล์ Excel จาก TikTok Shop และอัพโหลดเข้า Lamsangstore Scanner</p>
+        </header>
+
+        <div class="placeholder-note">
+            <strong>คำแนะนำสำหรับนักพัฒนา (GitHub):</strong><br>
+            ภาพประกอบในคู่มือนี้ถูกตั้งค่าเป็น Placeholder ไว้ กรุณาแคปภาพหน้าจอจากวิดีโอตาม <strong>"นาทีที่ระบุไว้"</strong> แล้วนำไฟล์ภาพมาบันทึกไว้ในโฟลเดอร์เดียวกัน (เช่น ตั้งชื่อว่า <code>step1.png</code>) และเปลี่ยนที่อยู่ไฟล์ในแท็ก <code>&lt;img src="..."&gt;</code> ในโค้ด HTML นี้
+        </div>
+
+        <div class="section-divider">
+            <span>ส่วนที่ 1: การดาวน์โหลดไฟล์จาก TikTok Seller Center</span>
+        </div>
+
+        <!-- Step 1 -->
+        <div class="step-card">
+            <div class="step-header">
+                <div class="step-number">1</div>
+                <h2>เข้าสู่เมนูจัดการคำสั่งซื้อ</h2>
+            </div>
+            <p class="step-description">
+                ล็อกอินเข้าสู่ TikTok Seller Center ที่เมนูด้านซ้ายมือ ให้คลิกที่ <strong>"คำสั่งซื้อ"</strong> จากนั้นเลือกเมนูย่อย <span class="highlight">"จัดการคำสั่งซื้อ"</span>
+            </p>
+            <div class="image-container">
+                <!-- Replace src with your actual image file, e.g., src="assets/step1.png" -->
+                <img class="step-image" src="https://placehold.co/800x450/e2e8f0/64748b?text=Capture+Video+at+0:05\n(Menu:+คำสั่งซื้อ+>+จัดการคำสั่งซื้อ)" alt="เมนูจัดการคำสั่งซื้อ">
+            </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step-card">
+            <div class="step-header">
+                <div class="step-number">2</div>
+                <h2>เตรียมการจัดส่ง (หากจำเป็น)</h2>
+            </div>
+            <p class="step-description">
+                ในแท็บ "รอดำเนินการ" ให้ติ๊กเลือกออเดอร์ที่คุณต้องการจัดส่ง จากนั้นเลื่อนลงมาด้านล่างและคลิกปุ่มสีเขียว <span class="highlight">"เตรียมการจัดส่งหลายรายการ"</span> (หลังจากนั้นให้ดำเนินการพิมพ์ใบปะหน้าตามปกติจนเสร็จสิ้น)
+            </p>
+            <div class="image-container">
+                <img class="step-image" src="https://placehold.co/800x450/e2e8f0/64748b?text=Capture+Video+at+0:21\n(Button:+เตรียมการจัดส่งหลายรายการ)" alt="เตรียมการจัดส่ง">
+            </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step-card">
+            <div class="step-header">
+                <div class="step-number">3</div>
+                <h2>ส่งออกคำสั่งซื้อ (Export Orders)</h2>
+            </div>
+            <p class="step-description">
+                เมื่อจัดการออเดอร์เรียบร้อยแล้ว ให้มองหาปุ่มเมนูทางด้านขวามือ คลิกที่ <span class="highlight">"ดาวน์โหลด"</span> เพื่อเปิดหน้าต่างสำหรับดาวน์โหลดข้อมูล
+            </p>
+            <div class="image-container">
+                <img class="step-image" src="https://placehold.co/800x450/e2e8f0/64748b?text=Capture+Video+at+1:03\n(Button:+ส่งออกคำสั่งซื้อ+ทางขวามือ)" alt="ส่งออกคำสั่งซื้อ">
+            </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="step-card">
+            <div class="step-header">
+                <div class="step-number">4</div>
+                <h2>ดาวน์โหลดไฟล์ Excel</h2>
+            </div>
+            <p class="step-description">
+                ในหน้าต่างส่งออกคำสั่งซื้อ ตรวจสอบให้แน่ใจว่าเลือกรูปแบบไฟล์เป็น <strong>Excel</strong> จากนั้นดูที่รายการด้านล่าง (รายการล่าสุด) แล้วคลิกที่ <span class="highlight">"ดาวน์โหลด"</span> ไฟล์จะถูกเซฟลงในเครื่องคอมพิวเตอร์ของคุณ
+            </p>
+            <div class="image-container">
+                <img class="step-image" src="https://placehold.co/800x450/e2e8f0/64748b?text=Capture+Video+at+1:24\n(Click:+ดาวน์โหลดไฟล์+Excel)" alt="ดาวน์โหลดไฟล์ Excel">
+            </div>
+        </div>
+
+        <div class="section-divider">
+            <span>ส่วนที่ 2: การอัพโหลดไฟล์เข้าสู่ Scanner</span>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="step-card">
+            <div class="step-header">
+                <div class="step-number">5</div>
+                <h2>เข้าสู่เว็บไซต์ Lamsangstore Scanner</h2>
+            </div>
+            <p class="step-description">
+                เปิดแท็บใหม่ในเบราว์เซอร์ แล้วไปที่เว็บไซต์ Lamsangstore Scanner เมื่อหน้าเว็บโหลดเสร็จสิ้น ให้คลิกที่ปุ่ม <span class="highlight">"เพิ่มออเดอร์ / โหลดข้อมูลสินค้า"</span> บริเวณกลางหน้าจอ
+            </p>
+            <div class="image-container">
+                <img class="step-image" src="https://placehold.co/800x450/e2e8f0/64748b?text=Capture+Video+at+1:37\n(Lamsangstore+Scanner+Main+Page)" alt="หน้าแรก Scanner">
+            </div>
+        </div>
+
+        <!-- Step 6 -->
+        <div class="step-card">
+            <div class="step-header">
+                <div class="step-number">6</div>
+                <h2>เลือกระบบและอัพโหลดไฟล์</h2>
+            </div>
+            <p class="step-description">
+                จะมีหน้าต่างป๊อปอัปแสดงขึ้นมา ในส่วนของ "เลือกช่องทาง (Marketplace)" ให้คลิกเลือกที่ <span class="highlight">"TikTok Shop"</span> จากนั้นคลิกที่พื้นที่ <strong>"เลือกไฟล์ Excel, csv"</strong> เพื่อเลือกไฟล์ออเดอร์ (.xlsx) ที่เราเพิ่งดาวน์โหลดมา เมื่อชื่อไฟล์ปรากฏขึ้นแล้ว ให้กดปุ่ม <span class="highlight">"อัพโหลดข้อมูล"</span> เพื่อให้ระบบประมวลผล
+            </p>
+            <div class="image-container">
+                <img class="step-image" src="https://placehold.co/800x450/e2e8f0/64748b?text=Capture+Video+at+1:40+-+1:51\n(Select+TikTok+Shop+and+Upload+File)" alt="เลือกระบบและอัพโหลดไฟล์">
+            </div>
+        </div>
+
+        <!-- Note about Error -->
+        <div class="step-card" style="border-color: #fca5a5; background-color: #fef2f2;">
+            <div class="step-header">
+                <div class="step-number" style="background: #ef4444;">!</div>
+                <h2 style="color: #b91c1c;">หมายเหตุ: กรณีพบข้อผิดพลาด</h2>
+            </div>
+            <p class="step-description" style="color: #7f1d1d;">
+                หากระบบขึ้นข้อความ "ข้อผิดพลาด บันทึกไม่ได้จ้า: TypeError..." (ดังที่ปรากฏในวิดีโอ) อาจเกิดจากรูปแบบคอลัมน์ในไฟล์ Excel ของ TikTok มีการอัปเดตหรือเปลี่ยนแปลง ทำให้ระบบสแกนเนอร์อ่านข้อมูลไม่ตรง กรุณาติดต่อผู้พัฒนา Lamsangstore เพื่ออัปเดตระบบให้รองรับไฟล์รูปแบบใหม่
+            </p>
+        </div>
+
+    </div>
+
+</body>
+</html>
