@@ -249,15 +249,16 @@
     /* === UPLOAD BUTTON === */
     .btn-upload-head {
       position: absolute; top: 0; right: 0;
-      border-radius: 20px; font-weight: 500;
-      font-size: 0.8rem;
+      border-radius: 22px; font-weight: 600;
+      font-size: 0.88rem;
+      padding: 8px 16px;
       background: white;
       border: 1.5px solid var(--pink-light) !important;
       color: var(--pink) !important;
-      box-shadow: 0 2px 10px rgba(255,143,171,0.2);
+      box-shadow: 0 3px 12px rgba(255,143,171,0.25);
       transition: all 0.2s;
     }
-    .btn-upload-head:hover { background: var(--pink); color: white !important; }
+    .btn-upload-head:hover { background: var(--pink); color: white !important; transform: scale(1.03); }
 
     /* === CHECKLIST === */
     .order-checklist {
@@ -519,7 +520,7 @@
   <div class="paw-bg" id="pawBg"></div>
 
   <div id="app-header" class="text-center mb-3 fade-in-up" style="position: relative;">
-    <button class="btn btn-sm btn-upload-head shadow-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">📥 ออเดอร์</button>
+    <button class="btn btn-upload-head" data-bs-toggle="modal" data-bs-target="#uploadModal">📥 อัปโหลดออเดอร์</button>
 
     <!-- Cat Mascot SVG -->
     <div style="margin-bottom: 4px;" onclick="catTap(this)">
