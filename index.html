@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
   <link href="https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
   <style>
@@ -1466,8 +1467,9 @@ async function processFileUpload() {
     // Page365 เป็น CSV (Tab-separated, UTF-16)
     if (map.isCsv) {
       const text = await file.text();
-      const lines = text.split('\n').map(l => l.split('\t'));
-      rows = lines;
+      // ใช้ PapaParse เพื่อ parse CSV อย่างถูกต้อง (รองรับ field ที่มี tab/newline ข้างใน)
+      const parsed = Papa.parse(text, { delimiter: '\t', skipEmptyLines: true });
+      rows = parsed.data;
     } else {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
@@ -1501,7 +1503,8 @@ async function processFileUpload() {
         const sku      = String(row[map.sku]      || '').trim().toUpperCase();
         const qty      = parseInt(row[map.qty]) || 1;
         if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
-        if (!tracking.match(/^[A-Z0-9]{5,}$/) && !tracking.match(/^\d{10,}$/)) continue; // กรองแถวที่ไม่ใช่ tracking
+        // กรองแถวที่ tracking สั้นเกินหรือมีช่องว่าง (header row)
+        if (tracking.length < 5 || tracking.includes(' ')) continue;
         extractData.push({ marketplace, tracking, sku, qty });
       }
     }
