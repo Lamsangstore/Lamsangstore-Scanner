@@ -126,6 +126,8 @@
     }
     .tab-btn.active .tab-icon { transform: scale(1.1); }
     .tab-btn:hover:not(.active) { background: var(--pink-pale); color: var(--text2); }
+    .tab-btn-upload { color: var(--pink) !important; }
+    .tab-btn-upload:hover { background: var(--pink-pale) !important; }
 
     /* ===== MAIN CONTENT ===== */
     .page-content { padding: 14px 14px 0; max-width: 500px; margin: 0 auto; }
@@ -489,7 +491,6 @@
       <span class="topbar-sub">ระบบแพ็กและตรวจสอบพัสดุ</span>
     </div>
   </div>
-  <button class="btn btn-upload-head" data-bs-toggle="modal" data-bs-target="#uploadModal">📥 ออเดอร์</button>
 </div>
 
 <!-- BOTTOM NAV -->
@@ -503,6 +504,9 @@
   <button class="tab-btn" onclick="openTab('dash', this)">
     <span class="tab-icon">🎀</span>รายงาน
   </button>
+  <button class="tab-btn tab-btn-upload" data-bs-toggle="modal" data-bs-target="#uploadModal">
+    <span class="tab-icon">📥</span>อัพโหลด
+  </button>
 </div>
 
 <div class="page-content">
@@ -510,15 +514,12 @@
   <!-- TAB: SCAN -->
   <div id="scan" class="fade-in-up">
     <div class="card p-3 text-center">
-      <div id="rec-ui" class="mb-3 p-2 border rounded-4 bg-light shadow-sm">
-        <div id="rec-status">
-          <span id="rec-label" style="color:#c49aaa; font-size:0.95rem; font-weight:500; font-family:'Mitr',sans-serif;">กดเริ่มระบบเพื่อสแกนพัสดุ</span>
-        </div>
+      <div id="rec-ui" style="display:none;">
+        <div id="rec-status"><span id="rec-label"></span></div>
         <video id="video-preview" autoplay playsinline muted></video>
       </div>
 
       <button id="startBtn" onclick="initScanner()" class="btn-custom btn-main mb-3 w-100 shadow">เริ่มระบบสแกน</button>
-      <button id="refreshCacheBtn" onclick="refreshProductCache()" class="btn btn-outline-secondary btn-sm mb-2" style="display:none; border-radius:15px;">รีเฟรชข้อมูลสินค้า</button>
       <div id="reader" style="display:none"></div>
 
       <div id="orderChecklistPanel" class="order-checklist text-start shadow-sm mb-3">
@@ -566,6 +567,8 @@
         <div class="section-title">รายการสินค้าในกล่อง</div>
         <ul id="itemList" class="list-group"></ul>
       </div>
+
+      <button id="refreshCacheBtn" onclick="refreshProductCache()" class="btn btn-sm mb-2 w-100" style="display:none; border-radius:18px; border:1.5px solid var(--pink-light); color:var(--pink); background:white; font-family:'Mitr',sans-serif; font-size:0.88rem; padding:8px;">🔄 รีเฟรชข้อมูลสินค้า</button>
 
       <div id="action-buttons" class="mt-4" style="display:none">
         <div class="row g-2">
