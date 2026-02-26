@@ -757,7 +757,7 @@
               </div>
               <div class="mp-label">
                 <span class="mp-name">TikTok Shop</span>
-                <span class="mp-desc">Tracking=AJ · SKU=G · Qty=J</span>
+                <span class="mp-desc">Tracking ID · Seller SKU · Quantity (.csv)</span>
               </div>
               <a href="TTindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
             </label>
@@ -1539,11 +1539,13 @@ async function processFileUpload() {
   try {
     let rows = [];
 
-    // Page365 เป็น CSV (Tab-separated, UTF-16)
+    // CSV (Page365 = tab, TikTok = comma)
     if (map.isCsv) {
       const text = await file.text();
-      // ใช้ PapaParse เพื่อ parse CSV อย่างถูกต้อง (รองรับ field ที่มี tab/newline ข้างใน)
-      const parsed = Papa.parse(text, { delimiter: '\t', skipEmptyLines: true });
+      // ลบ BOM ถ้ามี
+      const cleanText = text.replace(/^\uFEFF/, '');
+      const delimiter = map.csvDelimiter || '\t';
+      const parsed = Papa.parse(cleanText, { delimiter, skipEmptyLines: true });
       rows = parsed.data;
     } else {
       const buffer = await file.arrayBuffer();
