@@ -153,9 +153,62 @@
     #reader, #search-reader {
       width: 100%; max-width: 440px; margin: auto;
       border-radius: 14px; overflow: hidden;
-      border: 3px solid var(--surface);
+      border: 3px solid white;
       box-shadow: 0 0 0 2px var(--pink-light), 0 4px 16px rgba(0,0,0,0.08);
     }
+
+    /* === SCANNER DRAWER === */
+    #scanner-drawer {
+      position: fixed;
+      bottom: calc(var(--nav-h) + 18px);
+      left: 12px; right: 12px;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(20px);
+      border-radius: 24px 24px 20px 20px;
+      border: 1.5px solid var(--pink-light);
+      box-shadow: 0 -4px 32px rgba(255,143,171,0.2);
+      z-index: 90;
+      transform: translateY(110%);
+      transition: transform 0.35s cubic-bezier(0.34,1.2,0.64,1);
+      padding: 0 14px 14px;
+      max-height: 70vh;
+      overflow: hidden;
+    }
+    #scanner-drawer.open {
+      transform: translateY(0);
+    }
+    .drawer-handle {
+      display: flex; justify-content: center; align-items: center;
+      padding: 10px 0 6px;
+      cursor: pointer;
+    }
+    .drawer-handle-bar {
+      width: 40px; height: 4px;
+      background: var(--pink-light);
+      border-radius: 4px;
+    }
+    .drawer-toggle-btn {
+      width: 100%;
+      background: linear-gradient(135deg, var(--pink-pale), #fff0ff);
+      border: 1.5px solid var(--pink-light);
+      border-radius: 16px;
+      padding: 12px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      font-family: 'Mitr', sans-serif;
+      font-size: 0.95rem; font-weight: 500;
+      color: var(--pink); cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 10px rgba(255,143,171,0.15);
+    }
+    .drawer-toggle-btn:active { transform: scale(0.98); }
+    .drawer-toggle-btn .cam-icon { font-size: 1.3rem; }
+    /* overlay คลิกปิด drawer */
+    #drawer-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 89;
+      background: rgba(0,0,0,0.15);
+    }
+    #drawer-overlay.show { display: block; }
 
     /* ===== BUTTONS ===== */
     .btn-custom {
@@ -520,7 +573,14 @@
       </div>
 
       <button id="startBtn" onclick="initScanner()" class="btn-custom btn-main mb-3 w-100 shadow">เริ่มระบบสแกน</button>
-      <div id="reader" style="display:none"></div>
+
+      <!-- ปุ่มเปิดกล้อง (โชว์หลัง init สำเร็จ) -->
+      <button id="camToggleBtn" onclick="toggleScannerDrawer()" class="drawer-toggle-btn mb-3" style="display:none;">
+        <span class="cam-icon">📷</span>
+        <span id="camToggleLabel">เปิดกล้องสแกน</span>
+        <span id="camToggleArrow" style="margin-left:auto; font-size:0.8rem;">▲</span>
+      </button>
+
 
       <div id="orderChecklistPanel" class="order-checklist text-start shadow-sm mb-3">
         <h6 class="fw-bold mb-2" style="color:var(--text)">รายการที่ต้องแพ็ก</h6>
@@ -978,6 +1038,7 @@ async function initScanner() {
     btn.style.display = "none";
     document.getElementById("action-buttons").style.display = "block";
     document.getElementById("refreshCacheBtn").style.display = "inline-block";
+    document.getElementById("camToggleBtn").style.display = "flex";
     speak("ระบบพร้อมแล้วค่ะ เริ่มสแกนพัสดุได้เลย");
     startScan();
 
@@ -1009,6 +1070,7 @@ async function initScanner() {
     btn.style.display = "none";
     document.getElementById("action-buttons").style.display = "block";
     document.getElementById("refreshCacheBtn").style.display = "inline-block";
+    document.getElementById("camToggleBtn").style.display = "flex";
     speak("ระบบพร้อมแล้วค่ะ เริ่มสแกนพัสดุได้เลย");
     startScan();
   } catch (err) {
@@ -1043,11 +1105,31 @@ async function refreshProductCache() {
 }
 
 function startScan() {
-  document.getElementById("reader").style.display = "block";
   if (!scanner) {
     scanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: { width: 300, height: 350 }, rememberLastUsedCamera: true });
     scanner.render((text, result) => onScanBuffer(text, result));
   }
+  // เปิด drawer อัตโนมัติครั้งแรก
+  openScannerDrawer();
+}
+
+function openScannerDrawer() {
+  document.getElementById('scanner-drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('show');
+  document.getElementById('camToggleLabel').innerText = 'ปิดกล้อง';
+  document.getElementById('camToggleArrow').innerText = '▼';
+}
+
+function closeScannerDrawer() {
+  document.getElementById('scanner-drawer').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('show');
+  document.getElementById('camToggleLabel').innerText = 'เปิดกล้องสแกน';
+  document.getElementById('camToggleArrow').innerText = '▲';
+}
+
+function toggleScannerDrawer() {
+  const isOpen = document.getElementById('scanner-drawer').classList.contains('open');
+  isOpen ? closeScannerDrawer() : openScannerDrawer();
 }
 
 function onScanBuffer(text, result) {
@@ -1285,11 +1367,12 @@ async function closeAppCompletely() {
   if (scanner) { await scanner.clear(); scanner = null; }
   document.getElementById("app-header").style.display = "block";
   document.getElementById("app-tabs").style.display = "flex";
+  closeScannerDrawer();
   currentP = ""; items = []; isEditingId = false;
   expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
   resetRemark();
   document.getElementById("orderChecklistPanel").style.display = "none";
-  document.getElementById("reader").style.display = "none";
+  // reader อยู่ใน drawer แล้ว
   document.getElementById("parcelId").innerText = "-";
   document.getElementById("count").innerText = "0";
   document.getElementById("itemList").innerHTML = "";
@@ -1738,5 +1821,14 @@ window.processFinalScanWrapped = async function(text) {
   }
 };
 </script>
+<!-- Scanner Drawer -->
+<div id="drawer-overlay" onclick="closeScannerDrawer()"></div>
+<div id="scanner-drawer">
+  <div class="drawer-handle" onclick="closeScannerDrawer()">
+    <div class="drawer-handle-bar"></div>
+  </div>
+  <div id="reader"></div>
+</div>
+
 </body>
 </html>
