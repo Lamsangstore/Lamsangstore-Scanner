@@ -925,6 +925,41 @@ async function convertChunksToBase64(chunks) {
 }
 
 // --- เริ่มระบบ ---
+// โหลด orders cache จาก localStorage หรือ fetch ใหม่จาก GAS
+async function loadOrdersCache(forceRefresh = false) {
+  try {
+    const cached = localStorage.getItem(ORDERS_CACHE_KEY);
+    const ts     = parseInt(localStorage.getItem(ORDERS_CACHE_TS) || '0');
+    const fresh  = (Date.now() - ts) < ORDERS_CACHE_TTL;
+
+    if (!forceRefresh && cached && fresh) {
+      ordersCache = JSON.parse(cached);
+      console.log('[Cache] Orders loaded from localStorage:', Object.keys(ordersCache).length, 'records');
+      return;
+    }
+
+    console.log('[Cache] Fetching orders from GAS...');
+    const data = await callGAS('getAllOrders');
+    if (data && typeof data === 'object' && !data.error) {
+      ordersCache = data;
+      localStorage.setItem(ORDERS_CACHE_KEY, JSON.stringify(data));
+      localStorage.setItem(ORDERS_CACHE_TS, Date.now().toString());
+      console.log('[Cache] Orders cached:', Object.keys(data).length, 'records');
+    }
+  } catch(e) {
+    console.warn('[Cache] loadOrdersCache failed:', e.message);
+    ordersCache = null;
+  }
+}
+
+// รีเฟรช orders cache (เรียกหลังอัพโหลดออเดอร์ใหม่)
+async function refreshOrdersCache() {
+  const btn = document.getElementById('refreshCacheBtn');
+  if (btn) { btn.disabled = true; btn.innerText = '⏳ กำลังรีเฟรช...'; }
+  await loadOrdersCache(true);
+  if (btn) { btn.disabled = false; btn.innerText = '🔄 รีเฟรชข้อมูลสินค้า'; }
+}
+
 async function initScanner() {
   const btn = document.getElementById("startBtn");
   const CACHE_KEY = "productMap_cache";
@@ -988,14 +1023,19 @@ async function refreshProductCache() {
   btn.innerText = "⏳ กำลังรีเฟรช...";
   btn.disabled = true;
   try {
-    const res = await callGAS("getProductData");
+    // รีเฟรชพร้อมกันทั้ง product data และ orders cache
+    const [res] = await Promise.all([
+      callGAS("getProductData"),
+      loadOrdersCache(true)
+    ]);
     if (res && Object.keys(res).length > 0) {
       productMap = res;
       localStorage.setItem("productMap_cache", JSON.stringify(res));
       localStorage.setItem("productMap_time", Date.now().toString());
-      btn.innerText = "✅ อัปเดตแล้ว";
-      setTimeout(() => { btn.innerText = "🔄 รีเฟรชข้อมูลสินค้า"; btn.disabled = false; }, 2000);
     }
+    const orderCount = ordersCache ? Object.keys(ordersCache).length : 0;
+    btn.innerText = `✅ อัปเดตแล้ว (${orderCount} orders)`;
+    setTimeout(() => { btn.innerText = "🔄 รีเฟรชข้อมูลสินค้า"; btn.disabled = false; }, 2500);
   } catch (e) {
     btn.innerText = "❌ ลองใหม่";
     btn.disabled = false;
@@ -1292,7 +1332,24 @@ function removeItem(idx) {
 async function checkExpectedItems(tracking) {
   document.getElementById("orderChecklistPanel").style.display = "none";
   try {
-    const expectedData = await callGAS("getExpectedOrderDetails", { trackingNo: tracking });
+    let expectedData = null;
+    const key = String(tracking).trim().toUpperCase();
+
+    // ✅ ใช้ cache ก่อน (เร็วมาก — ค้นใน memory)
+    if (ordersCache && ordersCache[key]) {
+      expectedData = ordersCache[key];
+      console.log('[Cache] HIT:', key, expectedData.length, 'items');
+    } else {
+      // ❌ cache miss → fallback ยิง GAS (จะช้ากว่า)
+      console.log('[Cache] MISS:', key, '— calling GAS...');
+      expectedData = await callGAS("getExpectedOrderDetails", { trackingNo: tracking });
+
+      // เก็บเข้า cache ทันทีสำหรับครั้งต่อไป
+      if (expectedData && expectedData.length > 0 && ordersCache) {
+        ordersCache[key] = expectedData;
+      }
+    }
+
     if (expectedData && expectedData.length > 0) {
       isStrictValidationMode = true;
       expectedItemsArray = expectedData;
@@ -1305,6 +1362,7 @@ async function checkExpectedItems(tracking) {
       isStrictValidationMode = false; expectedItemsArray = []; scannedItemsMap = {};
     }
   } catch (e) {
+    console.warn('[checkExpectedItems] error:', e.message);
     isStrictValidationMode = false;
   }
 }
@@ -1467,6 +1525,8 @@ async function processFileUpload() {
       const dupMsg = response.duplicateSkipped > 0 ? `\n(ข้ามซ้ำ ${response.duplicateSkipped} รายการ)` : '';
       Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${response.count} รายการ${dupMsg}`, 'success');
       bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
+    // รีเฟรช orders cache หลังอัพโหลดข้อมูลใหม่
+    loadOrdersCache(true).then(() => console.log('[Cache] Refreshed after upload'));
       document.getElementById('fileInput').value = "";
     } else {
       Swal.fire('ข้อผิดพลาด', 'บันทึกไม่สำเร็จ: ' + (response?.error || ''), 'error');
