@@ -49,7 +49,7 @@
     body {
       background: var(--pink-pale);
       font-family: 'Mitr', 'Sarabun', sans-serif;
-      font-size: 17px;
+      font-size: 14px;
       color: var(--text);
       min-height: 100vh;
       overflow-x: hidden;
@@ -87,12 +87,12 @@
       box-shadow: 0 3px 10px rgba(255,143,171,0.4);
     }
     .topbar-title {
-      font-size: 1.15rem; font-weight: 600;
+      font-size: 0.95rem; font-weight: 600;
       color: var(--text); margin-left: 10px;
       flex: 1; line-height: 1.25;
     }
     .topbar-sub {
-      font-size: 0.82rem; color: var(--text3);
+      font-size: 0.68rem; color: var(--text3);
       display: block; font-weight: 400;
     }
 
@@ -159,15 +159,18 @@
     #reader video {
       width: 100% !important;
       max-height: 220px !important;
-      object-fit: cover !important;
+      object-fit: contain !important;
+      background: #000;
     }
     #reader canvas {
       width: 100% !important;
       max-height: 220px !important;
+      object-fit: contain !important;
     }
     #reader > div:first-child {
       max-height: 220px !important;
       overflow: hidden !important;
+      background: #000;
     }
     #search-reader {
       width: 100%; max-width: 440px; margin: auto;
@@ -241,8 +244,8 @@
     .status-badge {
       display: inline-block;
       padding: 8px 20px; border-radius: 50px;
-      font-size: 0.95rem; font-weight: 500;
-      margin-top: 10px; transition: all 0.4s ease;
+      font-size: 0.8rem; font-weight: 500;
+      margin-top: 8px; transition: all 0.4s ease;
       font-family: 'Mitr', sans-serif;
     }
 
@@ -279,7 +282,7 @@
 
     /* ===== EDIT BUTTON ===== */
     .btn-edit-inline {
-      padding: 3px 12px; font-size: 0.78rem;
+      padding: 7px 14px; font-size: 0.82rem;
       border-radius: 10px; margin-left: 8px;
       border: 1.5px solid var(--pink-light);
       background: white; color: var(--pink);
@@ -323,7 +326,7 @@
     }
     .remark-btn {
       border-radius: var(--radius-sm); padding: 7px 16px;
-      font-size: 0.92rem; font-weight: 500; margin: 3px;
+      font-size: 0.8rem; font-weight: 500; margin: 3px;
       border: 2px solid #ffd166; background: white;
       cursor: pointer; transition: all 0.2s;
       font-family: 'Mitr', sans-serif;
@@ -581,7 +584,7 @@
       <div id="orderChecklistPanel" class="order-checklist text-start shadow-sm mb-3">
         <h6 class="fw-bold mb-2" style="color:var(--text)">รายการที่ต้องแพ็ก</h6>
         <div id="checklistContent"></div>
-        <div id="orderStatusAlert" class="alert mt-2 mb-0 py-2" style="display:none; font-size: 0.85rem;"></div>
+        <div id="orderStatusAlert" class="alert mt-2 mb-0 py-2" style="display:none; font-size: 0.76rem;"></div>
 
         <!-- Remark Panel: แสดงเมื่อสินค้าไม่ครบ -->
         <div id="remarkPanel" class="remark-panel">
@@ -606,13 +609,13 @@
           <div class="col-7 text-start" style="border-right: 1.5px solid var(--pink-light);">
             <div class="section-title" style="margin-top:0; margin-bottom:4px;">พัสดุปัจจุบัน</div>
             <div class="d-flex align-items-center">
-              <span id="parcelId" style="font-weight:600; color:var(--pink); font-size:1.1rem;">-</span>
+              <span id="parcelId" style="font-weight:600; color:var(--pink); font-size:0.95rem;">-</span>
               <button id="editParcelBtn" onclick="editParcelId()" class="btn btn-edit-inline" style="display:none">✏️</button>
             </div>
           </div>
           <div class="col-5 text-center">
             <div class="section-title" style="margin-top:0; margin-bottom:4px;">จำนวนสินค้า</div>
-            <div id="count" style="font-size:2.2rem; font-weight:600; color:var(--pink);">0</div>
+            <div id="count" style="font-size:1.7rem; font-weight:600; color:var(--pink);">0</div>
           </div>
         </div>
       </div>
