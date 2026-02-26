@@ -583,7 +583,6 @@
         <ul id="itemList" class="list-group"></ul>
       </div>
       
-      <!-- ลบปุ่ม Refresh ที่ซ้ำกันออก เหลือเพียง 1 อัน -->
       <button id="refreshCacheBtn" onclick="refreshProductCache()" class="btn btn-sm mb-2 w-100 mt-3" style="display:none; border-radius:18px; border:1.5px solid var(--pink-light); color:var(--pink); background:white; font-family:'Mitr',sans-serif; font-size:0.88rem; padding:8px;">🔄 รีเฟรชข้อมูลสินค้า</button>
       
       <div id="action-buttons" class="mt-4" style="display:none">
@@ -680,7 +679,7 @@
     <div class="text-center mt-3">
       <button class="btn btn-sm" onclick="resetSession()" 
         style="border-radius:var(--radius-sm); border:1.5px solid var(--pink-light); color:var(--pink); background:white; font-family:Mitr,sans-serif; font-size:0.88rem; padding:8px 20px;">
-        รีเซ็ตสถิติ
+        รีเซ็ตสถิติและหน่วยความจำ
       </button>
     </div>
   </div>
@@ -767,7 +766,7 @@
 // ============================================================
 // ⚙️ CONFIG
 // ============================================================
-const GAS_URL = "https://script.google.com/macros/s/AKfycbxlLDzCUfX-EeG5E5eNr0GP5mhXviLDzxqt8dG7CVvBotuZYcJK0eIuaV_KDC4gxygcOw/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycby1689Y6ybjRtRB-nvG6SvQlP-jIVn5rpPttl9hSzD0VRyyEdsgHPrHLfIs2q8h612-Qg/exec";
 
 // --- Hash Routing ---
 function navigateByHash() {
@@ -924,13 +923,7 @@ async function initScanner() {
     productMap = JSON.parse(cached);
     setupScanUI();
     if (!isFresh) {
-      callGAS("getProductData").then(res => {
-        if (res && Object.keys(res).length > 0) {
-          productMap = res;
-          localStorage.setItem(CACHE_KEY, JSON.stringify(res));
-          localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
-        }
-      }).catch(() => {});
+      fetchBackgroundCache(CACHE_KEY, CACHE_TIME_KEY).catch(() => {});
     }
     return;
   }
@@ -938,15 +931,31 @@ async function initScanner() {
   btn.innerText = "กำลังโหลดข้อมูล...";
   btn.disabled = true;
   try {
-    const res = await callGAS("getProductData");
-    productMap = res || {};
-    localStorage.setItem(CACHE_KEY, JSON.stringify(productMap));
-    localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
+    await fetchBackgroundCache(CACHE_KEY, CACHE_TIME_KEY);
     setupScanUI();
   } catch (err) {
     btn.innerText = "โหลดไม่สำเร็จ — กดเพื่อลองใหม่";
     btn.disabled = false;
     Swal.fire('เชื่อมต่อไม่สำเร็จ', 'กรุณาตรวจสอบ GAS_URL ใน index.html\n\n' + err.message, 'error');
+  }
+}
+
+async function fetchBackgroundCache(cacheKey, cacheTimeKey) {
+  // ดึงข้อมูลทั้ง 2 อย่างพร้อมกัน (สินค้า และ ออเดอร์ทั้งหมดจาก Sheet)
+  const [prodRes, orderRes] = await Promise.all([
+    callGAS("getProductData").catch(() => ({})),
+    callGAS("getAllPendingOrders").catch(() => null)
+  ]);
+
+  if (prodRes && Object.keys(prodRes).length > 0) {
+    productMap = prodRes;
+    localStorage.setItem(cacheKey, JSON.stringify(prodRes));
+    localStorage.setItem(cacheTimeKey, Date.now().toString());
+  }
+
+  if (orderRes) {
+    localStorage.setItem('localOrdersCache', JSON.stringify(orderRes));
+    console.log("[Cache] ซิงค์ออเดอร์ลงมือถือสำเร็จ:", Object.keys(orderRes).length, "ออเดอร์");
   }
 }
 
@@ -960,19 +969,14 @@ function setupScanUI() {
   startScan();
 }
 
-async function refreshProductCache() {
+async function refreshAllCache() {
   const btn = document.getElementById("refreshCacheBtn");
-  btn.innerText = "⏳ กำลังรีเฟรช...";
+  btn.innerText = "⏳ กำลังดึงข้อมูล...";
   btn.disabled = true;
   try {
-    const res = await callGAS("getProductData");
-    if (res && Object.keys(res).length > 0) {
-      productMap = res;
-      localStorage.setItem("productMap_cache", JSON.stringify(res));
-      localStorage.setItem("productMap_time", Date.now().toString());
-      btn.innerText = "✅ อัปเดตแล้ว";
-      setTimeout(() => { btn.innerText = "🔄 รีเฟรชข้อมูลสินค้า"; btn.disabled = false; }, 2000);
-    }
+    await fetchBackgroundCache("productMap_cache", "productMap_time");
+    btn.innerText = "✅ อัปเดตข้อมูลแล้ว";
+    setTimeout(() => { btn.innerText = "🔄 ดึงข้อมูลล่าสุด (สินค้า & ออเดอร์)"; btn.disabled = false; }, 2000);
   } catch (e) {
     btn.innerText = "❌ ลองใหม่";
     btn.disabled = false;
@@ -1201,6 +1205,14 @@ async function finishWork(isManual = false) {
 
 async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '') {
   try {
+    // ---- ดึงออกจา Local Cache เมื่อแพ็กเสร็จ เพื่อไม่ให้รกความจำเครื่อง ----
+    let localOrders = JSON.parse(localStorage.getItem('localOrdersCache') || '{}');
+    if (localOrders[pId]) {
+      delete localOrders[pId];
+      localStorage.setItem('localOrdersCache', JSON.stringify(localOrders));
+    }
+    // -----------------------------------------------------------
+
     const videoData = await convertChunksToBase64(chunks);
     await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", remark: remarkNote || "" });
     console.log(`[Background] บันทึก ${pId} สำเร็จ`);
@@ -1272,7 +1284,19 @@ function removeItem(idx) {
 async function checkExpectedItems(tracking) {
   document.getElementById("orderChecklistPanel").style.display = "none";
   try {
-    const expectedData = await callGAS("getExpectedOrderDetails", { trackingNo: tracking });
+    let expectedData = null;
+
+    // 1. ลองดึงจาก Local Storage (ที่เคยอัปโหลดไฟล์ไว้ในเครื่องนี้)
+    let localOrders = JSON.parse(localStorage.getItem('localOrdersCache') || '{}');
+    if (localOrders[tracking] && localOrders[tracking].length > 0) {
+      expectedData = localOrders[tracking];
+      console.log("[Cache] ดึงข้อมูลออเดอร์จากในเครื่องทันที:", tracking);
+    } else {
+      // 2. ถ้าไม่มีในเครื่อง ค่อยไปดึงจาก Google Sheet
+      expectedData = await callGAS("getExpectedOrderDetails", { trackingNo: tracking });
+      console.log("[GAS] ดึงข้อมูลออเดอร์จาก Sheet:", tracking);
+    }
+
     if (expectedData && expectedData.length > 0) {
       isStrictValidationMode = true;
       expectedItemsArray = expectedData;
@@ -1429,9 +1453,27 @@ async function processFileUpload() {
       return;
     }
     
+    // ส่งข้อมูลไปบันทึกที่ Google Sheet ตามปกติ
     const response = await callGAS("saveMarketplaceData", { data: extractData, fileName: file.name, marketplace });
     
     if (response && response.success) {
+
+      // ---- บันทึกข้อมูลลง Local Storage ในเครื่องทันที (เพื่อดึงใช้ไวๆ ตอนสแกน) ----
+      let localOrders = JSON.parse(localStorage.getItem('localOrdersCache') || '{}');
+      extractData.forEach(row => {
+        const t = row.tracking;
+        if (!localOrders[t]) localOrders[t] = [];
+        // รวมจำนวน qty ในกรณีที่ SKU ซ้ำในบิลเดียวกัน
+        let existing = localOrders[t].find(x => x.sku === row.sku);
+        if (existing) {
+          existing.qty += row.qty;
+        } else {
+          localOrders[t].push({ sku: row.sku, qty: row.qty });
+        }
+      });
+      localStorage.setItem('localOrdersCache', JSON.stringify(localOrders));
+      // -------------------------------------------------------------
+
       const dupMsg = response.duplicateSkipped > 0 ? `\n(ข้ามซ้ำ ${response.duplicateSkipped} รายการ)` : '';
       Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${response.count} รายการ${dupMsg}`, 'success');
       bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
@@ -1538,7 +1580,7 @@ function renderReport(data, start, end) {
 async function resetSession() {
   const r = await Swal.fire({
     title: '🎀 ล้างสถิติ?',
-    html: '<div style="font-size:0.88rem; color:#444;">ยืนยันการล้างสถิติรอบนี้ทั้งหมดนะคะ</div>',
+    html: '<div style="font-size:0.88rem; color:#444;">ยืนยันการล้างสถิติรอบนี้ทั้งหมด และล้างความจำออเดอร์ในเครื่องนะคะ</div>',
     icon: 'question',
     showCancelButton: true,
     confirmButtonText: '🗑️ ล้างเลย',
@@ -1548,7 +1590,11 @@ async function resetSession() {
     background: '#fff0f3',
     reverseButtons: true,
   });
-  if (r.isConfirmed) { sessionParcels = {}; refreshDash(); }
+  if (r.isConfirmed) { 
+    sessionParcels = {}; 
+    localStorage.removeItem('localOrdersCache'); // ล้าง Local Cache ด้วยเมื่อเคลียร์งาน
+    refreshDash(); 
+  }
 }
 
 function startSearchScan() {
