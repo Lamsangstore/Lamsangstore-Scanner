@@ -1,775 +1,769 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Permissions-Policy" content="camera=*">
-  <title>Lamsangstore — Scanner</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJnR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiNmZjY5YjQ7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6I2ZmODVjMjtzdG9wLW9wYWNpdHk6MSIgLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9InNoaW5lR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojZmZmZmZmO3N0b3Atb3BhY2l0eTowLjM1IiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiNmZmZmZmY7c3RvcC1vcGFjaXR5OjAiIC8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KCiAgPCEtLSDguJ7guLfguYnguJnguKvguKXguLHguIfguIHguKXguKEgLS0+CiAgPGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNDgiIGZpbGw9InVybCgjYmdHcmFkKSIgLz4KICA8IS0tIHNoaW5lIG92ZXJsYXkgLS0+CiAgPGVsbGlwc2UgY3g9IjUwIiBjeT0iMzAiIHJ4PSIzMCIgcnk9IjIwIiBmaWxsPSJ1cmwoI3NoaW5lR3JhZCkiIC8+CgogIDwhLS0g4LiB4Lil4LmI4Lit4LiH4Lie4Lix4Liq4LiU4Li4IC0tPgogIDxyZWN0IHg9IjIyIiB5PSI0MiIgd2lkdGg9IjU2IiBoZWlnaHQ9IjM4IiByeD0iNSIgcnk9IjUiIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuOTUiLz4KICA8IS0tIOC4neC4suC4geC4peC5iOC4reC4hyAtLT4KICA8cGF0aCBkPSJNMjAgNDQgUTUwIDM2IDgwIDQ0IEw4MCA0MiBRNTAgMzIgMjAgNDIgWiIgZmlsbD0iI2ZmZTBmMCIgb3BhY2l0eT0iMC45Ii8+CiAgPHBhdGggZD0iTTIwIDQyIEw1MCAzNCBMODAgNDIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmNjliNCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPCEtLSDguYDguKrguYnguJnguIHguKXguLLguIfguJ3guLIgLS0+CiAgPGxpbmUgeDE9IjUwIiB5MT0iMzQiIHgyPSI1MCIgeTI9IjQ0IiBzdHJva2U9IiNmZjY5YjQiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtZGFzaGFycmF5PSIyLDIiLz4KICA8IS0tIHJpYmJvbiDguJrguJnguIHguKXguYjguK3guIcgLS0+CiAgPHJlY3QgeD0iNDQiIHk9IjQyIiB3aWR0aD0iMTIiIGhlaWdodD0iMzgiIHJ4PSIyIiBmaWxsPSIjZmZiNmQ5IiBvcGFjaXR5PSIwLjUiLz4KICA8IS0tIOC5guC4muC4p+C5jCAtLT4KICA8cGF0aCBkPSJNNTAgMzggUTQyIDMyIDM4IDM1IFE0MiAzOCA1MCAzOCIgZmlsbD0iI2ZmNjliNCIvPgogIDxwYXRoIGQ9Ik01MCAzOCBRNTggMzIgNjIgMzUgUTU4IDM4IDUwIDM4IiBmaWxsPSIjZmY2OWI0Ii8+CiAgPGNpcmNsZSBjeD0iNTAiIGN5PSIzOCIgcj0iMyIgZmlsbD0iI2ZmZiIgc3Ryb2tlPSIjZmY2OWI0IiBzdHJva2Utd2lkdGg9IjEiLz4KCiAgPCEtLSDguJTguLLguKfguYDguKXguYfguIHguYYgLS0+CiAgPHRleHQgeD0iMTgiIHk9IjM4IiBmb250LXNpemU9IjkiIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuOSI+4pymPC90ZXh0PgogIDx0ZXh0IHg9Ijc0IiB5PSIzNiIgZm9udC1zaXplPSI3IiBmaWxsPSIjZmZmIiBvcGFjaXR5PSIwLjgiPuKcpjwvdGV4dD4KICA8dGV4dCB4PSIyNiIgeT0iODIiIGZvbnQtc2l6ZT0iNiIgZmlsbD0iI2ZmNjliNCIgb3BhY2l0eT0iMC42Ij7inKY8L3RleHQ+CgogIDwhLS0g4LiV4Lix4Lin4Lit4Lix4LiB4Lip4LijIEwgLS0+CiAgPHRleHQgeD0iNTAiIHk9IjcyIiAKICAgICAgICBmb250LWZhbWlseT0iR2VvcmdpYSwgc2VyaWYiIAogICAgICAgIGZvbnQtc2l6ZT0iMjIiIAogICAgICAgIGZvbnQtd2VpZ2h0PSJib2xkIgogICAgICAgIGZpbGw9IiNmZjY5YjQiCiAgICAgICAgdGV4dC1hbmNob3I9Im1pZGRsZSIKICAgICAgICBsZXR0ZXItc3BhY2luZz0iMSI+TDwvdGV4dD4KPC9zdmc+Cg==">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Permissions-Policy" content="camera=*">
+  <title>Lamsangstore — Scanner</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJnR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiNmZjY5YjQ7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6I2ZmODVjMjtzdG9wLW9wYWNpdHk6MSIgLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9InNoaW5lR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojZmZmZmZmO3N0b3Atb3BhY2l0eTowLjM1IiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiNmZmZmZmY7c3RvcC1vcGFjaXR5OjAiIC8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KCiAgPCEtLSDguJ7guLfguYnguJnguKvguKXguLHguIfguIHguKXguKEgLS0+CiAgPGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNDgiIGZpbGw9InVybCgjYmdHcmFkKSIgLz4KICA8IS0tIHNoaW5lIG92ZXJsYXkgLS0+CiAgPGVsbGlwc2UgY3g9IjUwIiBjeT0iMzAiIHJ4PSIzMCIgcnk9IjIwIiBmaWxsPSJ1cmwoI3NoaW5lR3JhZCkiIC8+CgogIDwhLS0g4LiB4Lil4LmI4Lit4LiH4Lie4Lix4Liq4LiU4Li4IC0tPgogIDxyZWN0IHg9IjIyIiB5PSI0MiIgd2lkdGg9IjU2IiBoZWlnaHQ9IjM4IiByeD0iNSIgcnk9IjUiIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuOTUiLz4KICA8IS0tIOC4neC4suC4geC4peC5iOC4reC4hyAtLT4KICA8cGF0aCBkPSJNMjAgNDQgUTUwIDM2IDgwIDQ0IEw4MCA0MiBRNTAgMzIgMjAgNDIgWiIgZmlsbD0iI2ZmZTBmMCIgb3BhY2l0eT0iMC45Ii8+CiAgPHBhdGggZD0iTTIwIDQyIEw1MCAzNCBMODAgNDIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmNjliNCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPCEtLSDguYDguKrguYnguJnguIHguKXguLLguIfguJ3guLIgLS0+CiAgPGxpbmUgeDE9IjUwIiB5MT0iMzQiIHgyPSI1MCIgeTI9IjQ0IiBzdHJva2U9IiNmZjY5YjQiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtZGFzaGFycmF5PSIyLDIiLz4KICA8IS0tIHJpYmJvbiDguJrguJnguIHguKXguYjguK3guIcgLS0+CiAgPHJlY3QgeD0iNDQiIHk9IjQyIiB3aWR0aD0iMTIiIGhlaWdodD0iMzgiIHJ4PSIyIiBmaWxsPSIjZmZiNmQ5IiBvcGFjaXR5PSIwLjUiLz4KICA8IS0tIOC5guC4muC4p+C5jCAtLT4KICA8cGF0aCBkPSJNNTAgMzggUTQyIDMyIDM4IDM1IFE0MiAzOCA1MCAzOCIgZmlsbD0iI2ZmNjliNCIvPgogIDxwYXRoIGQ9Ik01MCAzOCBRNTggMzIgNjIgMzUgUTU4IDM4IDUwIDM4IiBmaWxsPSIjZmY2OWI0Ii8+CiAgPGNpcmNsZSBjeD0iNTAiIGN5PSIzOCIgcj0iMyIgZmlsbD0iI2ZmZiIgc3Ryb2tlPSIjZmY2OWI0IiBzdHJva2Utd2lkdGg9IjEiLz4KCiAgPCEtLSDguJTguLLguKfguYDguKXguYfguIHguYYgLS0+CiAgPHRleHQgeD0iMTgiIHk9IjM4IiBmb250LXNpemU9IjkiIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuOSI+4pymPC90ZXh0PgogIDx0ZXh0IHg9Ijc0IiB5PSIzNiIgZm9udC1zaXplPSI3IiBmaWxsPSIjZmZmIiBvcGFjaXR5PSIwLjgiPuKcpjwvdGV4dD4KICA8dGV4dCB4PSIyNiIgeT0iODIiIGZvbnQtc2l6ZT0iNiIgZmlsbD0iI2ZmNjliNCIgb3BhY2l0eT0iMC42Ij7inKY8L3RleHQ+CgogIDwhLS0g4LiV4Lix4Lin4Lit4Lix4LiB4Lip4LijIEwgLS0+CiAgPHRleHQgeD0iNTAiIHk9IjcyIiAKICAgICAgICBmb250LWZhbWlseT0iR2VvcmdpYSwgc2VyaWYiIAogICAgICAgIGZvbnQtc2l6ZT0iMjIiIAogICAgICAgIGZvbnQtd2VpZ2h0PSJib2xkIgogICAgICAgIGZpbGw9IiNmZjY5YjQiCiAgICAgICAgdGV4dC1hbmNob3I9Im1pZGRsZSIKICAgICAgICBsZXR0ZXItc3BhY2luZz0iMSI+TDwvdGV4dD4KPC9zdmc+Cg==">
 
-  <script src="https://unpkg.com/html5-qrcode"></script>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
-  <link href="https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --pink:        #ff8fab;
-      --pink-light:  #ffccd5;
-      --pink-pale:   #fff0f3;
-      --peach:       #ffd6a5;
-      --lilac:       #c8b6ff;
-      --mint:        #b9fbc0;
-      --cream:       #fff8f0;
-      --brown:       #8b5e52;
-      --text:        #5a3e4b;
-      --text2:       #7a5e6b;
-      --text3:       #c49aaa;
-      --card-bg:     rgba(255,255,255,0.85);
-      --surface:     #ffffff;
-      --surface2:    #fff0f3;
-      --border:      rgba(255,204,213,0.5);
-      --border2:     #ffccd5;
-      --success:     #2d9e6b;
-      --danger:      #d63031;
-      --warning:     #e17055;
-      --info:        #0984e3;
-      --nav-h:       64px;
-      --topbar-h:    58px;
-      --radius:      24px;
-      --radius-sm:   16px;
-      --radius-xs:   10px;
-    }
+  <link href="https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --pink:        #ff8fab;
+      --pink-light:  #ffccd5;
+      --pink-pale:   #fff0f3;
+      --peach:       #ffd6a5;
+      --lilac:       #c8b6ff;
+      --mint:        #b9fbc0;
+      --cream:       #fff8f0;
+      --brown:       #8b5e52;
+      --text:        #5a3e4b;
+      --text2:       #7a5e6b;
+      --text3:       #c49aaa;
+      --card-bg:     rgba(255,255,255,0.85);
+      --surface:     #ffffff;
+      --surface2:    #fff0f3;
+      --border:      rgba(255,204,213,0.5);
+      --border2:     #ffccd5;
+      --success:     #2d9e6b;
+      --danger:      #d63031;
+      --warning:     #e17055;
+      --info:        #0984e3;
+      --nav-h:       64px;
+      --topbar-h:    58px;
+      --radius:      24px;
+      --radius-sm:   16px;
+      --radius-xs:   10px;
+    }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      background: var(--pink-pale);
-      font-family: 'Mitr', 'Sarabun', sans-serif;
-      font-size: 17px;
-      color: var(--text);
-      min-height: 100vh;
-      overflow-x: hidden;
-      padding-top: var(--topbar-h);
-      padding-bottom: calc(var(--nav-h) + 28px);
-      -webkit-font-smoothing: antialiased;
-    }
+    body {
+      background: var(--pink-pale);
+      font-family: 'Mitr', 'Sarabun', sans-serif;
+      font-size: 17px;
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      padding-top: var(--topbar-h);
+      padding-bottom: calc(var(--nav-h) + 28px);
+      -webkit-font-smoothing: antialiased;
+    }
 
-    body::before {
-      content: '';
-      position: fixed; inset: 0; z-index: -2;
-      background:
-        radial-gradient(ellipse 80% 60% at 10% 10%, #ffe0ec 0%, transparent 60%),
-        radial-gradient(ellipse 60% 50% at 90% 90%, #f0d9ff 0%, transparent 60%),
-        radial-gradient(ellipse 50% 40% at 50% 50%, #fff0d6 0%, transparent 70%);
-    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: -2;
+      background:
+        radial-gradient(ellipse 80% 60% at 10% 10%, #ffe0ec 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 90% 90%, #f0d9ff 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 50% 50%, #fff0d6 0%, transparent 70%);
+    }
 
-    /* ===== TOP APP BAR ===== */
-    #app-header {
-      position: fixed; top: 0; left: 0; right: 0;
-      height: var(--topbar-h);
-      background: rgba(255,255,255,0.82);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--pink-light);
-      display: flex; align-items: center;
-      padding: 0 16px; z-index: 100;
-      box-shadow: 0 2px 12px rgba(255,143,171,0.1);
-    }
-    .topbar-logo {
-      width: 36px; height: 36px; border-radius: 12px;
-      background: linear-gradient(135deg, var(--pink), #ff6b9d);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.2rem; flex-shrink: 0;
-      box-shadow: 0 3px 10px rgba(255,143,171,0.4);
-    }
-    .topbar-title {
-      font-size: 1.15rem; font-weight: 600;
-      color: var(--text); margin-left: 10px;
-      flex: 1; line-height: 1.25;
-    }
-    .topbar-sub {
-      font-size: 0.82rem; color: var(--text3);
-      display: block; font-weight: 400;
-    }
+    /* ===== TOP APP BAR ===== */
+    #app-header {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: var(--topbar-h);
+      background: rgba(255,255,255,0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--pink-light);
+      display: flex; align-items: center;
+      padding: 0 16px; z-index: 100;
+      box-shadow: 0 2px 12px rgba(255,143,171,0.1);
+    }
+    .topbar-logo {
+      width: 36px; height: 36px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--pink), #ff6b9d);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; flex-shrink: 0;
+      box-shadow: 0 3px 10px rgba(255,143,171,0.4);
+    }
+    .topbar-title {
+      font-size: 1.15rem; font-weight: 600;
+      color: var(--text); margin-left: 10px;
+      flex: 1; line-height: 1.25;
+    }
+    .topbar-sub {
+      font-size: 0.82rem; color: var(--text3);
+      display: block; font-weight: 400;
+    }
 
-    /* ===== BOTTOM NAV ===== */
-    #app-tabs {
-      position: fixed; bottom: 10px; left: 12px; right: 12px;
-      height: var(--nav-h);
-      background: rgba(255,255,255,0.88);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1.5px solid rgba(255,204,213,0.6);
-      border-radius: 26px;
-      display: flex; justify-content: space-around; align-items: center;
-      z-index: 100; padding: 6px;
-      box-shadow: 0 8px 32px rgba(255,143,171,0.2), 0 2px 8px rgba(0,0,0,0.06);
-    }
-    .tab-btn {
-      border: none; background: transparent;
-      display: flex; flex-direction: column; align-items: center;
-      gap: 3px; padding: 7px 10px; border-radius: 20px;
-      color: var(--text3); font-size: 0.82rem; font-weight: 500;
-      transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1);
-      cursor: pointer; font-family: 'Mitr', sans-serif;
-      flex: 1;
-    }
-    .tab-btn .tab-icon { font-size: 1.4rem; line-height: 1; transition: transform 0.2s; }
-    .tab-btn.active {
-      background: linear-gradient(135deg, var(--pink-light), #f0d0ff);
-      color: var(--text);
-      box-shadow: 0 3px 12px rgba(255,143,171,0.3);
-    }
-    .tab-btn.active .tab-icon { transform: scale(1.1); }
-    .tab-btn:hover:not(.active) { background: var(--pink-pale); color: var(--text2); }
-    .tab-btn-upload { color: var(--pink) !important; }
-    .tab-btn-upload:hover { background: var(--pink-pale) !important; }
+    /* ===== BOTTOM NAV ===== */
+    #app-tabs {
+      position: fixed; bottom: 10px; left: 12px; right: 12px;
+      height: var(--nav-h);
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1.5px solid rgba(255,204,213,0.6);
+      border-radius: 26px;
+      display: flex; justify-content: space-around; align-items: center;
+      z-index: 100; padding: 6px;
+      box-shadow: 0 8px 32px rgba(255,143,171,0.2), 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .tab-btn {
+      border: none; background: transparent;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 3px; padding: 7px 10px; border-radius: 20px;
+      color: var(--text3); font-size: 0.82rem; font-weight: 500;
+      transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1);
+      cursor: pointer; font-family: 'Mitr', sans-serif;
+      flex: 1;
+    }
+    .tab-btn .tab-icon { font-size: 1.4rem; line-height: 1; transition: transform 0.2s; }
+    .tab-btn.active {
+      background: linear-gradient(135deg, var(--pink-light), #f0d0ff);
+      color: var(--text);
+      box-shadow: 0 3px 12px rgba(255,143,171,0.3);
+    }
+    .tab-btn.active .tab-icon { transform: scale(1.1); }
+    .tab-btn:hover:not(.active) { background: var(--pink-pale); color: var(--text2); }
+    .tab-btn-upload { color: var(--pink) !important; }
+    .tab-btn-upload:hover { background: var(--pink-pale) !important; }
 
-    /* ===== MAIN CONTENT ===== */
-    .page-content { padding: 14px 14px 0; max-width: 500px; margin: 0 auto; }
+    /* ===== MAIN CONTENT ===== */
+    .page-content { padding: 14px 14px 0; max-width: 500px; margin: 0 auto; }
 
-    /* ===== SECTION HEADER ===== */
-    .section-title {
-      font-size: 0.85rem; font-weight: 600;
-      color: var(--text3); letter-spacing: 0.3px;
-      margin-bottom: 6px; margin-top: 14px; padding-left: 2px;
-    }
+    /* ===== SECTION HEADER ===== */
+    .section-title {
+      font-size: 0.85rem; font-weight: 600;
+      color: var(--text3); letter-spacing: 0.3px;
+      margin-bottom: 6px; margin-top: 14px; padding-left: 2px;
+    }
 
-    /* ===== CARDS ===== */
-    .card {
-      border-radius: var(--radius);
-      border: 1.5px solid rgba(255,204,213,0.4);
-      background: rgba(255,255,255,0.85);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      box-shadow: 0 8px 32px rgba(255,143,171,0.1), 0 2px 8px rgba(0,0,0,0.04);
-    }
+    /* ===== CARDS ===== */
+    .card {
+      border-radius: var(--radius);
+      border: 1.5px solid rgba(255,204,213,0.4);
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(255,143,171,0.1), 0 2px 8px rgba(0,0,0,0.04);
+    }
 
-    /* ===== SCANNER ===== */
-    #reader, #search-reader {
-      width: 100%; max-width: 440px; margin: auto;
-      border-radius: 14px; overflow: hidden;
-      border: 3px solid var(--surface);
-      box-shadow: 0 0 0 2px var(--pink-light), 0 4px 16px rgba(0,0,0,0.08);
-    }
+    /* ===== SCANNER ===== */
+    #reader, #search-reader {
+      width: 100%; max-width: 440px; margin: auto;
+      border-radius: 14px; overflow: hidden;
+      border: 3px solid var(--surface);
+      box-shadow: 0 0 0 2px var(--pink-light), 0 4px 16px rgba(0,0,0,0.08);
+    }
 
-    /* ===== BUTTONS ===== */
-    .btn-custom {
-      border-radius: var(--radius-sm); padding: 14px 16px;
-      font-weight: 600; font-size: 1.05rem;
-      border: none; transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1);
-      font-family: 'Mitr', sans-serif;
-      cursor: pointer;
-    }
-    .btn-custom:hover { transform: translateY(-2px); }
-    .btn-custom:active { transform: scale(0.97); }
+    /* ===== BUTTONS ===== */
+    .btn-custom {
+      border-radius: var(--radius-sm); padding: 14px 16px;
+      font-weight: 600; font-size: 1.05rem;
+      border: none; transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1);
+      font-family: 'Mitr', sans-serif;
+      cursor: pointer;
+    }
+    .btn-custom:hover { transform: translateY(-2px); }
+    .btn-custom:active { transform: scale(0.97); }
 
-    .btn-main {
-      background: linear-gradient(135deg, #74b9ff, #0984e3);
-      color: white;
-      box-shadow: 0 4px 16px rgba(9,132,227,0.3);
-    }
-    .btn-save {
-      background: linear-gradient(135deg, var(--pink), #e84393);
-      color: white;
-      box-shadow: 0 4px 16px rgba(255,143,171,0.4);
-    }
-    .btn-cancel {
-      background: linear-gradient(135deg, #b2bec3, #636e72);
-      color: white;
-    }
+    .btn-main {
+      background: linear-gradient(135deg, #74b9ff, #0984e3);
+      color: white;
+      box-shadow: 0 4px 16px rgba(9,132,227,0.3);
+    }
+    .btn-save {
+      background: linear-gradient(135deg, var(--pink), #e84393);
+      color: white;
+      box-shadow: 0 4px 16px rgba(255,143,171,0.4);
+    }
+    .btn-cancel {
+      background: linear-gradient(135deg, #b2bec3, #636e72);
+      color: white;
+    }
 
-    /* ===== STATUS BADGE ===== */
-    .status-badge {
-      display: inline-block;
-      padding: 8px 20px; border-radius: 50px;
-      font-size: 0.95rem; font-weight: 500;
-      margin-top: 10px; transition: all 0.4s ease;
-      font-family: 'Mitr', sans-serif;
-    }
+    /* ===== STATUS BADGE ===== */
+    .status-badge {
+      display: inline-block;
+      padding: 8px 20px; border-radius: 50px;
+      font-size: 0.95rem; font-weight: 500;
+      margin-top: 10px; transition: all 0.4s ease;
+      font-family: 'Mitr', sans-serif;
+    }
 
-    /* ===== REC UI ===== */
-    #rec-ui {
-      min-height: 46px; display: flex;
-      align-items: center; justify-content: center;
-      background: var(--surface2);
-      border: 1px solid var(--border) !important;
-      border-radius: var(--radius-sm) !important;
-    }
-    #video-preview { display: none; }
-    .rec-indicator { display: flex; align-items: center; font-size: 11px; font-weight: 500; color: var(--text2); letter-spacing: 0.3px; }
-    .rec-dot {
-      width: 7px; height: 7px; background: var(--danger);
-      border-radius: 50%; margin-right: 8px;
-      animation: blink 1.2s infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.15; } }
+    /* ===== REC UI ===== */
+    #rec-ui {
+      min-height: 46px; display: flex;
+      align-items: center; justify-content: center;
+      background: var(--surface2);
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius-sm) !important;
+    }
+    #video-preview { display: none; }
+    .rec-indicator { display: flex; align-items: center; font-size: 11px; font-weight: 500; color: var(--text2); letter-spacing: 0.3px; }
+    .rec-dot {
+      width: 7px; height: 7px; background: var(--danger);
+      border-radius: 50%; margin-right: 8px;
+      animation: blink 1.2s infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.15; } }
 
-    /* ===== LIST ITEMS ===== */
-    .list-group-item {
-      border: none !important;
-      background: linear-gradient(135deg, #fff0f3, #fff8ff);
-      margin-bottom: 8px;
-      border-radius: var(--radius-sm) !important;
-      padding: 12px 16px;
-      border-left: 3px solid var(--pink-light) !important;
-      transition: all 0.2s ease;
-      font-size: 1.02rem;
-    }
-    .list-group-item:hover { transform: translateX(3px); border-left-color: var(--pink) !important; }
+    /* ===== LIST ITEMS ===== */
+    .list-group-item {
+      border: none !important;
+      background: linear-gradient(135deg, #fff0f3, #fff8ff);
+      margin-bottom: 8px;
+      border-radius: var(--radius-sm) !important;
+      padding: 12px 16px;
+      border-left: 3px solid var(--pink-light) !important;
+      transition: all 0.2s ease;
+      font-size: 1.02rem;
+    }
+    .list-group-item:hover { transform: translateX(3px); border-left-color: var(--pink) !important; }
 
-    /* ===== EDIT BUTTON ===== */
-    .btn-edit-inline {
-      padding: 3px 12px; font-size: 0.78rem;
-      border-radius: 10px; margin-left: 8px;
-      border: 1.5px solid var(--pink-light);
-      background: white; color: var(--pink);
-      transition: all 0.2s; cursor: pointer;
-    }
-    .btn-edit-inline:hover { background: var(--pink-light); }
+    /* ===== EDIT BUTTON ===== */
+    .btn-edit-inline {
+      padding: 3px 12px; font-size: 0.78rem;
+      border-radius: 10px; margin-left: 8px;
+      border: 1.5px solid var(--pink-light);
+      background: white; color: var(--pink);
+      transition: all 0.2s; cursor: pointer;
+    }
+    .btn-edit-inline:hover { background: var(--pink-light); }
 
-    /* ===== UPLOAD BUTTON ===== */
-    .btn-upload-head {
-      border-radius: var(--radius-xs); font-weight: 600;
-      font-size: 0.85rem; padding: 8px 16px;
-      background: white;
-      border: 1.5px solid var(--pink-light) !important;
-      color: var(--pink) !important;
-      transition: all 0.2s; white-space: nowrap;
-      box-shadow: 0 3px 12px rgba(255,143,171,0.25);
-    }
-    .btn-upload-head:hover { background: var(--pink); color: white !important; border-color: var(--pink) !important; }
+    /* ===== UPLOAD BUTTON ===== */
+    .btn-upload-head {
+      border-radius: var(--radius-xs); font-weight: 600;
+      font-size: 0.85rem; padding: 8px 16px;
+      background: white;
+      border: 1.5px solid var(--pink-light) !important;
+      color: var(--pink) !important;
+      transition: all 0.2s; white-space: nowrap;
+      box-shadow: 0 3px 12px rgba(255,143,171,0.25);
+    }
+    .btn-upload-head:hover { background: var(--pink); color: white !important; border-color: var(--pink) !important; }
 
-    /* ===== CHECKLIST ===== */
-    .order-checklist {
-      background: linear-gradient(135deg, #fff8ff, #fff0f3);
-      border-radius: var(--radius); padding: 14px;
-      border: 2px dashed var(--pink-light) !important;
-      margin-top: 14px; display: none;
-    }
-    .checklist-item {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 9px 10px; border-bottom: 1px solid #ffe4ec;
-      font-size: 1rem; border-radius: 8px; margin-bottom: 2px;
-    }
-    .checklist-item:last-child { border-bottom: none; }
-    .checklist-item.matched { background: #e8fff0; color: var(--success); font-weight: 600; }
-    .checklist-item.over    { background: #fff0f0; color: var(--danger); font-weight: 600; }
+    /* ===== CHECKLIST ===== */
+    .order-checklist {
+      background: linear-gradient(135deg, #fff8ff, #fff0f3);
+      border-radius: var(--radius); padding: 14px;
+      border: 2px dashed var(--pink-light) !important;
+      margin-top: 14px; display: none;
+    }
+    .checklist-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 9px 10px; border-bottom: 1px solid #ffe4ec;
+      font-size: 1rem; border-radius: 8px; margin-bottom: 2px;
+    }
+    .checklist-item:last-child { border-bottom: none; }
+    .checklist-item.matched { background: #e8fff0; color: var(--success); font-weight: 600; }
+    .checklist-item.over    { background: #fff0f0; color: var(--danger); font-weight: 600; }
 
-    /* ===== REMARK PANEL ===== */
-    .remark-panel {
-      background: linear-gradient(135deg, #fffbeb, #fff8e1);
-      border-radius: var(--radius); padding: 12px;
-      border: 2px solid #ffd166; margin-top: 10px; display: none;
-    }
-    .remark-btn {
-      border-radius: var(--radius-sm); padding: 7px 16px;
-      font-size: 0.92rem; font-weight: 500; margin: 3px;
-      border: 2px solid #ffd166; background: white;
-      cursor: pointer; transition: all 0.2s;
-      font-family: 'Mitr', sans-serif;
-    }
-    .remark-btn:hover, .remark-btn.selected { background: #ffd166; border-color: #ffd166; color: #5a3e00; }
+    /* ===== REMARK PANEL ===== */
+    .remark-panel {
+      background: linear-gradient(135deg, #fffbeb, #fff8e1);
+      border-radius: var(--radius); padding: 12px;
+      border: 2px solid #ffd166; margin-top: 10px; display: none;
+    }
+    .remark-btn {
+      border-radius: var(--radius-sm); padding: 7px 16px;
+      font-size: 0.92rem; font-weight: 500; margin: 3px;
+      border: 2px solid #ffd166; background: white;
+      cursor: pointer; transition: all 0.2s;
+      font-family: 'Mitr', sans-serif;
+    }
+    .remark-btn:hover, .remark-btn.selected { background: #ffd166; border-color: #ffd166; color: #5a3e00; }
 
-    /* ===== PARCEL INFO BOX ===== */
-    .parcel-box {
-      background: linear-gradient(135deg, rgba(255,240,243,0.7), rgba(255,248,255,0.7));
-      border: 1.5px solid var(--pink-light);
-      border-radius: var(--radius); padding: 14px;
-    }
+    /* ===== PARCEL INFO BOX ===== */
+    .parcel-box {
+      background: linear-gradient(135deg, rgba(255,240,243,0.7), rgba(255,248,255,0.7));
+      border: 1.5px solid var(--pink-light);
+      border-radius: var(--radius); padding: 14px;
+    }
 
 
 
-    /* ===== MODAL ===== */
-    .modal-content {
-      border-radius: var(--radius) !important;
-      border: 1.5px solid var(--pink-light);
-    }
-    .modal-header {
-      background: linear-gradient(135deg, var(--pink), #ff6b9d) !important;
-      border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0 !important;
-      padding: 14px 18px !important;
-    }
-    .modal-title { color: white !important; font-size: 1rem !important; font-weight: 600 !important; }
+    /* ===== MODAL ===== */
+    .modal-content {
+      border-radius: var(--radius) !important;
+      border: 1.5px solid var(--pink-light);
+    }
+    .modal-header {
+      background: linear-gradient(135deg, var(--pink), #ff6b9d) !important;
+      border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0 !important;
+      padding: 14px 18px !important;
+    }
+    .modal-title { color: white !important; font-size: 1rem !important; font-weight: 600 !important; }
 
-    /* ===== DASHBOARD CARDS ===== */
-    .stat-card {
-      border-radius: var(--radius); padding: 20px;
-      background: rgba(255,255,255,0.85);
-      border: 1.5px solid var(--pink-light);
-      text-align: center;
-      backdrop-filter: blur(12px);
-    }
-    .stat-num {
-      font-size: 3rem; font-weight: 600;
-      background: linear-gradient(135deg, var(--pink), #b57bee);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
+    /* ===== DASHBOARD CARDS ===== */
+    .stat-card {
+      border-radius: var(--radius); padding: 20px;
+      background: rgba(255,255,255,0.85);
+      border: 1.5px solid var(--pink-light);
+      text-align: center;
+      backdrop-filter: blur(12px);
+    }
+    .stat-num {
+      font-size: 3rem; font-weight: 600;
+      background: linear-gradient(135deg, var(--pink), #b57bee);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
 
-    /* ===== SCROLLBAR ===== */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: var(--pink-pale); }
-    ::-webkit-scrollbar-thumb { background: var(--pink-light); border-radius: 10px; }
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--pink-pale); }
+    ::-webkit-scrollbar-thumb { background: var(--pink-light); border-radius: 10px; }
 
-    /* ===== ANIMATE ===== */
-    .fade-in-up { animation: fadeInUp 0.25s ease both; }
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
+    /* ===== ANIMATE ===== */
+    .fade-in-up { animation: fadeInUp 0.25s ease both; }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
 
-    /* refresh button */
-    #refreshCacheBtn {
-      border-radius: var(--radius-sm) !important;
-      border: 1.5px solid var(--pink-light) !important;
-      color: var(--pink) !important;
-      font-family: 'Mitr', sans-serif;
-      font-size: 0.85rem; transition: all 0.2s;
-    }
-    #refreshCacheBtn:hover { background: var(--pink-light) !important; }
+    /* refresh button */
+    #refreshCacheBtn {
+      border-radius: var(--radius-sm) !important;
+      border: 1.5px solid var(--pink-light) !important;
+      color: var(--pink) !important;
+      font-family: 'Mitr', sans-serif;
+      font-size: 0.85rem; transition: all 0.2s;
+    }
+    #refreshCacheBtn:hover { background: var(--pink-light) !important; }
 
-    /* === DASHBOARD === */
-    .dash-presets {
-      display: flex; gap: 6px; flex-wrap: wrap;
-    }
-    .preset-btn {
-      border-radius: 20px; padding: 6px 14px;
-      font-size: 0.78rem; font-weight: 500;
-      border: 1.5px solid var(--pink-light);
-      background: white; color: #c49aaa;
-      cursor: pointer; transition: all 0.2s;
-      font-family: 'Mitr', sans-serif;
-    }
-    .preset-btn:hover, .preset-btn.active {
-      background: linear-gradient(135deg, var(--pink), #ff6b9d);
-      color: white; border-color: transparent;
-      box-shadow: 0 3px 10px rgba(255,143,171,0.35);
-    }
-    .dash-datepicker {
-      display: flex; gap: 8px; align-items: center;
-      background: var(--card-bg); border-radius: 18px;
-      padding: 10px 14px;
-      border: 1.5px solid var(--pink-light);
-      backdrop-filter: blur(12px);
-    }
-    .dash-date-input {
-      border: 1.5px solid var(--pink-light); border-radius: 12px;
-      padding: 6px 10px; font-family: 'Mitr', sans-serif;
-      font-size: 0.82rem; color: var(--text);
-      flex: 1; min-width: 0; background: white;
-    }
-    .dash-search-btn {
-      border-radius: 12px; padding: 6px 14px;
-      background: linear-gradient(135deg, var(--pink), #ff6b9d);
-      border: none; color: white; font-size: 0.9rem;
-      cursor: pointer; transition: all 0.2s;
-      box-shadow: 0 3px 10px rgba(255,143,171,0.3);
-    }
-    .dash-search-btn:hover { filter: brightness(1.05); transform: scale(1.03); }
-    .dash-period-badge {
-      background: linear-gradient(135deg, var(--pink-pale), #f3e8ff);
-      border: 1.5px solid var(--pink-light);
-      border-radius: 20px; padding: 5px 16px;
-      font-size: 0.8rem; color: #b07090;
-      font-family: 'Mitr', sans-serif;
-    }
-    .dash-table-card {
-      background: var(--card-bg); border-radius: 22px;
-      padding: 16px; border: 1.5px solid var(--pink-light);
-      backdrop-filter: blur(12px);
-    }
-    .dash-row {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 9px 12px; border-radius: 12px; margin-bottom: 6px;
-      background: linear-gradient(135deg, #fff0f3, #fff8ff);
-      border-left: 3px solid var(--pink-light);
-      font-size: 0.88rem; transition: all 0.2s;
-    }
-    .dash-row:hover { border-left-color: var(--pink); transform: translateX(2px); }
-    .dash-row:nth-child(1) { border-left-color: #FFD700; background: linear-gradient(135deg, #fffde7, #fff8ff); }
-    .dash-row:nth-child(2) { border-left-color: #b0b8c0; }
-    .dash-row:nth-child(3) { border-left-color: #cd7f32; }
-    .dash-rank {
-      width: 26px; height: 26px; border-radius: 50%;
-      background: var(--pink-light); color: var(--pink);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
-    }
-    .dash-row:nth-child(1) .dash-rank { background: #FFD700; color: white; }
-    .dash-row:nth-child(2) .dash-rank { background: #b0b8c0; color: white; }
-    .dash-row:nth-child(3) .dash-rank { background: #cd7f32; color: white; }
-    .dash-count {
-      font-weight: 700; color: var(--pink);
-      font-size: 1.05rem; flex-shrink: 0;
-    }
-    .spinner-ring {
-      font-size: 2rem;
-      animation: catBounce 0.8s ease-in-out infinite;
-      display: inline-block;
-    }
+    /* === DASHBOARD === */
+    .dash-presets {
+      display: flex; gap: 6px; flex-wrap: wrap;
+    }
+    .preset-btn {
+      border-radius: 20px; padding: 6px 14px;
+      font-size: 0.78rem; font-weight: 500;
+      border: 1.5px solid var(--pink-light);
+      background: white; color: #c49aaa;
+      cursor: pointer; transition: all 0.2s;
+      font-family: 'Mitr', sans-serif;
+    }
+    .preset-btn:hover, .preset-btn.active {
+      background: linear-gradient(135deg, var(--pink), #ff6b9d);
+      color: white; border-color: transparent;
+      box-shadow: 0 3px 10px rgba(255,143,171,0.35);
+    }
+    .dash-datepicker {
+      display: flex; gap: 8px; align-items: center;
+      background: var(--card-bg); border-radius: 18px;
+      padding: 10px 14px;
+      border: 1.5px solid var(--pink-light);
+      backdrop-filter: blur(12px);
+    }
+    .dash-date-input {
+      border: 1.5px solid var(--pink-light); border-radius: 12px;
+      padding: 6px 10px; font-family: 'Mitr', sans-serif;
+      font-size: 0.82rem; color: var(--text);
+      flex: 1; min-width: 0; background: white;
+    }
+    .dash-search-btn {
+      border-radius: 12px; padding: 6px 14px;
+      background: linear-gradient(135deg, var(--pink), #ff6b9d);
+      border: none; color: white; font-size: 0.9rem;
+      cursor: pointer; transition: all 0.2s;
+      box-shadow: 0 3px 10px rgba(255,143,171,0.3);
+    }
+    .dash-search-btn:hover { filter: brightness(1.05); transform: scale(1.03); }
+    .dash-period-badge {
+      background: linear-gradient(135deg, var(--pink-pale), #f3e8ff);
+      border: 1.5px solid var(--pink-light);
+      border-radius: 20px; padding: 5px 16px;
+      font-size: 0.8rem; color: #b07090;
+      font-family: 'Mitr', sans-serif;
+    }
+    .dash-table-card {
+      background: var(--card-bg); border-radius: 22px;
+      padding: 16px; border: 1.5px solid var(--pink-light);
+      backdrop-filter: blur(12px);
+    }
+    .dash-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 9px 12px; border-radius: 12px; margin-bottom: 6px;
+      background: linear-gradient(135deg, #fff0f3, #fff8ff);
+      border-left: 3px solid var(--pink-light);
+      font-size: 0.88rem; transition: all 0.2s;
+    }
+    .dash-row:hover { border-left-color: var(--pink); transform: translateX(2px); }
+    .dash-row:nth-child(1) { border-left-color: #FFD700; background: linear-gradient(135deg, #fffde7, #fff8ff); }
+    .dash-row:nth-child(2) { border-left-color: #b0b8c0; }
+    .dash-row:nth-child(3) { border-left-color: #cd7f32; }
+    .dash-rank {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--pink-light); color: var(--pink);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+    }
+    .dash-row:nth-child(1) .dash-rank { background: #FFD700; color: white; }
+    .dash-row:nth-child(2) .dash-rank { background: #b0b8c0; color: white; }
+    .dash-row:nth-child(3) .dash-rank { background: #cd7f32; color: white; }
+    .dash-count {
+      font-weight: 700; color: var(--pink);
+      font-size: 1.05rem; flex-shrink: 0;
+    }
+    .spinner-ring {
+      font-size: 2rem;
+      animation: catBounce 0.8s ease-in-out infinite;
+      display: inline-block;
+    }
 
-    /* === SWEETALERT THEME === */
-    .swal-popup {
-      border-radius: var(--radius) !important;
-      border: 1.5px solid var(--pink-light) !important;
-      font-family: 'Mitr', sans-serif !important;
-      background: #fff0f3 !important;
-      box-shadow: 0 8px 32px rgba(255,143,171,0.2) !important;
-    }
-    .swal-ttl {
-      font-family: 'Mitr', sans-serif !important;
-      color: var(--text) !important;
-      font-size: 1.1rem !important; font-weight: 600 !important;
-    }
-    .swal-btn {
-      border-radius: var(--radius-sm) !important;
-      font-family: 'Mitr', sans-serif !important;
-      font-size: 0.92rem !important; font-weight: 600 !important;
-      padding: 10px 22px !important;
-    }
-    .swal2-icon.swal2-warning { border-color: var(--pink) !important; color: var(--pink) !important; }
-    .swal2-icon.swal2-question { border-color: var(--lilac) !important; color: var(--lilac) !important; }
+    /* === SWEETALERT THEME === */
+    .swal-popup {
+      border-radius: var(--radius) !important;
+      border: 1.5px solid var(--pink-light) !important;
+      font-family: 'Mitr', sans-serif !important;
+      background: #fff0f3 !important;
+      box-shadow: 0 8px 32px rgba(255,143,171,0.2) !important;
+    }
+    .swal-ttl {
+      font-family: 'Mitr', sans-serif !important;
+      color: var(--text) !important;
+      font-size: 1.1rem !important; font-weight: 600 !important;
+    }
+    .swal-btn {
+      border-radius: var(--radius-sm) !important;
+      font-family: 'Mitr', sans-serif !important;
+      font-size: 0.92rem !important; font-weight: 600 !important;
+      padding: 10px 22px !important;
+    }
+    .swal2-icon.swal2-warning { border-color: var(--pink) !important; color: var(--pink) !important; }
+    .swal2-icon.swal2-question { border-color: var(--lilac) !important; color: var(--lilac) !important; }
 
-    /* === MARKETPLACE SELECTOR === */
-    .mp-option {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 14px;
-      border-radius: 16px;
-      border: 2px solid #f0e0e8;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      background: white;
-      user-select: none;
-    }
-    .mp-option:hover { border-color: var(--pink-light); background: var(--pink-pale); }
-    .mp-option.selected { border-color: var(--pink); background: var(--pink-pale); box-shadow: 0 2px 12px rgba(255,143,171,0.2); }
-    .mp-radio {
-      width: 18px; height: 18px; border-radius: 50%;
-      border: 2px solid #ddd; flex-shrink: 0;
-      transition: all 0.2s;
-      background: white;
-    }
-    .mp-option.selected .mp-radio {
-      border-color: var(--pink);
-      background: var(--pink);
-      box-shadow: inset 0 0 0 3px white;
-    }
-    .mp-icon {
-      width: 36px; height: 36px; border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .mp-label { display: flex; flex-direction: column; }
-    .mp-name { font-weight: 600; font-size: 0.92rem; color: var(--text); }
-    .mp-desc { font-size: 0.72rem; color: #b0889a; margin-top: 1px; }
-    .mp-guide-btn {
-      margin-left: auto; flex-shrink: 0;
-      font-size: 0.72rem; padding: 4px 10px;
-      border-radius: 12px; border: 1.5px solid var(--pink-light);
-      background: white; color: var(--pink);
-      text-decoration: none; font-family: 'Mitr', sans-serif;
-      transition: all 0.2s; white-space: nowrap;
-      display: flex; align-items: center; gap: 4px;
-    }
-    .mp-guide-btn:hover { background: var(--pink); color: white; border-color: var(--pink); }
-  </style>
+    /* === MARKETPLACE SELECTOR === */
+    .mp-option {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px;
+      border-radius: 16px;
+      border: 2px solid #f0e0e8;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: white;
+      user-select: none;
+    }
+    .mp-option:hover { border-color: var(--pink-light); background: var(--pink-pale); }
+    .mp-option.selected { border-color: var(--pink); background: var(--pink-pale); box-shadow: 0 2px 12px rgba(255,143,171,0.2); }
+    .mp-radio {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 2px solid #ddd; flex-shrink: 0;
+      transition: all 0.2s;
+      background: white;
+    }
+    .mp-option.selected .mp-radio {
+      border-color: var(--pink);
+      background: var(--pink);
+      box-shadow: inset 0 0 0 3px white;
+    }
+    .mp-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .mp-label { display: flex; flex-direction: column; }
+    .mp-name { font-weight: 600; font-size: 0.92rem; color: var(--text); }
+    .mp-desc { font-size: 0.72rem; color: #b0889a; margin-top: 1px; }
+    .mp-guide-btn {
+      margin-left: auto; flex-shrink: 0;
+      font-size: 0.72rem; padding: 4px 10px;
+      border-radius: 12px; border: 1.5px solid var(--pink-light);
+      background: white; color: var(--pink);
+      text-decoration: none; font-family: 'Mitr', sans-serif;
+      transition: all 0.2s; white-space: nowrap;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .mp-guide-btn:hover { background: var(--pink); color: white; border-color: var(--pink); }
+  </style>
 </head>
 <body>
 <canvas id="overlayCanvas" style="display:none;"></canvas>
 
 <!-- TOP APP BAR -->
 <div id="app-header">
-  <div class="topbar-logo">🌸</div>
-  <div style="flex:1; margin-left:10px;">
-    <div class="topbar-title">Lamsangstore Scanner
-      <span class="topbar-sub">ระบบแพ็กและตรวจสอบพัสดุ</span>
-    </div>
-  </div>
-  <button class="btn btn-upload-head" data-bs-toggle="modal" data-bs-target="#uploadModal">📥 ออเดอร์</button>
+  <div class="topbar-logo">🌸</div>
+  <div style="flex:1; margin-left:10px;">
+    <div class="topbar-title">Lamsangstore Scanner
+      <span class="topbar-sub">ระบบแพ็กและตรวจสอบพัสดุ</span>
+    </div>
+  </div>
 </div>
 
 <!-- BOTTOM NAV -->
 <div id="app-tabs">
-  <button class="tab-btn active" onclick="openTab('scan', this)">
-    <span class="tab-icon">🐾</span>สแกน
-  </button>
-  <button class="tab-btn" onclick="openTab('search', this)">
-    <span class="tab-icon">🔍</span>ค้นหา
-  </button>
-  <button class="tab-btn" onclick="openTab('dash', this)">
-    <span class="tab-icon">🎀</span>รายงาน
-  </button>
-  <button class="tab-btn tab-btn-upload" data-bs-toggle="modal" data-bs-target="#uploadModal">
-    <span class="tab-icon">📥</span>อัพโหลด
-  </button>
+  <button class="tab-btn active" onclick="openTab('scan', this)">
+    <span class="tab-icon">🐾</span>สแกน
+  </button>
+  <button class="tab-btn" onclick="openTab('search', this)">
+    <span class="tab-icon">🔍</span>ค้นหา
+  </button>
+  <button class="tab-btn" onclick="openTab('dash', this)">
+    <span class="tab-icon">🎀</span>รายงาน
+  </button>
+  <button class="tab-btn tab-btn-upload" data-bs-toggle="modal" data-bs-target="#uploadModal">
+    <span class="tab-icon">📥</span>อัพโหลด
+  </button>
 </div>
 
 <div class="page-content">
 
-  <!-- TAB: SCAN -->
-  <div id="scan" class="fade-in-up">
-    <div class="card p-3 text-center">
-      <div id="rec-ui" class="mb-3 p-2 border rounded-4 bg-light shadow-sm">
-        <div id="rec-status">
-          <span id="rec-label" style="color:#c49aaa; font-size:0.95rem; font-weight:500; font-family:'Mitr',sans-serif;">กดเริ่มระบบเพื่อสแกนพัสดุ</span>
-        </div>
-      <div id="rec-ui" style="display:none;">
-        <div id="rec-status"><span id="rec-label"></span></div>
-        <video id="video-preview" autoplay playsinline muted></video>
-      </div>
+  <!-- TAB: SCAN -->
+  <div id="scan" class="fade-in-up">
+    <div class="card p-3 text-center">
+      <div id="rec-ui" style="display:none;">
+        <div id="rec-status"><span id="rec-label"></span></div>
+        <video id="video-preview" autoplay playsinline muted></video>
+      </div>
 
-      <button id="startBtn" onclick="initScanner()" class="btn-custom btn-main mb-3 w-100 shadow">เริ่มระบบสแกน</button>
-      <button id="refreshCacheBtn" onclick="refreshProductCache()" class="btn btn-outline-secondary btn-sm mb-2" style="display:none; border-radius:15px;">รีเฟรชข้อมูลสินค้า</button>
-      <div id="reader" style="display:none"></div>
+      <button id="startBtn" onclick="initScanner()" class="btn-custom btn-main mb-3 w-100 shadow">เริ่มระบบสแกน</button>
+      <div id="reader" style="display:none"></div>
 
-      <div id="orderChecklistPanel" class="order-checklist text-start shadow-sm mb-3">
-        <h6 class="fw-bold mb-2" style="color:var(--text)">รายการที่ต้องแพ็ก</h6>
-        <div id="checklistContent"></div>
-        <div id="orderStatusAlert" class="alert mt-2 mb-0 py-2" style="display:none; font-size: 0.85rem;"></div>
+      <div id="orderChecklistPanel" class="order-checklist text-start shadow-sm mb-3">
+        <h6 class="fw-bold mb-2" style="color:var(--text)">รายการที่ต้องแพ็ก</h6>
+        <div id="checklistContent"></div>
+        <div id="orderStatusAlert" class="alert mt-2 mb-0 py-2" style="display:none; font-size: 0.85rem;"></div>
 
-        <!-- Remark Panel: แสดงเมื่อสินค้าไม่ครบ -->
-        <div id="remarkPanel" class="remark-panel">
-          <p class="mb-2 small fw-bold" style="color:var(--warning);">⚠ สินค้าไม่ครบ — เลือกเหตุผล</p>
-          <div id="remarkButtons">
-            <button class="remark-btn" onclick="selectRemark(this, 'สินค้าหมด')">📦 สินค้าหมด</button>
-            <button class="remark-btn" onclick="selectRemark(this, 'ลูกค้าแจ้งเปลี่ยนสี')">🎨 เปลี่ยนสี</button>
-            <button class="remark-btn" onclick="selectRemark(this, 'ลูกค้าแจ้งเปลี่ยนรุ่น')">🔄 เปลี่ยนรุ่น</button>
-            <button class="remark-btn" onclick="selectRemark(this, 'อื่นๆ')">✏️ อื่นๆ</button>
-          </div>
-          <div id="remarkOtherBox" style="display:none; margin-top:8px;">
-            <input id="remarkOtherInput" class="form-control form-control-sm" placeholder="ระบุเหตุผล..." style="border-radius:10px;">
-          </div>
-          <button onclick="confirmRemarkAndFinish()" class="btn btn-warning btn-sm mt-2 w-100 fw-bold" style="border-radius:15px;">
-            บันทึกพร้อมหมายเหตุและจบงาน
-          </button>
-        </div>
-      </div>
+        <!-- Remark Panel: แสดงเมื่อสินค้าไม่ครบ -->
+        <div id="remarkPanel" class="remark-panel">
+          <p class="mb-2 small fw-bold" style="color:var(--warning);">⚠ สินค้าไม่ครบ — เลือกเหตุผล</p>
+          <div id="remarkButtons">
+            <button class="remark-btn" onclick="selectRemark(this, 'สินค้าหมด')">📦 สินค้าหมด</button>
+            <button class="remark-btn" onclick="selectRemark(this, 'ลูกค้าแจ้งเปลี่ยนสี')">🎨 เปลี่ยนสี</button>
+            <button class="remark-btn" onclick="selectRemark(this, 'ลูกค้าแจ้งเปลี่ยนรุ่น')">🔄 เปลี่ยนรุ่น</button>
+            <button class="remark-btn" onclick="selectRemark(this, 'อื่นๆ')">✏️ อื่นๆ</button>
+          </div>
+          <div id="remarkOtherBox" style="display:none; margin-top:8px;">
+            <input id="remarkOtherInput" class="form-control form-control-sm" placeholder="ระบุเหตุผล..." style="border-radius:10px;">
+          </div>
+          <button onclick="confirmRemarkAndFinish()" class="btn btn-warning btn-sm mt-2 w-100 fw-bold" style="border-radius:15px;">
+            บันทึกพร้อมหมายเหตุและจบงาน
+          </button>
+        </div>
+      </div>
 
-      <div class="parcel-box mt-3">
-        <div class="row align-items-center">
-          <div class="col-7 text-start" style="border-right: 1.5px solid var(--pink-light);">
-            <div class="section-title" style="margin-top:0; margin-bottom:4px;">พัสดุปัจจุบัน</div>
-            <div class="d-flex align-items-center">
-              <span id="parcelId" style="font-weight:600; color:var(--pink); font-size:1.1rem;">-</span>
-              <button id="editParcelBtn" onclick="editParcelId()" class="btn btn-edit-inline" style="display:none">✏️</button>
-            </div>
-          </div>
-          <div class="col-5 text-center">
-            <div class="section-title" style="margin-top:0; margin-bottom:4px;">จำนวนสินค้า</div>
-            <div id="count" style="font-size:2.2rem; font-weight:600; color:var(--pink);">0</div>
-          </div>
-        </div>
-      </div>
+      <div class="parcel-box mt-3">
+        <div class="row align-items-center">
+          <div class="col-7 text-start" style="border-right: 1.5px solid var(--pink-light);">
+            <div class="section-title" style="margin-top:0; margin-bottom:4px;">พัสดุปัจจุบัน</div>
+            <div class="d-flex align-items-center">
+              <span id="parcelId" style="font-weight:600; color:var(--pink); font-size:1.1rem;">-</span>
+              <button id="editParcelBtn" onclick="editParcelId()" class="btn btn-edit-inline" style="display:none">✏️</button>
+            </div>
+          </div>
+          <div class="col-5 text-center">
+            <div class="section-title" style="margin-top:0; margin-bottom:4px;">จำนวนสินค้า</div>
+            <div id="count" style="font-size:2.2rem; font-weight:600; color:var(--pink);">0</div>
+          </div>
+        </div>
+      </div>
 
-      <div id="statusLabel" class="status-badge bg-light text-muted">รอเริ่มระบบ...</div>
+      <div id="statusLabel" class="status-badge bg-light text-muted">รอเริ่มระบบ...</div>
 
-      <div class="mt-3 text-start">
-        <div class="section-title">รายการสินค้าในกล่อง</div>
-        <ul id="itemList" class="list-group"></ul>
-      </div>
+      <div class="mt-3 text-start">
+        <div class="section-title">รายการสินค้าในกล่อง</div>
+        <ul id="itemList" class="list-group"></ul>
+      </div>
 
-      <button id="refreshCacheBtn" onclick="refreshProductCache()" class="btn btn-sm mb-2 w-100" style="display:none; border-radius:18px; border:1.5px solid var(--pink-light); color:var(--pink); background:white; font-family:'Mitr',sans-serif; font-size:0.88rem; padding:8px;">🔄 รีเฟรชข้อมูลสินค้า</button>
+      <button id="refreshCacheBtn" onclick="refreshProductCache()" class="btn btn-sm mb-2 w-100" style="display:none; border-radius:18px; border:1.5px solid var(--pink-light); color:var(--pink); background:white; font-family:'Mitr',sans-serif; font-size:0.88rem; padding:8px;">🔄 รีเฟรชข้อมูลสินค้า</button>
 
-      <div id="action-buttons" class="mt-4" style="display:none">
-        <div class="row g-2">
-          <div class="col-8">
-            <button id="saveBtn" onclick="finishWork(true)" class="btn-custom btn-save w-100">บันทึกและจบงาน</button>
-          </div>
-          <div class="col-4">
-            <button id="cancelBtn" onclick="cancelWork()" class="btn-custom btn-cancel w-100">ยกเลิก</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div><!-- /scan -->
+      <div id="action-buttons" class="mt-4" style="display:none">
+        <div class="row g-2">
+          <div class="col-8">
+            <button id="saveBtn" onclick="finishWork(true)" class="btn-custom btn-save w-100">บันทึกและจบงาน</button>
+          </div>
+          <div class="col-4">
+            <button id="cancelBtn" onclick="cancelWork()" class="btn-custom btn-cancel w-100">ยกเลิก</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /scan -->
 
-  <!-- TAB: SEARCH -->
-  <div id="search" style="display:none" class="fade-in-up">
-    <div class="card p-3">
-      <div class="mb-3">
-        <div id="search-reader" style="display:none; margin-bottom: 15px;"></div>
-        <div class="input-group">
-          <input id="searchInput" class="form-control rounded-start-4 p-3" placeholder="พิมพ์หรือสแกนรหัสพัสดุ..." onkeypress="handleEnter(event)">
-          <button class="btn btn-primary px-3" onclick="startSearchScan()" title="สแกนด้วยกล้อง">📷</button>
-          <button class="btn btn-success rounded-end-4 px-4" onclick="runSearch()">ค้นหา</button>
-        </div>
-        <div class="form-text text-muted ms-2 small">💡 ค้นหาได้ทั้งตัวพิมพ์เล็กและใหญ่</div>
-      </div>
-      <div id="loadingSearch" class="text-center my-3" style="display:none">
-        <div class="spinner-border text-primary"></div>
-        <p class="small text-muted mt-2">กำลังค้นหา...</p>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-hover small">
-          <thead id="tableHead" class="table-light"></thead>
-          <tbody id="resultBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+  <!-- TAB: SEARCH -->
+  <div id="search" style="display:none" class="fade-in-up">
+    <div class="card p-3">
+      <div class="mb-3">
+        <div id="search-reader" style="display:none; margin-bottom: 15px;"></div>
+        <div class="input-group">
+          <input id="searchInput" class="form-control rounded-start-4 p-3" placeholder="พิมพ์หรือสแกนรหัสพัสดุ..." onkeypress="handleEnter(event)">
+          <button class="btn btn-primary px-3" onclick="startSearchScan()" title="สแกนด้วยกล้อง">📷</button>
+          <button class="btn btn-success rounded-end-4 px-4" onclick="runSearch()">ค้นหา</button>
+        </div>
+        <div class="form-text text-muted ms-2 small">💡 ค้นหาได้ทั้งตัวพิมพ์เล็กและใหญ่</div>
+      </div>
+      <div id="loadingSearch" class="text-center my-3" style="display:none">
+        <div class="spinner-border text-primary"></div>
+        <p class="small text-muted mt-2">กำลังค้นหา...</p>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover small">
+          <thead id="tableHead" class="table-light"></thead>
+          <tbody id="resultBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
-  <!-- TAB: DASHBOARD -->
-  <div id="dash" style="display:none" class="fade-in-up">
+  <!-- TAB: DASHBOARD -->
+  <div id="dash" style="display:none" class="fade-in-up">
 
-    <!-- Date Preset Buttons -->
-    <div class="dash-presets mb-3">
-      <button class="preset-btn active" onclick="setPreset('today',this)">วันนี้</button>
-      <button class="preset-btn" onclick="setPreset('yesterday',this)">เมื่อวาน</button>
-      <button class="preset-btn" onclick="setPreset('last7',this)">7 วัน</button>
-      <button class="preset-btn" onclick="setPreset('thisMonth',this)">เดือนนี้</button>
-      <button class="preset-btn" onclick="setPreset('lastMonth',this)">เดือนก่อน</button>
-    </div>
+    <!-- Date Preset Buttons -->
+    <div class="dash-presets mb-3">
+      <button class="preset-btn active" onclick="setPreset('today',this)">วันนี้</button>
+      <button class="preset-btn" onclick="setPreset('yesterday',this)">เมื่อวาน</button>
+      <button class="preset-btn" onclick="setPreset('last7',this)">7 วัน</button>
+      <button class="preset-btn" onclick="setPreset('thisMonth',this)">เดือนนี้</button>
+      <button class="preset-btn" onclick="setPreset('lastMonth',this)">เดือนก่อน</button>
+    </div>
 
-    <!-- Date Range Picker -->
-    <div class="dash-datepicker mb-3">
-      <input type="date" id="dashStart" class="dash-date-input">
-      <span style="color:#c49aaa; font-size:0.85rem;">ถึง</span>
-      <input type="date" id="dashEnd" class="dash-date-input">
-      <button onclick="fetchReport()" class="dash-search-btn">🔍</button>
-    </div>
+    <!-- Date Range Picker -->
+    <div class="dash-datepicker mb-3">
+      <input type="date" id="dashStart" class="dash-date-input">
+      <span style="color:#c49aaa; font-size:0.85rem;">ถึง</span>
+      <input type="date" id="dashEnd" class="dash-date-input">
+      <button onclick="fetchReport()" class="dash-search-btn">🔍</button>
+    </div>
 
-    <!-- Loading -->
-    <div id="dashLoading" style="display:none; text-align:center; padding:20px;">
-      <div style="width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--text);border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto 8px;"></div>
-      <div style="font-size:0.78rem;color:var(--text3);">กำลังโหลดข้อมูล...</div>
-    </div>
+    <!-- Loading -->
+    <div id="dashLoading" style="display:none; text-align:center; padding:20px;">
+      <div style="width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--text);border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto 8px;"></div>
+      <div style="font-size:0.78rem;color:var(--text3);">กำลังโหลดข้อมูล...</div>
+    </div>
 
-    <!-- Report Content -->
-    <div id="dashContent" style="display:none;">
-      <div class="text-center mb-3">
-        <span class="dash-period-badge" id="dashPeriod">-</span>
-      </div>
+    <!-- Report Content -->
+    <div id="dashContent" style="display:none;">
+      <div class="text-center mb-3">
+        <span class="dash-period-badge" id="dashPeriod">-</span>
+      </div>
 
-      <!-- Summary Cards -->
-      <div class="row g-2 mb-3">
-        <div class="col-6">
-          <div class="stat-card">
-            <div style="font-size:1.8rem;">📦</div>
-            <div class="small mb-1" style="color:#c49aaa;">ออเดอร์ (แพ็ค)</div>
-            <div id="d-box" class="stat-num">0</div>
-          </div>
-        </div>
-        <div class="col-6">
-          <div class="stat-card">
-            <div style="font-size:1.8rem;">🎀</div>
-            <div class="small mb-1" style="color:#c49aaa;">สินค้า (ชิ้น)</div>
-            <div id="d-item" class="stat-num">0</div>
-          </div>
-        </div>
-      </div>
+      <!-- Summary Cards -->
+      <div class="row g-2 mb-3">
+        <div class="col-6">
+          <div class="stat-card">
+            <div style="font-size:1.8rem;">📦</div>
+            <div class="small mb-1" style="color:#c49aaa;">ออเดอร์ (แพ็ค)</div>
+            <div id="d-box" class="stat-num">0</div>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="stat-card">
+            <div style="font-size:1.8rem;">🎀</div>
+            <div class="small mb-1" style="color:#c49aaa;">สินค้า (ชิ้น)</div>
+            <div id="d-item" class="stat-num">0</div>
+          </div>
+        </div>
+      </div>
 
-      <!-- Top Products Table -->
-      <div class="dash-table-card">
-        <h6 class="fw-bold mb-3" style="color:var(--pink);">🏆 สินค้าขายดี</h6>
-        <div id="dashProductTable">
-          <div class="text-center text-muted small py-3">กดค้นหาเพื่อดูข้อมูลค่ะ 🐱</div>
-        </div>
-      </div>
-    </div>
+      <!-- Top Products Table -->
+      <div class="dash-table-card">
+        <h6 class="fw-bold mb-3" style="color:var(--pink);">🏆 สินค้าขายดี</h6>
+        <div id="dashProductTable">
+          <div class="text-center text-muted small py-3">กดค้นหาเพื่อดูข้อมูลค่ะ 🐱</div>
+        </div>
+      </div>
+    </div>
 
-    <!-- Reset button -->
-    <div class="text-center mt-3">
-      <button class="btn btn-sm" onclick="resetSession()"
-        style="border-radius:var(--radius-sm); border:1.5px solid var(--pink-light); color:var(--pink); background:white; font-family:Mitr,sans-serif; font-size:0.88rem; padding:8px 20px;">
-        รีเซ็ตสถิติ
-      </button>
-    </div>
-  </div>
+    <!-- Reset button -->
+    <div class="text-center mt-3">
+      <button class="btn btn-sm" onclick="resetSession()"
+        style="border-radius:var(--radius-sm); border:1.5px solid var(--pink-light); color:var(--pink); background:white; font-family:Mitr,sans-serif; font-size:0.88rem; padding:8px 20px;">
+        รีเซ็ตสถิติ
+      </button>
+    </div>
+  </div>
 </div><!-- /page-content -->
 
 <!-- Modal อัปโหลดไฟล์ -->
 <div class="modal fade" id="uploadModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title text-white">🛍️ อัปโหลดไฟล์รายการสั่งซื้อ</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body px-4 py-3">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-white">🛍️ อัปโหลดไฟล์รายการสั่งซื้อ</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4 py-3">
 
-        <div class="mb-4">
-          <label class="form-label fw-600 small mb-2" style="color:var(--brown);">เลือกช่องทาง (Marketplace)</label>
-          <!-- Custom marketplace selector -->
-          <div id="mpSelector" style="display:flex; flex-direction:column; gap:8px;">
+        <div class="mb-4">
+          <label class="form-label fw-600 small mb-2" style="color:var(--brown);">เลือกช่องทาง (Marketplace)</label>
+          <!-- Custom marketplace selector -->
+          <div id="mpSelector" style="display:flex; flex-direction:column; gap:8px;">
 
-            <label class="mp-option" data-value="tiktok" onclick="selectMarketplace('tiktok', this)">
-              <div class="mp-radio"></div>
-              <div class="mp-icon" style="background:#010101;">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.74a4.85 4.85 0 01-1.01-.05z"/></svg>
-              </div>
-              <div class="mp-label">
-                <span class="mp-name">TikTok Shop</span>
-                <span class="mp-desc">Tracking=AJ · SKU=G · Qty=J</span>
-              </div>
-              <a href="TTindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
-            </label>
+            <label class="mp-option" data-value="tiktok" onclick="selectMarketplace('tiktok', this)">
+              <div class="mp-radio"></div>
+              <div class="mp-icon" style="background:#010101;">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.74a4.85 4.85 0 01-1.01-.05z"/></svg>
+              </div>
+              <div class="mp-label">
+                <span class="mp-name">TikTok Shop</span>
+                <span class="mp-desc">Tracking=AJ · SKU=G · Qty=J</span>
+              </div>
+              <a href="TTindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
+            </label>
 
-            <label class="mp-option" data-value="shopee" onclick="selectMarketplace('shopee', this)">
-              <div class="mp-radio"></div>
-              <div class="mp-icon" style="background:#ee4d2d;">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12 2C9.2 2 7 4.2 7 7H5c-.6 0-1 .4-1.1.9L2.5 19.9c-.1.6.4 1.1 1 1.1h17c.6 0 1.1-.5 1-1.1l-1.4-12C19.9 7.4 19.5 7 19 7h-2c0-2.8-2.2-5-5-5zm0 2c1.7 0 3 1.3 3 3H9c0-1.7 1.3-3 3-3zm0 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
-              </div>
-              <div class="mp-label">
-                <span class="mp-name">Shopee</span>
-                <span class="mp-desc">Tracking=N · SKU=S · Qty=W</span>
-              </div>
-              <a href="SPindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
-            </label>
+            <label class="mp-option" data-value="shopee" onclick="selectMarketplace('shopee', this)">
+              <div class="mp-radio"></div>
+              <div class="mp-icon" style="background:#ee4d2d;">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12 2C9.2 2 7 4.2 7 7H5c-.6 0-1 .4-1.1.9L2.5 19.9c-.1.6.4 1.1 1 1.1h17c.6 0 1.1-.5 1-1.1l-1.4-12C19.9 7.4 19.5 7 19 7h-2c0-2.8-2.2-5-5-5zm0 2c1.7 0 3 1.3 3 3H9c0-1.7 1.3-3 3-3zm0 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
+              </div>
+              <div class="mp-label">
+                <span class="mp-name">Shopee</span>
+                <span class="mp-desc">Tracking=N · SKU=S · Qty=W</span>
+              </div>
+              <a href="SPindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
+            </label>
 
-            <label class="mp-option" data-value="lazada" onclick="selectMarketplace('lazada', this)">
-              <div class="mp-radio"></div>
-              <div class="mp-icon" style="background:#0f146d;">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M4 4h16v2H4zm0 5h10v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>
-              </div>
-              <div class="mp-label">
-                <span class="mp-name">Lazada</span>
-                <span class="mp-desc">Tracking=BG · SKU=F · (1 row = 1 ชิ้น)</span>
-              </div>
-              <a href="LZindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
-            </label>
+            <label class="mp-option" data-value="lazada" onclick="selectMarketplace('lazada', this)">
+              <div class="mp-radio"></div>
+              <div class="mp-icon" style="background:#0f146d;">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M4 4h16v2H4zm0 5h10v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>
+              </div>
+              <div class="mp-label">
+                <span class="mp-name">Lazada</span>
+                <span class="mp-desc">Tracking=BG · SKU=F · (1 row = 1 ชิ้น)</span>
+              </div>
+              <a href="LZindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
+            </label>
 
-            <label class="mp-option" data-value="page365" onclick="selectMarketplace('page365', this)">
-              <div class="mp-radio"></div>
-              <div class="mp-icon" style="background:#1877f2;">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.99 3.66 9.12 8.44 9.88v-6.99H7.9V12h2.54V9.8c0-2.51 1.49-3.89 3.78-3.89 1.09 0 2.24.19 2.24.19v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.77l-.44 2.89h-2.33v6.99C18.34 21.12 22 17 22 12c0-5.52-4.48-10-10-10z"/></svg>
-              </div>
-              <div class="mp-label">
-                <span class="mp-name">Page365</span>
-                <span class="mp-desc">Tracking=L · SKU=Y · Qty=AC</span>
-              </div>
-              <a href="365index.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
-            </label>
+            <label class="mp-option" data-value="page365" onclick="selectMarketplace('page365', this)">
+              <div class="mp-radio"></div>
+              <div class="mp-icon" style="background:#1877f2;">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.99 3.66 9.12 8.44 9.88v-6.99H7.9V12h2.54V9.8c0-2.51 1.49-3.89 3.78-3.89 1.09 0 2.24.19 2.24.19v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.77l-.44 2.89h-2.33v6.99C18.34 21.12 22 17 22 12c0-5.52-4.48-10-10-10z"/></svg>
+              </div>
+              <div class="mp-label">
+                <span class="mp-name">Page365</span>
+                <span class="mp-desc">Tracking=L · SKU=Y · Qty=AC</span>
+              </div>
+              <a href="365index.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
+            </label>
 
-          </div>
-          <!-- hidden select สำหรับ JS -->
-          <select id="marketplaceSelect" style="display:none;">
-            <option value="tiktok">tiktok</option>
-            <option value="shopee">shopee</option>
-            <option value="lazada">lazada</option>
-            <option value="page365">page365</option>
-          </select>
-        </div>
+          </div>
+          <!-- hidden select สำหรับ JS -->
+          <select id="marketplaceSelect" style="display:none;">
+            <option value="tiktok">tiktok</option>
+            <option value="shopee">shopee</option>
+            <option value="lazada">lazada</option>
+            <option value="page365">page365</option>
+          </select>
+        </div>
 
-        <div class="mb-2">
-          <label class="form-label fw-600 small mb-2" style="color:var(--brown);">เลือกไฟล์ (.xlsx, .csv)</label>
-          <input type="file" id="fileInput" class="form-control" style="border-radius:14px; border:1.5px solid var(--pink-light);" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-        </div>
-      </div>
+        <div class="mb-2">
+          <label class="form-label fw-600 small mb-2" style="color:var(--brown);">เลือกไฟล์ (.xlsx, .csv)</label>
+          <input type="file" id="fileInput" class="form-control" style="border-radius:14px; border:1.5px solid var(--pink-light);" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+        </div>
+      </div>
 
-      <div class="modal-footer" style="border-top:1.5px solid var(--pink-light); padding:14px 20px; gap:10px;">
-        <button type="button" class="btn" style="border-radius:16px; border:1.5px solid #ddd; color:#888; font-family:'Mitr',sans-serif; padding:10px 22px;" data-bs-dismiss="modal">ยกเลิก</button>
-        <button type="button" onclick="processFileUpload()" style="border-radius:16px; background:linear-gradient(135deg,var(--pink),#e84393); color:white; border:none; font-family:'Mitr',sans-serif; font-weight:600; padding:10px 28px; box-shadow:0 4px 14px rgba(255,143,171,0.4); font-size:0.95rem;">
-          📤 อัปโหลดข้อมูล
-        </button>
-      </div>
-    </div>
-  </div>
+      <div class="modal-footer" style="border-top:1.5px solid var(--pink-light); padding:14px 20px; gap:10px;">
+        <button type="button" class="btn" style="border-radius:16px; border:1.5px solid #ddd; color:#888; font-family:'Mitr',sans-serif; padding:10px 22px;" data-bs-dismiss="modal">ยกเลิก</button>
+        <button type="button" onclick="processFileUpload()" style="border-radius:16px; background:linear-gradient(135deg,var(--pink),#e84393); color:white; border:none; font-family:'Mitr',sans-serif; font-weight:600; padding:10px 28px; box-shadow:0 4px 14px rgba(255,143,171,0.4); font-size:0.95rem;">
+          📤 อัปโหลดข้อมูล
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -782,47 +776,47 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycby1689Y6ybjRtRB-nvG6SvQ
 
 // --- Hash Routing ---
 function navigateByHash() {
-  const hash = window.location.hash;
-  if (!hash || hash === '#scan') return;
+  const hash = window.location.hash;
+  if (!hash || hash === '#scan') return;
 
-  // แสดง tab bar ก่อนเลย (ในกรณีที่ยังซ่อนอยู่)
-  const appTabs = document.getElementById('app-tabs');
-  if (appTabs) appTabs.style.display = 'flex';
+  // แสดง tab bar ก่อนเลย (ในกรณีที่ยังซ่อนอยู่)
+  const appTabs = document.getElementById('app-tabs');
+  if (appTabs) appTabs.style.display = 'flex';
 
-  if (hash === '#report' || hash === '#dash') {
-    const btn = document.querySelectorAll('.tab-btn')[2];
-    openTab('dash', btn);
-  } else if (hash === '#search') {
-    const btn = document.querySelectorAll('.tab-btn')[1];
-    openTab('search', btn);
-  }
+  if (hash === '#report' || hash === '#dash') {
+    const btn = document.querySelectorAll('.tab-btn')[2];
+    openTab('dash', btn);
+  } else if (hash === '#search') {
+    const btn = document.querySelectorAll('.tab-btn')[1];
+    openTab('search', btn);
+  }
 }
 
 window.addEventListener('hashchange', navigateByHash);
 
 // รอ page โหลดเสร็จสมบูรณ์ก่อนค่อย navigate
 window.addEventListener('load', () => {
-  setTimeout(navigateByHash, 100);
+  setTimeout(navigateByHash, 100);
 });
 
 // --- Marketplace Selector ---
 function selectMarketplace(value, el) {
-  document.querySelectorAll('.mp-option').forEach(o => o.classList.remove('selected'));
-  el.classList.add('selected');
-  document.getElementById('marketplaceSelect').value = value;
+  document.querySelectorAll('.mp-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('marketplaceSelect').value = value;
 }
 // เลือก TikTok เป็น default
 document.addEventListener('DOMContentLoaded', () => {
-  const first = document.querySelector('.mp-option');
-  if (first) first.classList.add('selected');
+  const first = document.querySelector('.mp-option');
+  if (first) first.classList.add('selected');
 });
 
 // col index = เลข column - 1 (เริ่มจาก 0)
 const colMappings = {
-  'tiktok':  { tracking: 35, sku: 6,  qty: 9,  headerRows: 1 }, // AJ=36, G=7, J=10
-  'shopee':  { tracking: 13, sku: 18, qty: 22, headerRows: 1 }, // N=14, S=19, W=23
-  'lazada':  { tracking: 58, sku: 5,  qty: -1, headerRows: 1 }, // BG=59, F=6, ไม่มี qty (1row=1ชิ้น)
-  'page365': { tracking: 11, sku: 24, qty: 28, headerRows: 1, isCsv: true } // L=12, Y=25, AC=29
+  'tiktok':  { tracking: 35, sku: 6,  qty: 9,  headerRows: 1 }, // AJ=36, G=7, J=10
+  'shopee':  { tracking: 13, sku: 18, qty: 22, headerRows: 1 }, // N=14, S=19, W=23
+  'lazada':  { tracking: 58, sku: 5,  qty: -1, headerRows: 1 }, // BG=59, F=6, ไม่มี qty (1row=1ชิ้น)
+  'page365': { tracking: 11, sku: 24, qty: 28, headerRows: 1, isCsv: true } // L=12, Y=25, AC=29
 };
 
 // --- ตัวแปรหลัก ---
@@ -834,840 +828,904 @@ let mediaRecorder, recordedChunks = [], cameraStream = null, isRecording = false
 
 // --- API Helper: แทนที่ google.script.run ทั้งหมด ---
 async function callGAS(action, payload = {}) {
-  const res = await fetch(GAS_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify({ action, ...payload })
-  });
-  const text = await res.text();
-  try { return JSON.parse(text); } catch { return text; }
+  const res = await fetch(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({ action, ...payload })
+  });
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { return text; }
 }
 
 // --- Speech ---
 function speak(t, priority = true) {
-  if (!window.speechSynthesis) return;
-  if (priority) speechSynthesis.cancel();
-  const m = new SpeechSynthesisUtterance(t);
-  m.lang = "th-TH"; m.rate = 1.3;
-  speechSynthesis.speak(m);
+  if (!window.speechSynthesis) return;
+  if (priority) speechSynthesis.cancel();
+  const m = new SpeechSynthesisUtterance(t);
+  m.lang = "th-TH"; m.rate = 1.3;
+  speechSynthesis.speak(m);
 }
 
 // --- กล้องและวิดีโอ ---
 async function startCameraRecording() {
-  if (isRecording) return;
-  const videoEl = document.getElementById('video-preview');
-  const canvas = document.getElementById('overlayCanvas');
-  const ctx = canvas.getContext('2d');
-  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
-  try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-    videoEl.srcObject = cameraStream;
-    await videoEl.play();
-    canvas.width = videoEl.videoWidth || 640;
-    canvas.height = videoEl.videoHeight || 480;
-    recordedChunks = [];
+  if (isRecording) return;
+  const videoEl = document.getElementById('video-preview');
+  const canvas = document.getElementById('overlayCanvas');
+  const ctx = canvas.getContext('2d');
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+    videoEl.srcObject = cameraStream;
+    await videoEl.play();
+    canvas.width = videoEl.videoWidth || 640;
+    canvas.height = videoEl.videoHeight || 480;
+    recordedChunks = [];
 
-    function drawOverlay() {
-      if (!isRecording && !cameraStream) return;
-      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-      const overlayHeight = 160 + items.length * 26;
-      ctx.fillStyle = "rgba(0,0,0,0.55)";
-      ctx.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "22px sans-serif";
-      const now = new Date().toLocaleString("th-TH");
-      let y = canvas.height - overlayHeight + 30;
-      ctx.fillText("📅 " + now, 20, y); y += 30;
-      ctx.fillText("📦 พัสดุ: " + (currentP || "-"), 20, y); y += 30;
-      ctx.fillText("🧾 จำนวนสินค้า: " + items.length + " ชิ้น", 20, y);
-      ctx.font = "20px sans-serif";
-      items.forEach(sku => { y += 26; ctx.fillText("- " + (productMap[sku] || sku), 40, y); });
-      requestAnimationFrame(drawOverlay);
-    }
-    drawOverlay();
+    function drawOverlay() {
+      if (!isRecording && !cameraStream) return;
+      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+      const overlayHeight = 160 + items.length * 26;
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "22px sans-serif";
+      const now = new Date().toLocaleString("th-TH");
+      let y = canvas.height - overlayHeight + 30;
+      ctx.fillText("📅 " + now, 20, y); y += 30;
+      ctx.fillText("📦 พัสดุ: " + (currentP || "-"), 20, y); y += 30;
+      ctx.fillText("🧾 จำนวนสินค้า: " + items.length + " ชิ้น", 20, y);
+      ctx.font = "20px sans-serif";
+      items.forEach(sku => { y += 26; ctx.fillText("- " + (productMap[sku] || sku), 40, y); });
+      requestAnimationFrame(drawOverlay);
+    }
+    drawOverlay();
 
-    const canvasStream = canvas.captureStream(30);
-    mediaRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 2500000 });
-    mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
-    mediaRecorder.start();
-    isRecording = true;
-    document.getElementById('rec-label').innerHTML = '<div class="rec-indicator"><span class="rec-dot"></span> กำลังบันทึกวิดีโอพร้อมข้อมูลกำกับ</div>';
-  } catch (err) {
-    console.error("Camera error:", err);
-    document.getElementById('rec-label').innerText = "⚠️ ไม่สามารถเปิดกล้องได้: " + err.message;
-  }
+    const canvasStream = canvas.captureStream(30);
+    mediaRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 2500000 });
+    mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.start();
+    isRecording = true;
+    document.getElementById('rec-label').innerHTML = '<div class="rec-indicator"><span class="rec-dot"></span> กำลังบันทึกวิดีโอพร้อมข้อมูลกำกับ</div>';
+  } catch (err) {
+    console.error("Camera error:", err);
+    document.getElementById('rec-label').innerText = "⚠️ ไม่สามารถเปิดกล้องได้: " + err.message;
+  }
 }
 
 function stopCameraRecording() {
-  return new Promise((resolve) => {
-    if (!mediaRecorder || mediaRecorder.state === "inactive") {
-      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
-      resolve([]); return;
-    }
-    mediaRecorder.addEventListener('stop', () => {
-      isRecording = false;
-      const snapshot = [...recordedChunks];
-      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
-      document.getElementById('rec-label').innerText = "🔴 สิ้นสุดการบันทึกแล้ว";
-      resolve(snapshot);
-    }, { once: true });
-    mediaRecorder.stop();
-  });
+  return new Promise((resolve) => {
+    if (!mediaRecorder || mediaRecorder.state === "inactive") {
+      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+      resolve([]); return;
+    }
+    mediaRecorder.addEventListener('stop', () => {
+      isRecording = false;
+      const snapshot = [...recordedChunks];
+      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+      document.getElementById('rec-label').innerText = "🔴 สิ้นสุดการบันทึกแล้ว";
+      resolve(snapshot);
+    }, { once: true });
+    mediaRecorder.stop();
+  });
 }
 
 async function convertChunksToBase64(chunks) {
-  if (!chunks || chunks.length === 0) return "";
-  const blob = new Blob(chunks, { type: 'video/webm' });
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (!reader.result || typeof reader.result !== 'string') { resolve(""); return; }
-      const idx = reader.result.indexOf(',');
-      resolve(idx > -1 ? reader.result.slice(idx + 1) : "");
-    };
-    reader.onerror = () => resolve("");
-    reader.readAsDataURL(blob);
-  });
+  if (!chunks || chunks.length === 0) return "";
+  const blob = new Blob(chunks, { type: 'video/webm' });
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (!reader.result || typeof reader.result !== 'string') { resolve(""); return; }
+      const idx = reader.result.indexOf(',');
+      resolve(idx > -1 ? reader.result.slice(idx + 1) : "");
+    };
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(blob);
+  });
 }
 
 // --- เริ่มระบบ ---
+// โหลด orders cache จาก localStorage หรือ fetch ใหม่จาก GAS
+async function loadOrdersCache(forceRefresh = false) {
+  try {
+    const cached = localStorage.getItem(ORDERS_CACHE_KEY);
+    const ts     = parseInt(localStorage.getItem(ORDERS_CACHE_TS) || '0');
+    const fresh  = (Date.now() - ts) < ORDERS_CACHE_TTL;
+
+    if (!forceRefresh && cached && fresh) {
+      ordersCache = JSON.parse(cached);
+      console.log('[Cache] Orders loaded from localStorage:', Object.keys(ordersCache).length, 'records');
+      return;
+    }
+
+    console.log('[Cache] Fetching orders from GAS...');
+    const data = await callGAS('getAllOrders');
+    if (data && typeof data === 'object' && !data.error) {
+      ordersCache = data;
+      localStorage.setItem(ORDERS_CACHE_KEY, JSON.stringify(data));
+      localStorage.setItem(ORDERS_CACHE_TS, Date.now().toString());
+      console.log('[Cache] Orders cached:', Object.keys(data).length, 'records');
+    }
+  } catch(e) {
+    console.warn('[Cache] loadOrdersCache failed:', e.message);
+    ordersCache = null;
+  }
+}
+
+// รีเฟรช orders cache (เรียกหลังอัพโหลดออเดอร์ใหม่)
+async function refreshOrdersCache() {
+  const btn = document.getElementById('refreshCacheBtn');
+  if (btn) { btn.disabled = true; btn.innerText = '⏳ กำลังรีเฟรช...'; }
+  await loadOrdersCache(true);
+  if (btn) { btn.disabled = false; btn.innerText = '🔄 รีเฟรชข้อมูลสินค้า'; }
+}
+
 async function initScanner() {
-  const btn = document.getElementById("startBtn");
-  const CACHE_KEY = "productMap_cache";
-  const CACHE_TIME_KEY = "productMap_time";
-  const CACHE_TTL = 60 * 60 * 1000; // 1 ชั่วโมง
+  const btn = document.getElementById("startBtn");
+  const CACHE_KEY = "productMap_cache";
+  const CACHE_TIME_KEY = "productMap_time";
+  const CACHE_TTL = 60 * 60 * 1000; // 1 ชั่วโมง
 
-  // โหลด cache ก่อนเลย — เริ่มระบบได้ทันทีไม่รอ GAS
-  const cached = localStorage.getItem(CACHE_KEY);
-  const cachedTime = parseInt(localStorage.getItem(CACHE_TIME_KEY) || "0");
-  const isFresh = (Date.now() - cachedTime) < CACHE_TTL;
+  // โหลด cache ก่อนเลย — เริ่มระบบได้ทันทีไม่รอ GAS
+  const cached = localStorage.getItem(CACHE_KEY);
+  const cachedTime = parseInt(localStorage.getItem(CACHE_TIME_KEY) || "0");
+  const isFresh = (Date.now() - cachedTime) < CACHE_TTL;
 
-  if (cached) {
-    productMap = JSON.parse(cached);
-    document.getElementById("app-header").style.display = "none";
-    document.getElementById("app-tabs").style.display = "none";
-    btn.style.display = "none";
-    document.getElementById("action-buttons").style.display = "block";
-    document.getElementById("refreshCacheBtn").style.display = "inline-block";
-    speak("ระบบพร้อมแล้วค่ะ เริ่มสแกนพัสดุได้เลย");
-    startScan();
+  if (cached) {
+    productMap = JSON.parse(cached);
+    document.getElementById("app-header").style.display = "none";
+    document.getElementById("app-tabs").style.display = "none";
+    btn.style.display = "none";
+    document.getElementById("action-buttons").style.display = "block";
+    document.getElementById("refreshCacheBtn").style.display = "inline-block";
+    speak("ระบบพร้อมแล้วค่ะ เริ่มสแกนพัสดุได้เลย");
+    startScan();
 
-    // refresh เบื้องหลังถ้า cache เก่าเกิน 1 ชั่วโมง
-    if (!isFresh) {
-      callGAS("getProductData").then(res => {
-        if (res && Object.keys(res).length > 0) {
-          productMap = res;
-          localStorage.setItem(CACHE_KEY, JSON.stringify(res));
-          localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
-          console.log("[Cache] รีเฟรชข้อมูลสินค้าแล้ว");
-        }
-      }).catch(() => {});
-    }
-    return;
-  }
+    // refresh เบื้องหลังถ้า cache เก่าเกิน 1 ชั่วโมง
+    if (!isFresh) {
+      callGAS("getProductData").then(res => {
+        if (res && Object.keys(res).length > 0) {
+          productMap = res;
+          localStorage.setItem(CACHE_KEY, JSON.stringify(res));
+          localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
+          console.log("[Cache] รีเฟรชข้อมูลสินค้าแล้ว");
+        }
+      }).catch(() => {});
+    }
+    return;
+  }
 
-  // ครั้งแรกที่ยังไม่มี cache — โหลดปกติ
-  btn.innerText = "กำลังโหลดข้อมูล...";
-  btn.disabled = true;
-  try {
-    const res = await callGAS("getProductData");
-    productMap = res || {};
-    // เก็บ cache
-    localStorage.setItem(CACHE_KEY, JSON.stringify(productMap));
-    localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
-    document.getElementById("app-header").style.display = "none";
-    document.getElementById("app-tabs").style.display = "none";
-    btn.style.display = "none";
-    document.getElementById("action-buttons").style.display = "block";
-    document.getElementById("refreshCacheBtn").style.display = "inline-block";
-    speak("ระบบพร้อมแล้วค่ะ เริ่มสแกนพัสดุได้เลย");
-    startScan();
-  } catch (err) {
-    btn.innerText = "โหลดไม่สำเร็จ — กดเพื่อลองใหม่";
-    btn.disabled = false;
-    Swal.fire('เชื่อมต่อไม่สำเร็จ', 'กรุณาตรวจสอบ GAS_URL ใน index.html\n\n' + err.message, 'error');
-  }
+  // ครั้งแรกที่ยังไม่มี cache — โหลดปกติ
+  btn.innerText = "กำลังโหลดข้อมูล...";
+  btn.disabled = true;
+  try {
+    const res = await callGAS("getProductData");
+    productMap = res || {};
+    // เก็บ cache
+    localStorage.setItem(CACHE_KEY, JSON.stringify(productMap));
+    localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
+    document.getElementById("app-header").style.display = "none";
+    document.getElementById("app-tabs").style.display = "none";
+    btn.style.display = "none";
+    document.getElementById("action-buttons").style.display = "block";
+    document.getElementById("refreshCacheBtn").style.display = "inline-block";
+    speak("ระบบพร้อมแล้วค่ะ เริ่มสแกนพัสดุได้เลย");
+    startScan();
+  } catch (err) {
+    btn.innerText = "โหลดไม่สำเร็จ — กดเพื่อลองใหม่";
+    btn.disabled = false;
+    Swal.fire('เชื่อมต่อไม่สำเร็จ', 'กรุณาตรวจสอบ GAS_URL ใน index.html\n\n' + err.message, 'error');
+  }
 }
 
 async function refreshProductCache() {
-  const btn = document.getElementById("refreshCacheBtn");
-  btn.innerText = "⏳ กำลังรีเฟรช...";
-  btn.disabled = true;
-  try {
-    const res = await callGAS("getProductData");
-    if (res && Object.keys(res).length > 0) {
-      productMap = res;
-      localStorage.setItem("productMap_cache", JSON.stringify(res));
-      localStorage.setItem("productMap_time", Date.now().toString());
-      btn.innerText = "✅ อัปเดตแล้ว";
-      setTimeout(() => { btn.innerText = "🔄 รีเฟรชข้อมูลสินค้า"; btn.disabled = false; }, 2000);
-    }
-  } catch (e) {
-    btn.innerText = "❌ ลองใหม่";
-    btn.disabled = false;
-  }
+  const btn = document.getElementById("refreshCacheBtn");
+  btn.innerText = "⏳ กำลังรีเฟรช...";
+  btn.disabled = true;
+  try {
+    const res = await callGAS("getProductData");
+    // รีเฟรชพร้อมกันทั้ง product data และ orders cache
+    const [res] = await Promise.all([
+      callGAS("getProductData"),
+      loadOrdersCache(true)
+    ]);
+    if (res && Object.keys(res).length > 0) {
+      productMap = res;
+      localStorage.setItem("productMap_cache", JSON.stringify(res));
+      localStorage.setItem("productMap_time", Date.now().toString());
+      btn.innerText = "✅ อัปเดตแล้ว";
+      setTimeout(() => { btn.innerText = "🔄 รีเฟรชข้อมูลสินค้า"; btn.disabled = false; }, 2000);
+    }
+    const orderCount = ordersCache ? Object.keys(ordersCache).length : 0;
+    btn.innerText = `✅ อัปเดตแล้ว (${orderCount} orders)`;
+    setTimeout(() => { btn.innerText = "🔄 รีเฟรชข้อมูลสินค้า"; btn.disabled = false; }, 2500);
+  } catch (e) {
+    btn.innerText = "❌ ลองใหม่";
+    btn.disabled = false;
+  }
 }
 
 function startScan() {
-  document.getElementById("reader").style.display = "block";
-  if (!scanner) {
-    scanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: { width: 300, height: 350 }, rememberLastUsedCamera: true });
-    scanner.render((text, result) => onScanBuffer(text, result));
-  }
+  document.getElementById("reader").style.display = "block";
+  if (!scanner) {
+    scanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: { width: 300, height: 350 }, rememberLastUsedCamera: true });
+    scanner.render((text, result) => onScanBuffer(text, result));
+  }
 }
 
 function onScanBuffer(text, result) {
-  const now = Date.now();
-  if (isFinishing || now - lastScanTime < 2500) return;
-  let yPos = 9999;
-  if (result && result.result && result.result.location) yPos = result.result.location.topLeftCorner.y;
-  scanBuffer.push({ text, y: yPos });
-  if (!bufferTimeout) {
-    bufferTimeout = setTimeout(() => {
-      scanBuffer.sort((a, b) => a.y - b.y);
-      processFinalScan(scanBuffer[0].text);
-      scanBuffer = []; bufferTimeout = null;
-    }, 300);
-  }
+  const now = Date.now();
+  if (isFinishing || now - lastScanTime < 2500) return;
+  let yPos = 9999;
+  if (result && result.result && result.result.location) yPos = result.result.location.topLeftCorner.y;
+  scanBuffer.push({ text, y: yPos });
+  if (!bufferTimeout) {
+    bufferTimeout = setTimeout(() => {
+      scanBuffer.sort((a, b) => a.y - b.y);
+      processFinalScan(scanBuffer[0].text);
+      scanBuffer = []; bufferTimeout = null;
+    }, 300);
+  }
 }
 
 async function processFinalScan(text) {
-  const upperText = text.trim().toUpperCase();
-  const isFlash = upperText.startsWith("TH") && (upperText.length === 15 || upperText.length === 14);
-  const isJT = /^\d{12}$/.test(upperText) || /^(81|82|83|86|JET)/.test(upperText);
-  const isProduct = upperText.startsWith("B");
+  const upperText = text.trim().toUpperCase();
+  const isFlash = upperText.startsWith("TH") && (upperText.length === 15 || upperText.length === 14);
+  const isJT = /^\d{12}$/.test(upperText) || /^(81|82|83|86|JET)/.test(upperText);
+  const isProduct = upperText.startsWith("B");
 
-  if (isProduct) {
-    if (!currentP && !isEditingId) { speak("กรุณาสแกนรหัสพัสดุก่อนนะคะ"); return; }
-    if (isStrictValidationMode) {
-      let reqItem = expectedItemsArray.find(i => i.sku === upperText);
-      let currentScannedQty = scannedItemsMap[upperText] || 0;
-      const productName = productMap[upperText] || upperText;
-      if (!reqItem) {
-        // พูดชื่อสินค้าก่อน แล้วตามด้วยแจ้งเตือน
-        speak(productName, true);
-        setTimeout(() => speak("ไม่มีสินค้านี้ในรายการนะคะ", false), 800);
-      } else if (currentScannedQty >= reqItem.qty) {
-        speak(productName, true);
-        setTimeout(() => speak("สินค้าเกินจำนวนค่ะ", false), 800);
-      } else {
-        speak(productName, true);
-      }
-      scannedItemsMap[upperText] = currentScannedQty + 1;
-    } else {
-      speak(productMap[upperText] || upperText, true);
-    }
-    lastScanTime = Date.now();
-    items.push(upperText);
-    document.getElementById("count").innerText = items.length;
-    renderList();
-    if (isStrictValidationMode) updateChecklistUI();
-    setStatus("✔ เพิ่มสินค้า: " + upperText, "success");
-  } else if (isFlash || isJT) {
-    lastScanTime = Date.now();
-    const carrier = isFlash ? "แฟลช" : "เจ แอนด์ ที";
-    if (sessionParcels[upperText] && !isEditingId) {
-      speak("พัสดุใบนี้สแกนปิดงานไปแล้วค่ะ");
-      setStatus("❌ พัสดุ " + upperText + " ปิดงานไปแล้ว", "danger"); return;
-    }
-    if (upperText === currentP && !isEditingId) {
-      if (items.length === 0) { speak("กล่องยังไม่มีสินค้าค่ะ"); setStatus("⚠️ กล่องว่าง", "warning"); return; }
-      // ถ้าอยู่ใน strict mode และสินค้าไม่ครบ — ไม่อนุญาตให้ปิดงานด้วยการสแกน
-      if (isStrictValidationMode && !validateCurrentOrder()) {
-        let hasOver = false;
-        for (let sSku in scannedItemsMap) {
-          const req = expectedItemsArray.find(ex => ex.sku === sSku);
-          if (!req || scannedItemsMap[sSku] > req.qty) { hasOver = true; break; }
-        }
-        if (hasOver) {
-          speak("มีสินค้าเกินจำนวนค่ะ กรุณาตรวจสอบ");
-          setStatus("❌ มีสินค้าเกินจำนวน", "danger"); return;
-        }
-        // สินค้าไม่ครบ — แสดง remark panel ให้กดที่หน้าจอ
-        speak("สินค้าไม่ครบค่ะ กรุณาเลือกเหตุผลบนหน้าจอ", false);
-        document.getElementById('remarkPanel').style.display = 'block';
-        document.getElementById('orderChecklistPanel').scrollIntoView({ behavior: 'smooth' });
-        setStatus("⚠️ สินค้าไม่ครบ กรุณาเลือกเหตุผล", "warning"); return;
-      }
-      speak("สแกนปิดงานเรียบร้อยค่ะ กำลังบันทึกแบบเบื้องหลัง");
-      finishWork(false); return;
-    }
-    if (currentP && upperText !== currentP && !isEditingId) {
-      speak("กรุณาสแกนรหัสพัสดุเดิมเพื่อปิดงานก่อนค่ะ");
-      setStatus("❌ ต้องสแกนปิดงานใบเดิมก่อน", "danger"); return;
-    }
-    processNewParcel(upperText, carrier);
-  } else {
-    lastScanTime = Date.now();
-    speak("รูปแบบรหัสไม่ถูกต้องค่ะ");
-    setStatus("⚠️ รูปแบบรหัสไม่ถูกต้อง", "warning");
-  }
+  if (isProduct) {
+    if (!currentP && !isEditingId) { speak("กรุณาสแกนรหัสพัสดุก่อนนะคะ"); return; }
+    if (isStrictValidationMode) {
+      let reqItem = expectedItemsArray.find(i => i.sku === upperText);
+      let currentScannedQty = scannedItemsMap[upperText] || 0;
+      const productName = productMap[upperText] || upperText;
+      if (!reqItem) {
+        // พูดชื่อสินค้าก่อน แล้วตามด้วยแจ้งเตือน
+        speak(productName, true);
+        setTimeout(() => speak("ไม่มีสินค้านี้ในรายการนะคะ", false), 800);
+      } else if (currentScannedQty >= reqItem.qty) {
+        speak(productName, true);
+        setTimeout(() => speak("สินค้าเกินจำนวนค่ะ", false), 800);
+      } else {
+        speak(productName, true);
+      }
+      scannedItemsMap[upperText] = currentScannedQty + 1;
+    } else {
+      speak(productMap[upperText] || upperText, true);
+    }
+    lastScanTime = Date.now();
+    items.push(upperText);
+    document.getElementById("count").innerText = items.length;
+    renderList();
+    if (isStrictValidationMode) updateChecklistUI();
+    setStatus("✔ เพิ่มสินค้า: " + upperText, "success");
+  } else if (isFlash || isJT) {
+    lastScanTime = Date.now();
+    const carrier = isFlash ? "แฟลช" : "เจ แอนด์ ที";
+    if (sessionParcels[upperText] && !isEditingId) {
+      speak("พัสดุใบนี้สแกนปิดงานไปแล้วค่ะ");
+      setStatus("❌ พัสดุ " + upperText + " ปิดงานไปแล้ว", "danger"); return;
+    }
+    if (upperText === currentP && !isEditingId) {
+      if (items.length === 0) { speak("กล่องยังไม่มีสินค้าค่ะ"); setStatus("⚠️ กล่องว่าง", "warning"); return; }
+      // ถ้าอยู่ใน strict mode และสินค้าไม่ครบ — ไม่อนุญาตให้ปิดงานด้วยการสแกน
+      if (isStrictValidationMode && !validateCurrentOrder()) {
+        let hasOver = false;
+        for (let sSku in scannedItemsMap) {
+          const req = expectedItemsArray.find(ex => ex.sku === sSku);
+          if (!req || scannedItemsMap[sSku] > req.qty) { hasOver = true; break; }
+        }
+        if (hasOver) {
+          speak("มีสินค้าเกินจำนวนค่ะ กรุณาตรวจสอบ");
+          setStatus("❌ มีสินค้าเกินจำนวน", "danger"); return;
+        }
+        // สินค้าไม่ครบ — แสดง remark panel ให้กดที่หน้าจอ
+        speak("สินค้าไม่ครบค่ะ กรุณาเลือกเหตุผลบนหน้าจอ", false);
+        document.getElementById('remarkPanel').style.display = 'block';
+        document.getElementById('orderChecklistPanel').scrollIntoView({ behavior: 'smooth' });
+        setStatus("⚠️ สินค้าไม่ครบ กรุณาเลือกเหตุผล", "warning"); return;
+      }
+      speak("สแกนปิดงานเรียบร้อยค่ะ กำลังบันทึกแบบเบื้องหลัง");
+      finishWork(false); return;
+    }
+    if (currentP && upperText !== currentP && !isEditingId) {
+      speak("กรุณาสแกนรหัสพัสดุเดิมเพื่อปิดงานก่อนค่ะ");
+      setStatus("❌ ต้องสแกนปิดงานใบเดิมก่อน", "danger"); return;
+    }
+    processNewParcel(upperText, carrier);
+  } else {
+    lastScanTime = Date.now();
+    speak("รูปแบบรหัสไม่ถูกต้องค่ะ");
+    setStatus("⚠️ รูปแบบรหัสไม่ถูกต้อง", "warning");
+  }
 }
 
 function setStatus(msg, type) {
-  const el = document.getElementById("statusLabel");
-  el.innerText = msg;
-  const map = { success: "bg-success text-white", danger: "bg-danger text-white", warning: "bg-warning text-dark", primary: "bg-primary text-white", info: "bg-info text-white" };
-  el.className = "status-badge " + (map[type] || "bg-light text-muted");
+  const el = document.getElementById("statusLabel");
+  el.innerText = msg;
+  const map = { success: "bg-success text-white", danger: "bg-danger text-white", warning: "bg-warning text-dark", primary: "bg-primary text-white", info: "bg-info text-white" };
+  el.className = "status-badge " + (map[type] || "bg-light text-muted");
 }
 
 function editParcelId() {
-  speak("เตรียมสแกนรหัสพัสดุที่ถูกต้องนะคะ");
-  isEditingId = true; currentP = "";
-  document.getElementById("parcelId").innerText = "รอสแกนรหัสใหม่...";
-  setStatus("✏️ กำลังแก้ไขรหัสพัสดุ...", "info");
-  document.getElementById("editParcelBtn").style.display = "none";
+  speak("เตรียมสแกนรหัสพัสดุที่ถูกต้องนะคะ");
+  isEditingId = true; currentP = "";
+  document.getElementById("parcelId").innerText = "รอสแกนรหัสใหม่...";
+  setStatus("✏️ กำลังแก้ไขรหัสพัสดุ...", "info");
+  document.getElementById("editParcelBtn").style.display = "none";
 }
 
 function processNewParcel(text, carrier) {
-  const wasEditing = isEditingId;
-  currentP = text;
-  if (!wasEditing) items = [];
-  isEditingId = false;
-  document.getElementById("parcelId").innerText = text;
-  document.getElementById("count").innerText = items.length;
-  renderList();
-  setStatus((wasEditing ? "✏️ แก้ไขรหัสพัสดุเป็น: " : `📦 พัสดุ ${carrier}: `) + text, "primary");
-  document.getElementById("editParcelBtn").style.display = "inline-block";
-  const lastFour = text.length >= 4 ? text.slice(-4) : text;
-  if (wasEditing) {
-    speak(`แก้ไขเป็นรหัส ${lastFour.split('').join(' ')} เรียบร้อยค่ะ`);
-    // reset checklist แล้วโหลดใหม่ตามพัสดุที่แก้ไข
-    expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
-    resetRemark();
-    document.getElementById("orderChecklistPanel").style.display = "none";
-    checkExpectedItems(text); // โหลด checklist ใหม่
-  } else {
-    speak(`พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`);
-    startCameraRecording();
-    checkExpectedItems(text);
-  }
+  const wasEditing = isEditingId;
+  currentP = text;
+  if (!wasEditing) items = [];
+  isEditingId = false;
+  document.getElementById("parcelId").innerText = text;
+  document.getElementById("count").innerText = items.length;
+  renderList();
+  setStatus((wasEditing ? "✏️ แก้ไขรหัสพัสดุเป็น: " : `📦 พัสดุ ${carrier}: `) + text, "primary");
+  document.getElementById("editParcelBtn").style.display = "inline-block";
+  const lastFour = text.length >= 4 ? text.slice(-4) : text;
+  if (wasEditing) {
+    speak(`แก้ไขเป็นรหัส ${lastFour.split('').join(' ')} เรียบร้อยค่ะ`);
+    // reset checklist แล้วโหลดใหม่ตามพัสดุที่แก้ไข
+    expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
+    resetRemark();
+    document.getElementById("orderChecklistPanel").style.display = "none";
+    checkExpectedItems(text); // โหลด checklist ใหม่
+  } else {
+    speak(`พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`);
+    startCameraRecording();
+    checkExpectedItems(text);
+  }
 }
 
 async function cancelWork() {
-  if (!currentP && items.length === 0) { await closeAppCompletely(); return; }
-  const result = await Swal.fire({
-    title: '🐱 ยืนยันการยกเลิก?',
-    html: '<div style="font-size:0.92rem; color:#444;">ข้อมูลและวิดีโอจะ<strong>ไม่ถูกบันทึก</strong>นะคะ</div>',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: '✖ ยกเลิกงาน',
-    cancelButtonText: '↩ กลับไปแพ็กต่อ',
-    confirmButtonColor: '#ff8fab',
-    cancelButtonColor: '#b2bec3',
-    background: '#fff0f3',
-    customClass: {
-      popup: 'swal-popup',
-      title: 'swal-ttl',
-      confirmButton: 'swal-btn',
-      cancelButton: 'swal-btn',
-    },
-    reverseButtons: true,
-  });
-  if (result.isConfirmed) {
-    isFinishing = true;
-    speak("ยกเลิกงานและไม่บันทึกข้อมูลค่ะ");
-    await stopCameraRecording();
-    recordedChunks = [];
-    await resetAppForNext();
-    isFinishing = false;
-    setStatus("✖ ยกเลิกงานเรียบร้อย", "secondary");
-  }
+  if (!currentP && items.length === 0) { await closeAppCompletely(); return; }
+  const result = await Swal.fire({
+    title: '🐱 ยืนยันการยกเลิก?',
+    html: '<div style="font-size:0.92rem; color:#444;">ข้อมูลและวิดีโอจะ<strong>ไม่ถูกบันทึก</strong>นะคะ</div>',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: '✖ ยกเลิกงาน',
+    cancelButtonText: '↩ กลับไปแพ็กต่อ',
+    confirmButtonColor: '#ff8fab',
+    cancelButtonColor: '#b2bec3',
+    background: '#fff0f3',
+    customClass: {
+      popup: 'swal-popup',
+      title: 'swal-ttl',
+      confirmButton: 'swal-btn',
+      cancelButton: 'swal-btn',
+    },
+    reverseButtons: true,
+  });
+  if (result.isConfirmed) {
+    isFinishing = true;
+    speak("ยกเลิกงานและไม่บันทึกข้อมูลค่ะ");
+    await stopCameraRecording();
+    recordedChunks = [];
+    await resetAppForNext();
+    isFinishing = false;
+    setStatus("✖ ยกเลิกงานเรียบร้อย", "secondary");
+  }
 }
 
 async function finishWork(isManual = false) {
-  const pId = currentP;
-  if (!pId) { if (isManual) speak("กรุณาสแกนรหัสพัสดุก่อนนะคะ"); return; }
-  if (isStrictValidationMode && !validateCurrentOrder()) {
-    // มีสินค้าเกิน — ยังบล็อกอยู่
-    let hasOver = false;
-    for (let sSku in scannedItemsMap) {
-      const req = expectedItemsArray.find(ex => ex.sku === sSku);
-      if (!req || scannedItemsMap[sSku] > req.qty) { hasOver = true; break; }
-    }
-    if (hasOver) {
-      Swal.fire('ยังปิดงานไม่ได้!', 'มีสินค้าผิดรายการ หรือ เกินจำนวน กรุณาตรวจสอบก่อน', 'error');
-      speak("มีสินค้าเกินจำนวนค่ะ กรุณาตรวจสอบ"); return;
-    }
-    // สินค้าไม่ครบ — แสดง remark panel แทน
-    if (!currentRemark) {
-      document.getElementById('remarkPanel').style.display = 'block';
-      document.getElementById('orderChecklistPanel').scrollIntoView({ behavior: 'smooth' });
-      speak("สินค้าไม่ครบค่ะ กรุณาเลือกเหตุผลก่อนจบงาน", false);
-      return;
-    }
-  }
-  isFinishing = true;
-  const snapshotItems = [...items];
-  const snapshotParcelId = pId;
-  const videoChunks = await stopCameraRecording();
-  const count = snapshotItems.length;
-  const summaryMsg = count > 0 ? `บันทึกสินค้า ${count} ชิ้น เรียบร้อยค่ะ` : `บันทึกพัสดุเบื้องหลังเรียบร้อยค่ะ`;
+  const pId = currentP;
+  if (!pId) { if (isManual) speak("กรุณาสแกนรหัสพัสดุก่อนนะคะ"); return; }
+  if (isStrictValidationMode && !validateCurrentOrder()) {
+    // มีสินค้าเกิน — ยังบล็อกอยู่
+    let hasOver = false;
+    for (let sSku in scannedItemsMap) {
+      const req = expectedItemsArray.find(ex => ex.sku === sSku);
+      if (!req || scannedItemsMap[sSku] > req.qty) { hasOver = true; break; }
+    }
+    if (hasOver) {
+      Swal.fire('ยังปิดงานไม่ได้!', 'มีสินค้าผิดรายการ หรือ เกินจำนวน กรุณาตรวจสอบก่อน', 'error');
+      speak("มีสินค้าเกินจำนวนค่ะ กรุณาตรวจสอบ"); return;
+    }
+    // สินค้าไม่ครบ — แสดง remark panel แทน
+    if (!currentRemark) {
+      document.getElementById('remarkPanel').style.display = 'block';
+      document.getElementById('orderChecklistPanel').scrollIntoView({ behavior: 'smooth' });
+      speak("สินค้าไม่ครบค่ะ กรุณาเลือกเหตุผลก่อนจบงาน", false);
+      return;
+    }
+  }
+  isFinishing = true;
+  const snapshotItems = [...items];
+  const snapshotParcelId = pId;
+  const videoChunks = await stopCameraRecording();
+  const count = snapshotItems.length;
+  const summaryMsg = count > 0 ? `บันทึกสินค้า ${count} ชิ้น เรียบร้อยค่ะ` : `บันทึกพัสดุเบื้องหลังเรียบร้อยค่ะ`;
 
-  if (isManual) {
-    await closeAppCompletely();
-    speak(summaryMsg, false);
-    setTimeout(() => { isFinishing = false; }, 1500);
-  } else {
-    await resetAppForNext();
-    speak(summaryMsg + " สแกนพัสดุใบถัดไปได้เลยค่ะ", false);
-    setStatus("⏳ กำลังเตรียมรับใบถัดไป...", "light");
-    setTimeout(() => {
-      isFinishing = false;
-      lastScanTime = Date.now();
-      setStatus("✔ พร้อมรับพัสดุใบถัดไป", "success");
-    }, 1500);
-  }
+  if (isManual) {
+    await closeAppCompletely();
+    speak(summaryMsg, false);
+    setTimeout(() => { isFinishing = false; }, 1500);
+  } else {
+    await resetAppForNext();
+    speak(summaryMsg + " สแกนพัสดุใบถัดไปได้เลยค่ะ", false);
+    setStatus("⏳ กำลังเตรียมรับใบถัดไป...", "light");
+    setTimeout(() => {
+      isFinishing = false;
+      lastScanTime = Date.now();
+      setStatus("✔ พร้อมรับพัสดุใบถัดไป", "success");
+    }, 1500);
+  }
 
-  sessionParcels[snapshotParcelId] = count;
-  const snapshotRemark = currentRemark;
-  processBackgroundUpload(snapshotParcelId, snapshotItems, videoChunks, snapshotRemark);
+  sessionParcels[snapshotParcelId] = count;
+  const snapshotRemark = currentRemark;
+  processBackgroundUpload(snapshotParcelId, snapshotItems, videoChunks, snapshotRemark);
 }
 
 async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '') {
-  try {
-    const videoData = await convertChunksToBase64(chunks);
-    await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", remark: remarkNote || "" });
-    console.log(`[Background] บันทึก ${pId} สำเร็จ`);
-  } catch (err) {
-    console.error(`[Background Error] ${pId}:`, err);
-  }
+  try {
+    const videoData = await convertChunksToBase64(chunks);
+    await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", remark: remarkNote || "" });
+    console.log(`[Background] บันทึก ${pId} สำเร็จ`);
+  } catch (err) {
+    console.error(`[Background Error] ${pId}:`, err);
+  }
 }
 
 async function resetAppForNext() {
-  currentP = ""; items = []; isEditingId = false;
-  expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
-  resetRemark();
-  document.getElementById("orderChecklistPanel").style.display = "none";
-  document.getElementById("parcelId").innerText = "-";
-  document.getElementById("count").innerText = "0";
-  document.getElementById("itemList").innerHTML = "";
-  document.getElementById("editParcelBtn").style.display = "none";
-  setStatus("รอพัสดุใบใหม่...", "light");
-  document.getElementById("rec-label").innerText = "🔴 ระบบพร้อมทำงาน (สแกนพัสดุใบถัดไปได้เลย)";
+  currentP = ""; items = []; isEditingId = false;
+  expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
+  resetRemark();
+  document.getElementById("orderChecklistPanel").style.display = "none";
+  document.getElementById("parcelId").innerText = "-";
+  document.getElementById("count").innerText = "0";
+  document.getElementById("itemList").innerHTML = "";
+  document.getElementById("editParcelBtn").style.display = "none";
+  setStatus("รอพัสดุใบใหม่...", "light");
+  document.getElementById("rec-label").innerText = "🔴 ระบบพร้อมทำงาน (สแกนพัสดุใบถัดไปได้เลย)";
 }
 
 async function closeAppCompletely() {
-  if (scanner) { await scanner.clear(); scanner = null; }
-  document.getElementById("app-header").style.display = "block";
-  document.getElementById("app-tabs").style.display = "flex";
-  currentP = ""; items = []; isEditingId = false;
-  expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
-  resetRemark();
-  document.getElementById("orderChecklistPanel").style.display = "none";
-  document.getElementById("reader").style.display = "none";
-  document.getElementById("parcelId").innerText = "-";
-  document.getElementById("count").innerText = "0";
-  document.getElementById("itemList").innerHTML = "";
-  document.getElementById("editParcelBtn").style.display = "none";
-  setStatus("จบงานแล้ว รอเริ่มใหม่...", "light");
-  const startBtn = document.getElementById("startBtn");
-  startBtn.style.display = "block"; startBtn.disabled = false;
-  startBtn.innerText = "🚀 เริ่มระบบ / โหลดข้อมูลสินค้า";
-  document.getElementById("action-buttons").style.display = "none";
+  if (scanner) { await scanner.clear(); scanner = null; }
+  document.getElementById("app-header").style.display = "block";
+  document.getElementById("app-tabs").style.display = "flex";
+  currentP = ""; items = []; isEditingId = false;
+  expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
+  resetRemark();
+  document.getElementById("orderChecklistPanel").style.display = "none";
+  document.getElementById("reader").style.display = "none";
+  document.getElementById("parcelId").innerText = "-";
+  document.getElementById("count").innerText = "0";
+  document.getElementById("itemList").innerHTML = "";
+  document.getElementById("editParcelBtn").style.display = "none";
+  setStatus("จบงานแล้ว รอเริ่มใหม่...", "light");
+  const startBtn = document.getElementById("startBtn");
+  startBtn.style.display = "block"; startBtn.disabled = false;
+  startBtn.innerText = "🚀 เริ่มระบบ / โหลดข้อมูลสินค้า";
+  document.getElementById("action-buttons").style.display = "none";
 }
 
 function renderList() {
-  let ul = document.getElementById("itemList");
-  ul.innerHTML = "";
-  [...items].reverse().forEach((c, i) => {
-    let li = document.createElement("li");
-    li.className = "list-group-item d-flex justify-content-between align-items-center animate__animated animate__slideInLeft";
-    li.innerHTML = `<span>${productMap[c] || c}</span> <button class="btn btn-sm text-danger" onclick="removeItem(${items.length - 1 - i})">✕</button>`;
-    ul.appendChild(li);
-  });
+  let ul = document.getElementById("itemList");
+  ul.innerHTML = "";
+  [...items].reverse().forEach((c, i) => {
+    let li = document.createElement("li");
+    li.className = "list-group-item d-flex justify-content-between align-items-center animate__animated animate__slideInLeft";
+    li.innerHTML = `<span>${productMap[c] || c}</span> <button class="btn btn-sm text-danger" onclick="removeItem(${items.length - 1 - i})">✕</button>`;
+    ul.appendChild(li);
+  });
 }
 
 function removeItem(idx) {
-  if (isStrictValidationMode) {
-    let sku = items[idx];
-    if (scannedItemsMap[sku] > 0) {
-      scannedItemsMap[sku]--;
-      // ลบออกจาก map เลยถ้าเป็น 0 เพื่อไม่ให้ validate ตรวจเจอ
-      if (scannedItemsMap[sku] === 0) delete scannedItemsMap[sku];
-    }
-  }
-  items.splice(idx, 1);
-  document.getElementById("count").innerText = items.length;
-  renderList();
-  if (isStrictValidationMode) updateChecklistUI();
-  speak("ลบรายการแล้วค่ะ");
+  if (isStrictValidationMode) {
+    let sku = items[idx];
+    if (scannedItemsMap[sku] > 0) {
+      scannedItemsMap[sku]--;
+      // ลบออกจาก map เลยถ้าเป็น 0 เพื่อไม่ให้ validate ตรวจเจอ
+      if (scannedItemsMap[sku] === 0) delete scannedItemsMap[sku];
+    }
+  }
+  items.splice(idx, 1);
+  document.getElementById("count").innerText = items.length;
+  renderList();
+  if (isStrictValidationMode) updateChecklistUI();
+  speak("ลบรายการแล้วค่ะ");
 }
 
 // --- Checklist ---
 async function checkExpectedItems(tracking) {
-  document.getElementById("orderChecklistPanel").style.display = "none";
-  try {
-    const expectedData = await callGAS("getExpectedOrderDetails", { trackingNo: tracking });
-    if (expectedData && expectedData.length > 0) {
-      isStrictValidationMode = true;
-      expectedItemsArray = expectedData;
-      scannedItemsMap = {};
-      items.forEach(sku => { scannedItemsMap[sku] = (scannedItemsMap[sku] || 0) + 1; });
-      document.getElementById("orderChecklistPanel").style.display = "block";
-      updateChecklistUI();
-      speak("กรุณาสแกนสินค้าให้ครบตามรายการในระบบค่ะ", false);
-    } else {
-      isStrictValidationMode = false; expectedItemsArray = []; scannedItemsMap = {};
-    }
-  } catch (e) {
-    isStrictValidationMode = false;
-  }
+  document.getElementById("orderChecklistPanel").style.display = "none";
+  try {
+    const expectedData = await callGAS("getExpectedOrderDetails", { trackingNo: tracking });
+    let expectedData = null;
+    const key = String(tracking).trim().toUpperCase();
+
+    // ✅ ใช้ cache ก่อน (เร็วมาก — ค้นใน memory)
+    if (ordersCache && ordersCache[key]) {
+      expectedData = ordersCache[key];
+      console.log('[Cache] HIT:', key, expectedData.length, 'items');
+    } else {
+      // ❌ cache miss → fallback ยิง GAS (จะช้ากว่า)
+      console.log('[Cache] MISS:', key, '— calling GAS...');
+      expectedData = await callGAS("getExpectedOrderDetails", { trackingNo: tracking });
+
+      // เก็บเข้า cache ทันทีสำหรับครั้งต่อไป
+      if (expectedData && expectedData.length > 0 && ordersCache) {
+        ordersCache[key] = expectedData;
+      }
+    }
+
+    if (expectedData && expectedData.length > 0) {
+      isStrictValidationMode = true;
+      expectedItemsArray = expectedData;
+      scannedItemsMap = {};
+      items.forEach(sku => { scannedItemsMap[sku] = (scannedItemsMap[sku] || 0) + 1; });
+      document.getElementById("orderChecklistPanel").style.display = "block";
+      updateChecklistUI();
+      speak("กรุณาสแกนสินค้าให้ครบตามรายการในระบบค่ะ", false);
+    } else {
+      isStrictValidationMode = false; expectedItemsArray = []; scannedItemsMap = {};
+    }
+  } catch (e) {
+    console.warn('[checkExpectedItems] error:', e.message);
+    isStrictValidationMode = false;
+  }
 }
 
 // --- Remark Functions ---
 function selectRemark(btn, value) {
-  document.querySelectorAll('.remark-btn').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-  currentRemark = value;
-  const otherBox = document.getElementById('remarkOtherBox');
-  if (value === 'อื่นๆ') {
-    otherBox.style.display = 'block';
-    document.getElementById('remarkOtherInput').focus();
-  } else {
-    otherBox.style.display = 'none';
-  }
+  document.querySelectorAll('.remark-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  currentRemark = value;
+  const otherBox = document.getElementById('remarkOtherBox');
+  if (value === 'อื่นๆ') {
+    otherBox.style.display = 'block';
+    document.getElementById('remarkOtherInput').focus();
+  } else {
+    otherBox.style.display = 'none';
+  }
 }
 
 async function confirmRemarkAndFinish() {
-  if (!currentRemark) { speak("กรุณาเลือกเหตุผลก่อนค่ะ", false); return; }
-  if (currentRemark === 'อื่นๆ') {
-    const other = document.getElementById('remarkOtherInput').value.trim();
-    if (!other) { speak("กรุณาระบุเหตุผลด้วยค่ะ", false); return; }
-    currentRemark = other;
-  }
-  document.getElementById('remarkPanel').style.display = 'none';
-  speak(`บันทึกพร้อมหมายเหตุ ${currentRemark} ค่ะ`, false);
-  await finishWork(false); // เรียก finishWork อีกครั้ง ตอนนี้มี currentRemark แล้ว
+  if (!currentRemark) { speak("กรุณาเลือกเหตุผลก่อนค่ะ", false); return; }
+  if (currentRemark === 'อื่นๆ') {
+    const other = document.getElementById('remarkOtherInput').value.trim();
+    if (!other) { speak("กรุณาระบุเหตุผลด้วยค่ะ", false); return; }
+    currentRemark = other;
+  }
+  document.getElementById('remarkPanel').style.display = 'none';
+  speak(`บันทึกพร้อมหมายเหตุ ${currentRemark} ค่ะ`, false);
+  await finishWork(false); // เรียก finishWork อีกครั้ง ตอนนี้มี currentRemark แล้ว
 }
 
 function resetRemark() {
-  currentRemark = '';
-  document.querySelectorAll('.remark-btn').forEach(b => b.classList.remove('selected'));
-  document.getElementById('remarkPanel').style.display = 'none';
-  document.getElementById('remarkOtherBox').style.display = 'none';
-  document.getElementById('remarkOtherInput').value = '';
+  currentRemark = '';
+  document.querySelectorAll('.remark-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('remarkPanel').style.display = 'none';
+  document.getElementById('remarkOtherBox').style.display = 'none';
+  document.getElementById('remarkOtherInput').value = '';
 }
 
 function updateChecklistUI() {
-  let html = ""; let isAllMatched = true; let hasOverScan = false;
-  expectedItemsArray.forEach(item => {
-    let scanQty = scannedItemsMap[item.sku] || 0;
-    let statusClass = "", icon = "⏳";
-    if (scanQty === item.qty) { statusClass = "matched"; icon = "✅"; }
-    else if (scanQty > item.qty) { statusClass = "over"; icon = "❌"; isAllMatched = false; hasOverScan = true; }
-    else { isAllMatched = false; }
-    html += `<div class="checklist-item ${statusClass}"><span>${icon} ${productMap[item.sku] || item.sku}</span><span class="badge bg-${scanQty === item.qty ? 'success' : (scanQty > item.qty ? 'danger' : 'secondary')} rounded-pill">${scanQty} / ${item.qty}</span></div>`;
-  });
-  for (let sSku in scannedItemsMap) {
-    if (!expectedItemsArray.find(ex => ex.sku === sSku) && scannedItemsMap[sSku] > 0) {
-      html += `<div class="checklist-item over"><span>❌ ${productMap[sSku] || sSku} (ส่วนเกิน!)</span><span class="badge bg-danger rounded-pill">${scannedItemsMap[sSku]}</span></div>`;
-      isAllMatched = false; hasOverScan = true;
-    }
-  }
-  document.getElementById('checklistContent').innerHTML = html;
-  const alertBox = document.getElementById('orderStatusAlert');
-  alertBox.style.display = 'block';
-  if (isAllMatched && !hasOverScan) {
-    alertBox.className = "alert alert-success mt-2 mb-0 py-2";
-    alertBox.innerHTML = "<strong>สมบูรณ์!</strong> สินค้าครบถ้วน";
-    speak("สินค้าครบถ้วนแล้วค่ะ", false);
-  } else if (hasOverScan) {
-    alertBox.className = "alert alert-danger mt-2 mb-0 py-2";
-    alertBox.innerHTML = "<strong>ระวัง!</strong> สินค้าผิดรายการ หรือ เกินจำนวน";
-  } else {
-    alertBox.className = "alert alert-warning mt-2 mb-0 py-2";
-    const missing = expectedItemsArray.filter(item => (scannedItemsMap[item.sku] || 0) < item.qty);
-    if (missing.length === 1) {
-      const m = missing[0];
-      const need = m.qty - (scannedItemsMap[m.sku] || 0);
-      alertBox.innerHTML = `<strong>กำลังแพ็ก...</strong> ยังขาด ${productMap[m.sku] || m.sku} อีก ${need} ชิ้น`;
-    } else {
-      alertBox.innerHTML = `<strong>กำลังแพ็ก...</strong> ยังขาดสินค้าอีก ${missing.length} รายการ`;
-    }
-  }
+  let html = ""; let isAllMatched = true; let hasOverScan = false;
+  expectedItemsArray.forEach(item => {
+    let scanQty = scannedItemsMap[item.sku] || 0;
+    let statusClass = "", icon = "⏳";
+    if (scanQty === item.qty) { statusClass = "matched"; icon = "✅"; }
+    else if (scanQty > item.qty) { statusClass = "over"; icon = "❌"; isAllMatched = false; hasOverScan = true; }
+    else { isAllMatched = false; }
+    html += `<div class="checklist-item ${statusClass}"><span>${icon} ${productMap[item.sku] || item.sku}</span><span class="badge bg-${scanQty === item.qty ? 'success' : (scanQty > item.qty ? 'danger' : 'secondary')} rounded-pill">${scanQty} / ${item.qty}</span></div>`;
+  });
+  for (let sSku in scannedItemsMap) {
+    if (!expectedItemsArray.find(ex => ex.sku === sSku) && scannedItemsMap[sSku] > 0) {
+      html += `<div class="checklist-item over"><span>❌ ${productMap[sSku] || sSku} (ส่วนเกิน!)</span><span class="badge bg-danger rounded-pill">${scannedItemsMap[sSku]}</span></div>`;
+      isAllMatched = false; hasOverScan = true;
+    }
+  }
+  document.getElementById('checklistContent').innerHTML = html;
+  const alertBox = document.getElementById('orderStatusAlert');
+  alertBox.style.display = 'block';
+  if (isAllMatched && !hasOverScan) {
+    alertBox.className = "alert alert-success mt-2 mb-0 py-2";
+    alertBox.innerHTML = "<strong>สมบูรณ์!</strong> สินค้าครบถ้วน";
+    speak("สินค้าครบถ้วนแล้วค่ะ", false);
+  } else if (hasOverScan) {
+    alertBox.className = "alert alert-danger mt-2 mb-0 py-2";
+    alertBox.innerHTML = "<strong>ระวัง!</strong> สินค้าผิดรายการ หรือ เกินจำนวน";
+  } else {
+    alertBox.className = "alert alert-warning mt-2 mb-0 py-2";
+    const missing = expectedItemsArray.filter(item => (scannedItemsMap[item.sku] || 0) < item.qty);
+    if (missing.length === 1) {
+      const m = missing[0];
+      const need = m.qty - (scannedItemsMap[m.sku] || 0);
+      alertBox.innerHTML = `<strong>กำลังแพ็ก...</strong> ยังขาด ${productMap[m.sku] || m.sku} อีก ${need} ชิ้น`;
+    } else {
+      alertBox.innerHTML = `<strong>กำลังแพ็ก...</strong> ยังขาดสินค้าอีก ${missing.length} รายการ`;
+    }
+  }
 }
 
 function validateCurrentOrder() {
-  if (!isStrictValidationMode) return true;
-  for (let item of expectedItemsArray) { if ((scannedItemsMap[item.sku] || 0) !== item.qty) return false; }
-  for (let sSku in scannedItemsMap) {
-    let reqItem = expectedItemsArray.find(ex => ex.sku === sSku);
-    if (!reqItem || scannedItemsMap[sSku] > reqItem.qty) return false;
-  }
-  return true;
+  if (!isStrictValidationMode) return true;
+  for (let item of expectedItemsArray) { if ((scannedItemsMap[item.sku] || 0) !== item.qty) return false; }
+  for (let sSku in scannedItemsMap) {
+    let reqItem = expectedItemsArray.find(ex => ex.sku === sSku);
+    if (!reqItem || scannedItemsMap[sSku] > reqItem.qty) return false;
+  }
+  return true;
 }
 
 // --- Upload Marketplace ---
 async function processFileUpload() {
-  const fileInput = document.getElementById('fileInput');
-  const marketplace = document.getElementById('marketplaceSelect').value;
-  if (!fileInput.files.length) { Swal.fire('ข้อผิดพลาด', 'กรุณาเลือกไฟล์ก่อน', 'warning'); return; }
+  const fileInput = document.getElementById('fileInput');
+  const marketplace = document.getElementById('marketplaceSelect').value;
+  if (!fileInput.files.length) { Swal.fire('ข้อผิดพลาด', 'กรุณาเลือกไฟล์ก่อน', 'warning'); return; }
 
-  Swal.fire({ title: 'กำลังประมวลผล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+  Swal.fire({ title: 'กำลังประมวลผล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
-  const file = fileInput.files[0];
-  const map = colMappings[marketplace];
+  const file = fileInput.files[0];
+  const map = colMappings[marketplace];
 
-  try {
-    let rows = [];
+  try {
+    let rows = [];
 
-    // Page365 เป็น CSV (Tab-separated, UTF-16)
-    if (map.isCsv) {
-      const text = await file.text();
-      // ใช้ PapaParse เพื่อ parse CSV อย่างถูกต้อง (รองรับ field ที่มี tab/newline ข้างใน)
-      const parsed = Papa.parse(text, { delimiter: '\t', skipEmptyLines: true });
-      rows = parsed.data;
-    } else {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
-      rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, raw: false });
-    }
+    // Page365 เป็น CSV (Tab-separated, UTF-16)
+    if (map.isCsv) {
+      const text = await file.text();
+      // ใช้ PapaParse เพื่อ parse CSV อย่างถูกต้อง (รองรับ field ที่มี tab/newline ข้างใน)
+      const parsed = Papa.parse(text, { delimiter: '\t', skipEmptyLines: true });
+      rows = parsed.data;
+    } else {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+      rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, raw: false });
+    }
 
-    let extractData = [];
-    const startRow = map.headerRows || 1;
+    let extractData = [];
+    const startRow = map.headerRows || 1;
 
-    if (marketplace === 'lazada') {
-      // Lazada: 1 row = 1 ชิ้น ไม่มี qty column — group by tracking
-      const trackingMap = {};
-      for (let i = startRow; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row) continue;
-        const tracking = String(row[map.tracking] || '').trim().toUpperCase();
-        const sku      = String(row[map.sku]      || '').trim().toUpperCase();
-        if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
-        const key = tracking + '|' + sku;
-        trackingMap[key] = (trackingMap[key] || 0) + 1;
-      }
-      for (const key in trackingMap) {
-        const [tracking, sku] = key.split('|');
-        extractData.push({ marketplace, tracking, sku, qty: trackingMap[key] });
-      }
-    } else {
-      for (let i = startRow; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row) continue;
-        const tracking = String(row[map.tracking] || '').trim().toUpperCase();
-        const sku      = String(row[map.sku]      || '').trim().toUpperCase();
-        const qty      = parseInt(row[map.qty]) || 1;
-        if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
-        // กรองแถวที่ tracking สั้นเกินหรือมีช่องว่าง (header row)
-        if (tracking.length < 5 || tracking.includes(' ')) continue;
-        extractData.push({ marketplace, tracking, sku, qty });
-      }
-    }
+    if (marketplace === 'lazada') {
+      // Lazada: 1 row = 1 ชิ้น ไม่มี qty column — group by tracking
+      const trackingMap = {};
+      for (let i = startRow; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row) continue;
+        const tracking = String(row[map.tracking] || '').trim().toUpperCase();
+        const sku      = String(row[map.sku]      || '').trim().toUpperCase();
+        if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
+        const key = tracking + '|' + sku;
+        trackingMap[key] = (trackingMap[key] || 0) + 1;
+      }
+      for (const key in trackingMap) {
+        const [tracking, sku] = key.split('|');
+        extractData.push({ marketplace, tracking, sku, qty: trackingMap[key] });
+      }
+    } else {
+      for (let i = startRow; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row) continue;
+        const tracking = String(row[map.tracking] || '').trim().toUpperCase();
+        const sku      = String(row[map.sku]      || '').trim().toUpperCase();
+        const qty      = parseInt(row[map.qty]) || 1;
+        if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
+        // กรองแถวที่ tracking สั้นเกินหรือมีช่องว่าง (header row)
+        if (tracking.length < 5 || tracking.includes(' ')) continue;
+        extractData.push({ marketplace, tracking, sku, qty });
+      }
+    }
 
-    if (extractData.length === 0) {
-      Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูล\nกรุณาตรวจสอบว่าเลือก Marketplace ให้ตรงกับไฟล์', 'warning');
-      return;
-    }
+    if (extractData.length === 0) {
+      Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูล\nกรุณาตรวจสอบว่าเลือก Marketplace ให้ตรงกับไฟล์', 'warning');
+      return;
+    }
 
-    // ส่งไป GAS พร้อมชื่อไฟล์เพื่อป้องกัน duplicate
-    const response = await callGAS("saveMarketplaceData", {
-      data: extractData,
-      fileName: file.name,  // ส่งชื่อไฟล์ไปตรวจ duplicate
-      marketplace
-    });
+    // ส่งไป GAS พร้อมชื่อไฟล์เพื่อป้องกัน duplicate
+    const response = await callGAS("saveMarketplaceData", {
+      data: extractData,
+      fileName: file.name,  // ส่งชื่อไฟล์ไปตรวจ duplicate
+      marketplace
+    });
 
-    if (response && response.success) {
-      const dupMsg = response.duplicateSkipped > 0 ? `\n(ข้ามซ้ำ ${response.duplicateSkipped} รายการ)` : '';
-      Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${response.count} รายการ${dupMsg}`, 'success');
-      bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
-      document.getElementById('fileInput').value = "";
-    } else {
-      Swal.fire('ข้อผิดพลาด', 'บันทึกไม่สำเร็จ: ' + (response?.error || ''), 'error');
-    }
-  } catch (err) {
-    Swal.fire('ข้อผิดพลาด', 'อ่านไฟล์ไม่ได้: ' + err.message, 'error');
-  }
+    if (response && response.success) {
+      const dupMsg = response.duplicateSkipped > 0 ? `\n(ข้ามซ้ำ ${response.duplicateSkipped} รายการ)` : '';
+      Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${response.count} รายการ${dupMsg}`, 'success');
+      bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
+    // รีเฟรช orders cache หลังอัพโหลดข้อมูลใหม่
+    loadOrdersCache(true).then(() => console.log('[Cache] Refreshed after upload'));
+      document.getElementById('fileInput').value = "";
+    } else {
+      Swal.fire('ข้อผิดพลาด', 'บันทึกไม่สำเร็จ: ' + (response?.error || ''), 'error');
+    }
+  } catch (err) {
+    Swal.fire('ข้อผิดพลาด', 'อ่านไฟล์ไม่ได้: ' + err.message, 'error');
+  }
 }
 
 // --- Search ---
 function openTab(tab, btn) {
-  document.querySelectorAll('#scan, #search, #dash').forEach(el => el.style.display = 'none');
-  document.getElementById(tab).style.display = 'block';
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  if (tab === 'dash') {
-    refreshDash();
-    // auto load วันนี้ครั้งแรก
-    if (!document.getElementById('dashStart').value) {
-      setPreset('today', document.querySelector('.preset-btn'));
-    }
-  }
-  if (tab !== 'search' && searchScanner) { searchScanner.clear(); document.getElementById("search-reader").style.display = "none"; }
+  document.querySelectorAll('#scan, #search, #dash').forEach(el => el.style.display = 'none');
+  document.getElementById(tab).style.display = 'block';
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (tab === 'dash') {
+    refreshDash();
+    // auto load วันนี้ครั้งแรก
+    if (!document.getElementById('dashStart').value) {
+      setPreset('today', document.querySelector('.preset-btn'));
+    }
+  }
+  if (tab !== 'search' && searchScanner) { searchScanner.clear(); document.getElementById("search-reader").style.display = "none"; }
 }
 
 function refreshDash() {
-  // อัปเดต summary cards จาก session
-  const orders = Object.keys(sessionParcels).length;
-  const items  = Object.values(sessionParcels).reduce((a, b) => a + b, 0);
-  document.getElementById("d-box").innerText  = orders;
-  document.getElementById("d-item").innerText = items;
+  // อัปเดต summary cards จาก session
+  const orders = Object.keys(sessionParcels).length;
+  const items  = Object.values(sessionParcels).reduce((a, b) => a + b, 0);
+  document.getElementById("d-box").innerText  = orders;
+  document.getElementById("d-item").innerText = items;
 }
 
 function localDateStr(d) {
-  // แปลงเป็น YYYY-MM-DD ตามเวลาท้องถิ่น ไม่ใช่ UTC
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  // แปลงเป็น YYYY-MM-DD ตามเวลาท้องถิ่น ไม่ใช่ UTC
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function setPreset(type, btnEl) {
-  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-  if (btnEl) btnEl.classList.add('active');
-  const today = new Date();
-  let start = new Date(today), end = new Date(today);
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+  const today = new Date();
+  let start = new Date(today), end = new Date(today);
 
-  if (type === 'yesterday') {
-    start = new Date(today); start.setDate(today.getDate() - 1);
-    end   = new Date(start);
-  } else if (type === 'last7') {
-    start = new Date(today); start.setDate(today.getDate() - 6);
-  } else if (type === 'thisMonth') {
-    start = new Date(today.getFullYear(), today.getMonth(), 1);
-  } else if (type === 'lastMonth') {
-    start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    end   = new Date(today.getFullYear(), today.getMonth(), 0);
-  }
+  if (type === 'yesterday') {
+    start = new Date(today); start.setDate(today.getDate() - 1);
+    end   = new Date(start);
+  } else if (type === 'last7') {
+    start = new Date(today); start.setDate(today.getDate() - 6);
+  } else if (type === 'thisMonth') {
+    start = new Date(today.getFullYear(), today.getMonth(), 1);
+  } else if (type === 'lastMonth') {
+    start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    end   = new Date(today.getFullYear(), today.getMonth(), 0);
+  }
 
-  // ใช้ localDateStr แทน valueAsDate เพื่อไม่ให้เพี้ยน UTC
-  document.getElementById('dashStart').value = localDateStr(start);
-  document.getElementById('dashEnd').value   = localDateStr(end);
-  fetchReport();
+  // ใช้ localDateStr แทน valueAsDate เพื่อไม่ให้เพี้ยน UTC
+  document.getElementById('dashStart').value = localDateStr(start);
+  document.getElementById('dashEnd').value   = localDateStr(end);
+  fetchReport();
 }
 
 async function fetchReport() {
-  const start = document.getElementById('dashStart').value;
-  const end   = document.getElementById('dashEnd').value;
-  if (!start || !end) return;
+  const start = document.getElementById('dashStart').value;
+  const end   = document.getElementById('dashEnd').value;
+  if (!start || !end) return;
 
-  document.getElementById('dashLoading').style.display = 'block';
-  document.getElementById('dashContent').style.display = 'none';
+  document.getElementById('dashLoading').style.display = 'block';
+  document.getElementById('dashContent').style.display = 'none';
 
-  try {
-    const data = await callGAS("getReportData", { start, end });
-    renderReport(data, start, end);
-  } catch(e) {
-    document.getElementById('dashLoading').style.display = 'none';
-    Swal.fire('โหลดข้อมูลไม่สำเร็จ', e.message, 'error');
-  }
+  try {
+    const data = await callGAS("getReportData", { start, end });
+    renderReport(data, start, end);
+  } catch(e) {
+    document.getElementById('dashLoading').style.display = 'none';
+    Swal.fire('โหลดข้อมูลไม่สำเร็จ', e.message, 'error');
+  }
 }
 
 function renderReport(data, start, end) {
-  document.getElementById('dashLoading').style.display = 'none';
-  document.getElementById('dashContent').style.display = 'block';
+  document.getElementById('dashLoading').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
 
-  // period label
-  const fmt = d => new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'});
-  document.getElementById('dashPeriod').innerText = start === end ? fmt(start) : `${fmt(start)} – ${fmt(end)}`;
+  // period label
+  const fmt = d => new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'});
+  document.getElementById('dashPeriod').innerText = start === end ? fmt(start) : `${fmt(start)} – ${fmt(end)}`;
 
-  // stats
-  document.getElementById('d-box').innerText  = data.totalOrders  ?? Object.keys(sessionParcels).length;
-  document.getElementById('d-item').innerText = data.totalItems   ?? Object.values(sessionParcels).reduce((a,b)=>a+b,0);
+  // stats
+  document.getElementById('d-box').innerText  = data.totalOrders  ?? Object.keys(sessionParcels).length;
+  document.getElementById('d-item').innerText = data.totalItems   ?? Object.values(sessionParcels).reduce((a,b)=>a+b,0);
 
-  // product table
-  const container = document.getElementById('dashProductTable');
-  const products  = data.allProducts || [];
-  if (products.length === 0) {
-    container.innerHTML = '<div class="text-center small py-4" style="color:#c49aaa;">😿 ไม่พบข้อมูลในช่วงนี้</div>';
-    return;
-  }
-  container.innerHTML = products.map((item, i) => `
-    <div class="dash-row">
-      <div style="display:flex; align-items:center; gap:10px; overflow:hidden;">
-        <div class="dash-rank">${i+1}</div>
-        <div style="overflow:hidden;">
-          <div style="font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.name}</div>
-          <div style="font-size:0.72rem; color:#b0889a;">${item.sku || ''}</div>
-        </div>
-      </div>
-      <div class="dash-count">${item.count}<span style="font-size:0.7rem; font-weight:400; color:#c49aaa;"> ชิ้น</span></div>
-    </div>
-  `).join('');
+  // product table
+  const container = document.getElementById('dashProductTable');
+  const products  = data.allProducts || [];
+  if (products.length === 0) {
+    container.innerHTML = '<div class="text-center small py-4" style="color:#c49aaa;">😿 ไม่พบข้อมูลในช่วงนี้</div>';
+    return;
+  }
+  container.innerHTML = products.map((item, i) => `
+    <div class="dash-row">
+      <div style="display:flex; align-items:center; gap:10px; overflow:hidden;">
+        <div class="dash-rank">${i+1}</div>
+        <div style="overflow:hidden;">
+          <div style="font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.name}</div>
+          <div style="font-size:0.72rem; color:#b0889a;">${item.sku || ''}</div>
+        </div>
+      </div>
+      <div class="dash-count">${item.count}<span style="font-size:0.7rem; font-weight:400; color:#c49aaa;"> ชิ้น</span></div>
+    </div>
+  `).join('');
 }
 
 async function resetSession() {
-  const r = await Swal.fire({
-    title: '🎀 ล้างสถิติ?',
-    html: '<div style="font-size:0.88rem; color:#444;">ยืนยันการล้างสถิติรอบนี้ทั้งหมดนะคะ</div>',
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: '🗑️ ล้างเลย',
-    cancelButtonText: 'ยกเลิก',
-    confirmButtonColor: '#ff8fab',
-    cancelButtonColor: '#b2bec3',
-    background: '#fff0f3',
-    reverseButtons: true,
-  });
-  if (r.isConfirmed) { sessionParcels = {}; refreshDash(); }
+  const r = await Swal.fire({
+    title: '🎀 ล้างสถิติ?',
+    html: '<div style="font-size:0.88rem; color:#444;">ยืนยันการล้างสถิติรอบนี้ทั้งหมดนะคะ</div>',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: '🗑️ ล้างเลย',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#ff8fab',
+    cancelButtonColor: '#b2bec3',
+    background: '#fff0f3',
+    reverseButtons: true,
+  });
+  if (r.isConfirmed) { sessionParcels = {}; refreshDash(); }
 }
 
 function startSearchScan() {
-  const readerDiv = document.getElementById("search-reader");
-  readerDiv.style.display = "block";
-  if (searchScanner) searchScanner.clear();
-  searchScanner = new Html5QrcodeScanner("search-reader", { fps: 15, qrbox: { width: 250, height: 250 } });
-  searchScanner.render((text) => {
-    document.getElementById("searchInput").value = text;
-    speak("สแกนสำเร็จค่ะ");
-    searchScanner.clear().then(() => { readerDiv.style.display = "none"; runSearch(); });
-  });
+  const readerDiv = document.getElementById("search-reader");
+  readerDiv.style.display = "block";
+  if (searchScanner) searchScanner.clear();
+  searchScanner = new Html5QrcodeScanner("search-reader", { fps: 15, qrbox: { width: 250, height: 250 } });
+  searchScanner.render((text) => {
+    document.getElementById("searchInput").value = text;
+    speak("สแกนสำเร็จค่ะ");
+    searchScanner.clear().then(() => { readerDiv.style.display = "none"; runSearch(); });
+  });
 }
 
 function handleEnter(e) { if (e.key === "Enter") runSearch(); }
 
 async function runSearch() {
-  const q = document.getElementById("searchInput").value.trim();
-  if (!q) return;
-  document.getElementById("loadingSearch").style.display = "block";
-  document.getElementById("resultBody").innerHTML = "";
-  try {
-    const res = await callGAS("searchData", { query: q });
-    document.getElementById("loadingSearch").style.display = "none";
-    const tb = document.getElementById("resultBody"), th = document.getElementById("tableHead");
-    tb.innerHTML = ""; th.innerHTML = "";
-    if (!res || res.length === 0) {
-      tb.innerHTML = "<tr><td colspan='5' class='text-center py-4 text-muted'>❌ ไม่พบข้อมูล</td></tr>";
-      speak("ไม่พบข้อมูลค่ะ"); return;
-    }
-    const max = Math.max(...res.map(r => r.length));
-    let head = "<tr><th>วันที่</th><th>รหัสพัสดุ</th><th>วิดีโอ</th>";
-    for (let i = 3; i < max; i++) head += `<th>สินค้า ${i - 2}</th>`;
-    th.innerHTML = head + "</tr>";
-    res.forEach(row => {
-      let tr = "<tr>";
-      row.forEach(cell => { tr += `<td>${String(cell).includes("http") ? `<a href="${cell}" target="_blank" class="btn btn-sm btn-outline-primary">ดูคลิป</a>` : cell}</td>`; });
-      tb.innerHTML += tr + "</tr>";
-    });
-    const rawItems = res[0].slice(3).filter(i => i && !String(i).includes("http"));
-    if (rawItems.length > 0) speak(`จำนวนสินค้า ${rawItems.length} รายการค่ะ`);
-    else speak("พบข้อมูลแต่ไม่มีรายการสินค้าค่ะ");
-  } catch (err) {
-    document.getElementById("loadingSearch").style.display = "none";
-    Swal.fire('ค้นหาไม่สำเร็จ', err.message, 'error');
-  }
+  const q = document.getElementById("searchInput").value.trim();
+  if (!q) return;
+  document.getElementById("loadingSearch").style.display = "block";
+  document.getElementById("resultBody").innerHTML = "";
+  try {
+    const res = await callGAS("searchData", { query: q });
+    document.getElementById("loadingSearch").style.display = "none";
+    const tb = document.getElementById("resultBody"), th = document.getElementById("tableHead");
+    tb.innerHTML = ""; th.innerHTML = "";
+    if (!res || res.length === 0) {
+      tb.innerHTML = "<tr><td colspan='5' class='text-center py-4 text-muted'>❌ ไม่พบข้อมูล</td></tr>";
+      speak("ไม่พบข้อมูลค่ะ"); return;
+    }
+    const max = Math.max(...res.map(r => r.length));
+    let head = "<tr><th>วันที่</th><th>รหัสพัสดุ</th><th>วิดีโอ</th>";
+    for (let i = 3; i < max; i++) head += `<th>สินค้า ${i - 2}</th>`;
+    th.innerHTML = head + "</tr>";
+    res.forEach(row => {
+      let tr = "<tr>";
+      row.forEach(cell => { tr += `<td>${String(cell).includes("http") ? `<a href="${cell}" target="_blank" class="btn btn-sm btn-outline-primary">ดูคลิป</a>` : cell}</td>`; });
+      tb.innerHTML += tr + "</tr>";
+    });
+    const rawItems = res[0].slice(3).filter(i => i && !String(i).includes("http"));
+    if (rawItems.length > 0) speak(`จำนวนสินค้า ${rawItems.length} รายการค่ะ`);
+    else speak("พบข้อมูลแต่ไม่มีรายการสินค้าค่ะ");
+  } catch (err) {
+    document.getElementById("loadingSearch").style.display = "none";
+    Swal.fire('ค้นหาไม่สำเร็จ', err.message, 'error');
+  }
 }
 </script>
 
 <script>
 // === CAT & PAWS ANIMATIONS ===
 (function() {
-  // สร้าง floating paws
-  const pawBg = document.getElementById('pawBg');
-  if (!pawBg) return;
-  const pawEmojis = ['🐾','🌸','✦','💕','🎀','⭐'];
-  for (let i = 0; i < 18; i++) {
-    const el = document.createElement('div');
-    el.className = 'paw';
-    el.textContent = pawEmojis[i % pawEmojis.length];
-    el.style.left = Math.random() * 100 + 'vw';
-    el.style.animationDuration = (12 + Math.random() * 16) + 's';
-    el.style.animationDelay = (Math.random() * 14) + 's';
-    el.style.fontSize = (0.9 + Math.random() * 1.4) + 'rem';
-    pawBg.appendChild(el);
-  }
+  // สร้าง floating paws
+  const pawBg = document.getElementById('pawBg');
+  if (!pawBg) return;
+  const pawEmojis = ['🐾','🌸','✦','💕','🎀','⭐'];
+  for (let i = 0; i < 18; i++) {
+    const el = document.createElement('div');
+    el.className = 'paw';
+    el.textContent = pawEmojis[i % pawEmojis.length];
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.animationDuration = (12 + Math.random() * 16) + 's';
+    el.style.animationDelay = (Math.random() * 14) + 's';
+    el.style.fontSize = (0.9 + Math.random() * 1.4) + 'rem';
+    pawBg.appendChild(el);
+  }
 })();
 
 // Cat tap animation
@@ -1677,11 +1735,11 @@ async function runSearch() {
 // spawn sparkle on scan success
 const origProcessFinal = processFinalScan;
 window.processFinalScanWrapped = async function(text) {
-  await origProcessFinal(text);
-  // sparkle at center screen on product scan
-  if (text.trim().toUpperCase().startsWith('B')) {
-    setTimeout(() => spawnSparkle(window.innerWidth/2 - 30, window.innerHeight/2 - 20), 150);
-  }
+  await origProcessFinal(text);
+  // sparkle at center screen on product scan
+  if (text.trim().toUpperCase().startsWith('B')) {
+    setTimeout(() => spawnSparkle(window.innerWidth/2 - 30, window.innerHeight/2 - 20), 150);
+  }
 };
 </script>
 </body>
