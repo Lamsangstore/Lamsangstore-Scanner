@@ -154,22 +154,61 @@
       width: 100%;
       overflow: hidden;
       background: #000;
+      max-height: 220px;
     }
-    /* ให้ video เต็มความกว้าง */
-    #reader video { width: 100% !important; }
-    #reader canvas { width: 100% !important; }
+    #reader video {
+      width: 100% !important;
+      max-height: 220px !important;
+      object-fit: cover !important;
+    }
+    #reader canvas {
+      width: 100% !important;
+      max-height: 220px !important;
+    }
+    #reader > div:first-child {
+      max-height: 220px !important;
+      overflow: hidden !important;
+    }
     #search-reader {
       width: 100%; max-width: 440px; margin: auto;
       border-radius: 14px; overflow: hidden;
       border: 3px solid white;
       box-shadow: 0 0 0 2px var(--pink-light), 0 4px 16px rgba(0,0,0,0.08);
     }
-    /* ซ่อนส่วน Select Camera / Stop Scanning / footer ของ html5-qrcode ทั้งหมด */
-    [id$="__dashboard"] { display: none !important; }
-    [id$="__dashboard_section"] { display: none !important; }
-    [id$="__dashboard_section_csr"] { display: none !important; }
+    /* ซ่อนแค่ "Scan an Image File" */
     [id$="__dashboard_section_swaplink"] { display: none !important; }
     [id$="__status_span"] { display: none !important; }
+    /* จัด style dashboard ให้สวย */
+    [id$="__dashboard"] {
+      background: rgba(255,255,255,0.92) !important;
+      backdrop-filter: blur(12px);
+      padding: 8px 12px !important;
+      border-top: 1px solid var(--pink-light) !important;
+    }
+    [id$="__dashboard"] select {
+      border-radius: 10px !important;
+      border: 1.5px solid var(--pink-light) !important;
+      font-family: "Mitr", sans-serif !important;
+      font-size: 0.85rem !important;
+      padding: 5px 10px !important;
+      color: var(--text) !important;
+      width: 100% !important;
+      margin-bottom: 6px !important;
+    }
+    /* Start Scanning / Stop Scanning button */
+    [id$="__dashboard"] button {
+      border-radius: 10px !important;
+      background: linear-gradient(135deg, var(--pink), #e84393) !important;
+      border: none !important;
+      color: white !important;
+      font-family: "Mitr", sans-serif !important;
+      font-size: 0.85rem !important;
+      padding: 6px 16px !important;
+      width: 100% !important;
+    }
+    /* ซ่อน Stop Scanning หลังกล้องทำงานแล้ว (JS จะเพิ่ม class) */
+    #reader.camera-started [id$="__dashboard"] { display: none !important; }
+    #reader.camera-started { border-bottom: none !important; }
 
 
     /* ===== BUTTONS ===== */
@@ -1069,7 +1108,18 @@ function startScan() {
   document.getElementById("reader").style.display = "block";
   if (!scanner) {
     scanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: { width: 300, height: 350 }, rememberLastUsedCamera: true });
-    scanner.render((text, result) => onScanBuffer(text, result));
+    scanner.render(
+      (text, result) => onScanBuffer(text, result),
+      () => {} // error callback
+    );
+    // ตรวจว่ากล้องเริ่มทำงานแล้ว → ซ่อน dashboard
+    const checkCameraStarted = setInterval(() => {
+      const video = document.querySelector('#reader video');
+      if (video && video.srcObject) {
+        document.getElementById('reader').classList.add('camera-started');
+        clearInterval(checkCameraStarted);
+      }
+    }, 300);
   }
 }
 
