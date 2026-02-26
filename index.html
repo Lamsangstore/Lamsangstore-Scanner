@@ -211,7 +211,6 @@
     #reader.camera-started [id$="__dashboard"] { display: none !important; }
     #reader.camera-started { border-bottom: none !important; }
 
-
     /* ===== BUTTONS ===== */
     .btn-custom {
       border-radius: var(--radius-sm); padding: 14px 16px;
@@ -288,18 +287,6 @@
     }
     .btn-edit-inline:hover { background: var(--pink-light); }
 
-    /* ===== UPLOAD BUTTON ===== */
-    .btn-upload-head {
-      border-radius: var(--radius-xs); font-weight: 600;
-      font-size: 0.85rem; padding: 8px 16px;
-      background: white;
-      border: 1.5px solid var(--pink-light) !important;
-      color: var(--pink) !important;
-      transition: all 0.2s; white-space: nowrap;
-      box-shadow: 0 3px 12px rgba(255,143,171,0.25);
-    }
-    .btn-upload-head:hover { background: var(--pink); color: white !important; border-color: var(--pink) !important; }
-
     /* ===== CHECKLIST ===== */
     .order-checklist {
       background: linear-gradient(135deg, #fff8ff, #fff0f3);
@@ -337,8 +324,6 @@
       border: 1.5px solid var(--pink-light);
       border-radius: var(--radius); padding: 14px;
     }
-
-
 
     /* ===== MODAL ===== */
     .modal-content {
@@ -463,11 +448,6 @@
       font-weight: 700; color: var(--pink);
       font-size: 1.05rem; flex-shrink: 0;
     }
-    .spinner-ring {
-      font-size: 2rem;
-      animation: catBounce 0.8s ease-in-out infinite;
-      display: inline-block;
-    }
 
     /* === SWEETALERT THEME === */
     .swal-popup {
@@ -523,16 +503,6 @@
     .mp-label { display: flex; flex-direction: column; }
     .mp-name { font-weight: 600; font-size: 0.92rem; color: var(--text); }
     .mp-desc { font-size: 0.72rem; color: #b0889a; margin-top: 1px; }
-    .mp-guide-btn {
-      margin-left: auto; flex-shrink: 0;
-      font-size: 0.72rem; padding: 4px 10px;
-      border-radius: 12px; border: 1.5px solid var(--pink-light);
-      background: white; color: var(--pink);
-      text-decoration: none; font-family: 'Mitr', sans-serif;
-      transition: all 0.2s; white-space: nowrap;
-      display: flex; align-items: center; gap: 4px;
-    }
-    .mp-guide-btn:hover { background: var(--pink); color: white; border-color: var(--pink); }
   </style>
 </head>
 <body>
@@ -625,7 +595,6 @@
         <ul id="itemList" class="list-group"></ul>
       </div>
 
-
       <button id="refreshCacheBtn" onclick="refreshProductCache()" class="btn btn-sm mb-2 w-100" style="display:none; border-radius:18px; border:1.5px solid var(--pink-light); color:var(--pink); background:white; font-family:'Mitr',sans-serif; font-size:0.88rem; padding:8px;">🔄 รีเฟรชข้อมูลสินค้า</button>
 
       <div id="action-buttons" class="mt-4" style="display:none">
@@ -668,7 +637,6 @@
 
   <!-- TAB: DASHBOARD -->
   <div id="dash" style="display:none" class="fade-in-up">
-
     <!-- Date Preset Buttons -->
     <div class="dash-presets mb-3">
       <button class="preset-btn active" onclick="setPreset('today',this)">วันนี้</button>
@@ -744,12 +712,9 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body px-4 py-3">
-
         <div class="mb-4">
           <label class="form-label fw-600 small mb-2" style="color:var(--brown);">เลือกช่องทาง (Marketplace)</label>
-          <!-- Custom marketplace selector -->
           <div id="mpSelector" style="display:flex; flex-direction:column; gap:8px;">
-
             <label class="mp-option" data-value="tiktok" onclick="selectMarketplace('tiktok', this)">
               <div class="mp-radio"></div>
               <div class="mp-icon" style="background:#010101;">
@@ -757,9 +722,8 @@
               </div>
               <div class="mp-label">
                 <span class="mp-name">TikTok Shop</span>
-                <span class="mp-desc">Tracking ID · Seller SKU · Quantity (.csv)</span>
+                <span class="mp-desc">Tracking ID · Seller SKU · Quantity</span>
               </div>
-              <a href="TTindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
             </label>
 
             <label class="mp-option" data-value="shopee" onclick="selectMarketplace('shopee', this)">
@@ -769,9 +733,8 @@
               </div>
               <div class="mp-label">
                 <span class="mp-name">Shopee</span>
-                <span class="mp-desc">Tracking=N · SKU=S · Qty=W</span>
+                <span class="mp-desc">ไฟล์ .csv หรือ .xlsx ที่โหลดจากระบบ</span>
               </div>
-              <a href="SPindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
             </label>
 
             <label class="mp-option" data-value="lazada" onclick="selectMarketplace('lazada', this)">
@@ -783,7 +746,6 @@
                 <span class="mp-name">Lazada</span>
                 <span class="mp-desc">Tracking=BG · SKU=F · (1 row = 1 ชิ้น)</span>
               </div>
-              <a href="LZindex.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
             </label>
 
             <label class="mp-option" data-value="page365" onclick="selectMarketplace('page365', this)">
@@ -795,9 +757,7 @@
                 <span class="mp-name">Page365</span>
                 <span class="mp-desc">Tracking=L · SKU=Y · Qty=AC</span>
               </div>
-              <a href="365index.html" target="_blank" class="mp-guide-btn" onclick="event.stopPropagation()">📖 คู่มือ</a>
             </label>
-
           </div>
           <!-- hidden select สำหรับ JS -->
           <select id="marketplaceSelect" style="display:none;">
@@ -836,8 +796,6 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycby1689Y6ybjRtRB-nvG6SvQ
 function navigateByHash() {
   const hash = window.location.hash;
   if (!hash || hash === '#scan') return;
-
-  // แสดง tab bar ก่อนเลย (ในกรณีที่ยังซ่อนอยู่)
   const appTabs = document.getElementById('app-tabs');
   if (appTabs) appTabs.style.display = 'flex';
 
@@ -851,19 +809,13 @@ function navigateByHash() {
 }
 
 window.addEventListener('hashchange', navigateByHash);
+window.addEventListener('load', () => { setTimeout(navigateByHash, 100); });
 
-// รอ page โหลดเสร็จสมบูรณ์ก่อนค่อย navigate
-window.addEventListener('load', () => {
-  setTimeout(navigateByHash, 100);
-});
-
-// --- Marketplace Selector ---
 function selectMarketplace(value, el) {
   document.querySelectorAll('.mp-option').forEach(o => o.classList.remove('selected'));
   el.classList.add('selected');
   document.getElementById('marketplaceSelect').value = value;
 }
-// เลือก TikTok เป็น default
 document.addEventListener('DOMContentLoaded', () => {
   const first = document.querySelector('.mp-option');
   if (first) first.classList.add('selected');
@@ -871,20 +823,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // col index = เลข column - 1 (เริ่มจาก 0)
 const colMappings = {
-  'tiktok':  { tracking: 35, sku: 6,  qty: 9,  headerRows: 1 }, // AJ=36, G=7, J=10
-  'shopee':  { tracking: 13, sku: 18, qty: 22, headerRows: 1 }, // N=14, S=19, W=23
-  'lazada':  { tracking: 58, sku: 5,  qty: -1, headerRows: 1 }, // BG=59, F=6, ไม่มี qty (1row=1ชิ้น)
-  'page365': { tracking: 11, sku: 24, qty: 28, headerRows: 1, isCsv: true } // L=12, Y=25, AC=29
+  'tiktok':  { tracking: 35, sku: 6,  qty: 9,  headerRows: 1 }, 
+  'shopee':  { tracking: 13, sku: 18, qty: 22, headerRows: 1 }, // ตรงกับไฟล์ Shopee เป๊ะๆ (N=14, S=19, W=23)
+  'lazada':  { tracking: 58, sku: 5,  qty: -1, headerRows: 1 }, 
+  'page365': { tracking: 11, sku: 24, qty: 28, headerRows: 1 }
 };
 
 // --- ตัวแปรหลัก ---
 let productMap = {}, currentP = "", items = [], scanner, searchScanner, lastScanTime = 0;
 let sessionParcels = {}, scanBuffer = [], bufferTimeout = null, isFinishing = false, isEditingId = false;
 let expectedItemsArray = [], scannedItemsMap = {}, isStrictValidationMode = false;
-let currentRemark = ''; // หมายเหตุเมื่อสินค้าไม่ครบ
+let currentRemark = '';
 let mediaRecorder, recordedChunks = [], cameraStream = null, isRecording = false;
 
-// --- API Helper: แทนที่ google.script.run ทั้งหมด ---
+const ORDERS_CACHE_KEY = 'lamsang_orders_cache';
+const ORDERS_CACHE_TS  = 'lamsang_orders_ts';
+const ORDERS_CACHE_TTL = 30 * 60 * 1000;
+let ordersCache = null;
+
+// --- API Helper ---
 async function callGAS(action, payload = {}) {
   const res = await fetch(GAS_URL, {
     method: "POST",
@@ -983,7 +940,6 @@ async function convertChunksToBase64(chunks) {
 }
 
 // --- เริ่มระบบ ---
-// โหลด orders cache จาก localStorage หรือ fetch ใหม่จาก GAS
 async function loadOrdersCache(forceRefresh = false) {
   try {
     const cached = localStorage.getItem(ORDERS_CACHE_KEY);
@@ -992,25 +948,19 @@ async function loadOrdersCache(forceRefresh = false) {
 
     if (!forceRefresh && cached && fresh) {
       ordersCache = JSON.parse(cached);
-      console.log('[Cache] Orders loaded from localStorage:', Object.keys(ordersCache).length, 'records');
       return;
     }
-
-    console.log('[Cache] Fetching orders from GAS...');
     const data = await callGAS('getAllOrders');
     if (data && typeof data === 'object' && !data.error) {
       ordersCache = data;
       localStorage.setItem(ORDERS_CACHE_KEY, JSON.stringify(data));
       localStorage.setItem(ORDERS_CACHE_TS, Date.now().toString());
-      console.log('[Cache] Orders cached:', Object.keys(data).length, 'records');
     }
   } catch(e) {
-    console.warn('[Cache] loadOrdersCache failed:', e.message);
     ordersCache = null;
   }
 }
 
-// รีเฟรช orders cache (เรียกหลังอัพโหลดออเดอร์ใหม่)
 async function refreshOrdersCache() {
   const btn = document.getElementById('refreshCacheBtn');
   if (btn) { btn.disabled = true; btn.innerText = '⏳ กำลังรีเฟรช...'; }
@@ -1022,9 +972,8 @@ async function initScanner() {
   const btn = document.getElementById("startBtn");
   const CACHE_KEY = "productMap_cache";
   const CACHE_TIME_KEY = "productMap_time";
-  const CACHE_TTL = 60 * 60 * 1000; // 1 ชั่วโมง
+  const CACHE_TTL = 60 * 60 * 1000;
 
-  // โหลด cache ก่อนเลย — เริ่มระบบได้ทันทีไม่รอ GAS
   const cached = localStorage.getItem(CACHE_KEY);
   const cachedTime = parseInt(localStorage.getItem(CACHE_TIME_KEY) || "0");
   const isFresh = (Date.now() - cachedTime) < CACHE_TTL;
@@ -1038,27 +987,22 @@ async function initScanner() {
     document.getElementById("refreshCacheBtn").style.display = "inline-block";
     speak("ระบบพร้อมแล้วค่ะ เริ่มสแกนพัสดุได้เลย");
     startScan();
-    // โหลด orders cache เบื้องหลัง
     loadOrdersCache();
-    // refresh product cache ถ้าเก่าเกิน 1 ชั่วโมง
     if (!isFresh) {
       callGAS("getProductData").then(res => {
         if (res && Object.keys(res).length > 0) {
           productMap = res;
           localStorage.setItem(CACHE_KEY, JSON.stringify(res));
           localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
-          console.log("[Cache] รีเฟรชข้อมูลสินค้าแล้ว");
         }
       }).catch(() => {});
     }
     return;
   }
 
-  // ครั้งแรกที่ยังไม่มี cache — โหลดปกติ
   btn.innerText = "กำลังโหลดข้อมูล...";
   btn.disabled = true;
   try {
-    // โหลด product data + orders cache พร้อมกัน
     const [res] = await Promise.all([
       callGAS("getProductData"),
       loadOrdersCache()
@@ -1077,7 +1021,7 @@ async function initScanner() {
   } catch (err) {
     btn.innerText = "โหลดไม่สำเร็จ — กดเพื่อลองใหม่";
     btn.disabled = false;
-    Swal.fire('เชื่อมต่อไม่สำเร็จ', 'กรุณาตรวจสอบ GAS_URL ใน index.html\n\n' + err.message, 'error');
+    Swal.fire('เชื่อมต่อไม่สำเร็จ', 'กรุณาตรวจสอบ GAS_URL\n\n' + err.message, 'error');
   }
 }
 
@@ -1086,7 +1030,6 @@ async function refreshProductCache() {
   btn.innerText = "⏳ กำลังรีเฟรช...";
   btn.disabled = true;
   try {
-    // รีเฟรชพร้อมกันทั้ง product data และ orders cache
     const [res] = await Promise.all([
       callGAS("getProductData"),
       loadOrdersCache(true)
@@ -1109,11 +1052,7 @@ function startScan() {
   document.getElementById("reader").style.display = "block";
   if (!scanner) {
     scanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: (w, h) => ({ width: Math.round(w * 0.88), height: Math.round(h * 0.88) }), rememberLastUsedCamera: true });
-    scanner.render(
-      (text, result) => onScanBuffer(text, result),
-      () => {} // error callback
-    );
-    // ตรวจว่ากล้องเริ่มทำงานแล้ว → ซ่อน dashboard
+    scanner.render((text, result) => onScanBuffer(text, result), () => {});
     const checkCameraStarted = setInterval(() => {
       const video = document.querySelector('#reader video');
       if (video && video.srcObject) {
@@ -1152,7 +1091,6 @@ async function processFinalScan(text) {
       let currentScannedQty = scannedItemsMap[upperText] || 0;
       const productName = productMap[upperText] || upperText;
       if (!reqItem) {
-        // พูดชื่อสินค้าก่อน แล้วตามด้วยแจ้งเตือน
         speak(productName, true);
         setTimeout(() => speak("ไม่มีสินค้านี้ในรายการนะคะ", false), 800);
       } else if (currentScannedQty >= reqItem.qty) {
@@ -1180,7 +1118,6 @@ async function processFinalScan(text) {
     }
     if (upperText === currentP && !isEditingId) {
       if (items.length === 0) { speak("กล่องยังไม่มีสินค้าค่ะ"); setStatus("⚠️ กล่องว่าง", "warning"); return; }
-      // ถ้าอยู่ใน strict mode และสินค้าไม่ครบ — ไม่อนุญาตให้ปิดงานด้วยการสแกน
       if (isStrictValidationMode && !validateCurrentOrder()) {
         let hasOver = false;
         for (let sSku in scannedItemsMap) {
@@ -1191,7 +1128,6 @@ async function processFinalScan(text) {
           speak("มีสินค้าเกินจำนวนค่ะ กรุณาตรวจสอบ");
           setStatus("❌ มีสินค้าเกินจำนวน", "danger"); return;
         }
-        // สินค้าไม่ครบ — แสดง remark panel ให้กดที่หน้าจอ
         speak("สินค้าไม่ครบค่ะ กรุณาเลือกเหตุผลบนหน้าจอ", false);
         document.getElementById('remarkPanel').style.display = 'block';
         document.getElementById('orderChecklistPanel').scrollIntoView({ behavior: 'smooth' });
@@ -1240,11 +1176,10 @@ function processNewParcel(text, carrier) {
   const lastFour = text.length >= 4 ? text.slice(-4) : text;
   if (wasEditing) {
     speak(`แก้ไขเป็นรหัส ${lastFour.split('').join(' ')} เรียบร้อยค่ะ`);
-    // reset checklist แล้วโหลดใหม่ตามพัสดุที่แก้ไข
     expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
     resetRemark();
     document.getElementById("orderChecklistPanel").style.display = "none";
-    checkExpectedItems(text); // โหลด checklist ใหม่
+    checkExpectedItems(text);
   } else {
     speak(`พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`);
     startCameraRecording();
@@ -1264,12 +1199,7 @@ async function cancelWork() {
     confirmButtonColor: '#ff8fab',
     cancelButtonColor: '#b2bec3',
     background: '#fff0f3',
-    customClass: {
-      popup: 'swal-popup',
-      title: 'swal-ttl',
-      confirmButton: 'swal-btn',
-      cancelButton: 'swal-btn',
-    },
+    customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn', cancelButton: 'swal-btn' },
     reverseButtons: true,
   });
   if (result.isConfirmed) {
@@ -1287,7 +1217,6 @@ async function finishWork(isManual = false) {
   const pId = currentP;
   if (!pId) { if (isManual) speak("กรุณาสแกนรหัสพัสดุก่อนนะคะ"); return; }
   if (isStrictValidationMode && !validateCurrentOrder()) {
-    // มีสินค้าเกิน — ยังบล็อกอยู่
     let hasOver = false;
     for (let sSku in scannedItemsMap) {
       const req = expectedItemsArray.find(ex => ex.sku === sSku);
@@ -1297,7 +1226,6 @@ async function finishWork(isManual = false) {
       Swal.fire('ยังปิดงานไม่ได้!', 'มีสินค้าผิดรายการ หรือ เกินจำนวน กรุณาตรวจสอบก่อน', 'error');
       speak("มีสินค้าเกินจำนวนค่ะ กรุณาตรวจสอบ"); return;
     }
-    // สินค้าไม่ครบ — แสดง remark panel แทน
     if (!currentRemark) {
       document.getElementById('remarkPanel').style.display = 'block';
       document.getElementById('orderChecklistPanel').scrollIntoView({ behavior: 'smooth' });
@@ -1336,10 +1264,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '') {
   try {
     const videoData = await convertChunksToBase64(chunks);
     await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", remark: remarkNote || "" });
-    console.log(`[Background] บันทึก ${pId} สำเร็จ`);
-  } catch (err) {
-    console.error(`[Background Error] ${pId}:`, err);
-  }
+  } catch (err) {}
 }
 
 async function resetAppForNext() {
@@ -1364,7 +1289,6 @@ async function closeAppCompletely() {
   expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
   resetRemark();
   document.getElementById("orderChecklistPanel").style.display = "none";
-  
   document.getElementById("parcelId").innerText = "-";
   document.getElementById("count").innerText = "0";
   document.getElementById("itemList").innerHTML = "";
@@ -1392,7 +1316,6 @@ function removeItem(idx) {
     let sku = items[idx];
     if (scannedItemsMap[sku] > 0) {
       scannedItemsMap[sku]--;
-      // ลบออกจาก map เลยถ้าเป็น 0 เพื่อไม่ให้ validate ตรวจเจอ
       if (scannedItemsMap[sku] === 0) delete scannedItemsMap[sku];
     }
   }
@@ -1403,28 +1326,19 @@ function removeItem(idx) {
   speak("ลบรายการแล้วค่ะ");
 }
 
-// --- Checklist ---
 async function checkExpectedItems(tracking) {
   document.getElementById("orderChecklistPanel").style.display = "none";
   try {
     let expectedData = null;
     const key = String(tracking).trim().toUpperCase();
-
-    // ✅ ใช้ cache ก่อน (เร็วมาก — ค้นใน memory)
     if (ordersCache && ordersCache[key]) {
       expectedData = ordersCache[key];
-      console.log('[Cache] HIT:', key, expectedData.length, 'items');
     } else {
-      // ❌ cache miss → fallback ยิง GAS (จะช้ากว่า)
-      console.log('[Cache] MISS:', key, '— calling GAS...');
       expectedData = await callGAS("getExpectedOrderDetails", { trackingNo: tracking });
-
-      // เก็บเข้า cache ทันทีสำหรับครั้งต่อไป
       if (expectedData && expectedData.length > 0 && ordersCache) {
         ordersCache[key] = expectedData;
       }
     }
-
     if (expectedData && expectedData.length > 0) {
       isStrictValidationMode = true;
       expectedItemsArray = expectedData;
@@ -1437,12 +1351,10 @@ async function checkExpectedItems(tracking) {
       isStrictValidationMode = false; expectedItemsArray = []; scannedItemsMap = {};
     }
   } catch (e) {
-    console.warn('[checkExpectedItems] error:', e.message);
     isStrictValidationMode = false;
   }
 }
 
-// --- Remark Functions ---
 function selectRemark(btn, value) {
   document.querySelectorAll('.remark-btn').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
@@ -1465,7 +1377,7 @@ async function confirmRemarkAndFinish() {
   }
   document.getElementById('remarkPanel').style.display = 'none';
   speak(`บันทึกพร้อมหมายเหตุ ${currentRemark} ค่ะ`, false);
-  await finishWork(false); // เรียก finishWork อีกครั้ง ตอนนี้มี currentRemark แล้ว
+  await finishWork(false); 
 }
 
 function resetRemark() {
@@ -1525,7 +1437,9 @@ function validateCurrentOrder() {
   return true;
 }
 
-// --- Upload Marketplace ---
+// =========================================================================
+// 🚀 UPLOAD LOGIC 🚀 โค้ดที่แก้ใหม่ ให้รองรับ CSV ของทุกแพลตฟอร์ม 100%
+// =========================================================================
 async function processFileUpload() {
   const fileInput = document.getElementById('fileInput');
   const marketplace = document.getElementById('marketplaceSelect').value;
@@ -1535,19 +1449,22 @@ async function processFileUpload() {
 
   const file = fileInput.files[0];
   const map = colMappings[marketplace];
+  const isFileCsv = file.name.toLowerCase().endsWith('.csv');
 
   try {
     let rows = [];
 
-    // CSV (Page365 = tab, TikTok = comma)
-    if (map.isCsv) {
-      const text = await file.text();
-      // ลบ BOM ถ้ามี
-      const cleanText = text.replace(/^\uFEFF/, '');
-      const delimiter = map.csvDelimiter || '\t';
-      const parsed = Papa.parse(cleanText, { delimiter, skipEmptyLines: true });
-      rows = parsed.data;
+    if (isFileCsv) {
+      // 🌟 ใช้ PapaParse อ่านไฟล์ CSV Natively ทำให้แก้ปัญหาคอมม่าซ้อนกัน และรับภาษาไทยได้สมบูรณ์แบบ
+      rows = await new Promise((resolve, reject) => {
+        Papa.parse(file, {
+          skipEmptyLines: true,
+          complete: (results) => resolve(results.data),
+          error: (err) => reject(err)
+        });
+      });
     } else {
+      // สำหรับไฟล์ Excel ปกติ (.xlsx)
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
       rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, raw: false });
@@ -1557,7 +1474,6 @@ async function processFileUpload() {
     const startRow = map.headerRows || 1;
 
     if (marketplace === 'lazada') {
-      // Lazada: 1 row = 1 ชิ้น ไม่มี qty column — group by tracking
       const trackingMap = {};
       for (let i = startRow; i < rows.length; i++) {
         const row = rows[i];
@@ -1579,31 +1495,31 @@ async function processFileUpload() {
         const tracking = String(row[map.tracking] || '').trim().toUpperCase();
         const sku      = String(row[map.sku]      || '').trim().toUpperCase();
         const qty      = parseInt(row[map.qty]) || 1;
+
         if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
-        // กรองแถวที่ tracking สั้นเกินหรือมีช่องว่าง (header row)
-        if (tracking.length < 5 || tracking.includes(' ')) continue;
+        if (tracking.length < 5 || tracking.includes(' ')) continue; // กรองหัวตารางออก
+
         extractData.push({ marketplace, tracking, sku, qty });
       }
     }
 
     if (extractData.length === 0) {
-      Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูล\nกรุณาตรวจสอบว่าเลือก Marketplace ให้ตรงกับไฟล์', 'warning');
+      console.log("ตัวอย่างข้อมูลที่อ่านได้ (ตรวจสอบคอลัมน์):", rows.slice(0, 3));
+      Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลรายการสั่งซื้อ\nกรุณาเช็คว่าเลือกช่องทางตรงกับไฟล์หรือไม่', 'warning');
       return;
     }
 
-    // ส่งไป GAS พร้อมชื่อไฟล์เพื่อป้องกัน duplicate
     const response = await callGAS("saveMarketplaceData", {
       data: extractData,
-      fileName: file.name,  // ส่งชื่อไฟล์ไปตรวจ duplicate
+      fileName: file.name,
       marketplace
     });
 
     if (response && response.success) {
-      const dupMsg = response.duplicateSkipped > 0 ? `\n(ข้ามซ้ำ ${response.duplicateSkipped} รายการ)` : '';
+      const dupMsg = response.duplicateSkipped > 0 ? `\n(ข้ามข้อมูลที่ซ้ำในระบบ ${response.duplicateSkipped} รายการ)` : '';
       Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${response.count} รายการ${dupMsg}`, 'success');
       bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
-    // รีเฟรช orders cache หลังอัพโหลดข้อมูลใหม่
-    loadOrdersCache(true).then(() => console.log('[Cache] Refreshed after upload'));
+      loadOrdersCache(true);
       document.getElementById('fileInput').value = "";
     } else {
       Swal.fire('ข้อผิดพลาด', 'บันทึกไม่สำเร็จ: ' + (response?.error || ''), 'error');
@@ -1612,6 +1528,7 @@ async function processFileUpload() {
     Swal.fire('ข้อผิดพลาด', 'อ่านไฟล์ไม่ได้: ' + err.message, 'error');
   }
 }
+// =========================================================================
 
 // --- Search ---
 function openTab(tab, btn) {
@@ -1621,7 +1538,6 @@ function openTab(tab, btn) {
   btn.classList.add('active');
   if (tab === 'dash') {
     refreshDash();
-    // auto load วันนี้ครั้งแรก
     if (!document.getElementById('dashStart').value) {
       setPreset('today', document.querySelector('.preset-btn'));
     }
@@ -1630,7 +1546,6 @@ function openTab(tab, btn) {
 }
 
 function refreshDash() {
-  // อัปเดต summary cards จาก session
   const orders = Object.keys(sessionParcels).length;
   const items  = Object.values(sessionParcels).reduce((a, b) => a + b, 0);
   document.getElementById("d-box").innerText  = orders;
@@ -1638,7 +1553,6 @@ function refreshDash() {
 }
 
 function localDateStr(d) {
-  // แปลงเป็น YYYY-MM-DD ตามเวลาท้องถิ่น ไม่ใช่ UTC
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -1663,7 +1577,6 @@ function setPreset(type, btnEl) {
     end   = new Date(today.getFullYear(), today.getMonth(), 0);
   }
 
-  // ใช้ localDateStr แทน valueAsDate เพื่อไม่ให้เพี้ยน UTC
   document.getElementById('dashStart').value = localDateStr(start);
   document.getElementById('dashEnd').value   = localDateStr(end);
   fetchReport();
@@ -1690,15 +1603,12 @@ function renderReport(data, start, end) {
   document.getElementById('dashLoading').style.display = 'none';
   document.getElementById('dashContent').style.display = 'block';
 
-  // period label
   const fmt = d => new Date(d).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'});
   document.getElementById('dashPeriod').innerText = start === end ? fmt(start) : `${fmt(start)} – ${fmt(end)}`;
 
-  // stats
   document.getElementById('d-box').innerText  = data.totalOrders  ?? Object.keys(sessionParcels).length;
   document.getElementById('d-item').innerText = data.totalItems   ?? Object.values(sessionParcels).reduce((a,b)=>a+b,0);
 
-  // product table
   const container = document.getElementById('dashProductTable');
   const products  = data.allProducts || [];
   if (products.length === 0) {
@@ -1781,11 +1691,8 @@ async function runSearch() {
   }
 }
 </script>
-
 <script>
-// === CAT & PAWS ANIMATIONS ===
 (function() {
-  // สร้าง floating paws
   const pawBg = document.getElementById('pawBg');
   if (!pawBg) return;
   const pawEmojis = ['🐾','🌸','✦','💕','🎀','⭐'];
@@ -1800,16 +1707,9 @@ async function runSearch() {
     pawBg.appendChild(el);
   }
 })();
-
-// Cat tap animation
-
-// spawn sparkle
-
-// spawn sparkle on scan success
 const origProcessFinal = processFinalScan;
 window.processFinalScanWrapped = async function(text) {
   await origProcessFinal(text);
-  // sparkle at center screen on product scan
   if (text.trim().toUpperCase().startsWith('B')) {
     setTimeout(() => spawnSparkle(window.innerWidth/2 - 30, window.innerHeight/2 - 20), 150);
   }
