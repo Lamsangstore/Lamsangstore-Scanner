@@ -150,7 +150,12 @@
     }
 
     /* ===== SCANNER ===== */
-    #reader, #search-reader {
+    #reader {
+      width: 100%;
+      border-radius: 20px 20px 0 0;
+      overflow: hidden;
+    }
+    #search-reader {
       width: 100%; max-width: 440px; margin: auto;
       border-radius: 14px; overflow: hidden;
       border: 3px solid white;
@@ -520,6 +525,8 @@
 
   <!-- TAB: SCAN -->
   <div id="scan" class="fade-in-up">
+    <div id="reader" style="display:none; margin: -14px -14px 0; border-radius: 20px 20px 0 0; overflow:hidden;"></div>
+
     <div class="card p-3 text-center">
       <div id="rec-ui" style="display:none;">
         <div id="rec-status"><span id="rec-label"></span></div>
@@ -527,7 +534,6 @@
       </div>
 
       <button id="startBtn" onclick="initScanner()" class="btn-custom btn-main mb-3 w-100 shadow">เริ่มระบบสแกน</button>
-
 
       <div id="orderChecklistPanel" class="order-checklist text-start shadow-sm mb-3">
         <h6 class="fw-bold mb-2" style="color:var(--text)">รายการที่ต้องแพ็ก</h6>
@@ -575,7 +581,6 @@
         <ul id="itemList" class="list-group"></ul>
       </div>
 
-      <div id="reader" style="display:none"></div>
 
       <button id="refreshCacheBtn" onclick="refreshProductCache()" class="btn btn-sm mb-2 w-100" style="display:none; border-radius:18px; border:1.5px solid var(--pink-light); color:var(--pink); background:white; font-family:'Mitr',sans-serif; font-size:0.88rem; padding:8px;">🔄 รีเฟรชข้อมูลสินค้า</button>
 
@@ -989,8 +994,9 @@ async function initScanner() {
     document.getElementById("refreshCacheBtn").style.display = "inline-block";
     speak("ระบบพร้อมแล้วค่ะ เริ่มสแกนพัสดุได้เลย");
     startScan();
-
-    // refresh เบื้องหลังถ้า cache เก่าเกิน 1 ชั่วโมง
+    // โหลด orders cache เบื้องหลัง
+    loadOrdersCache();
+    // refresh product cache ถ้าเก่าเกิน 1 ชั่วโมง
     if (!isFresh) {
       callGAS("getProductData").then(res => {
         if (res && Object.keys(res).length > 0) {
@@ -1008,9 +1014,12 @@ async function initScanner() {
   btn.innerText = "กำลังโหลดข้อมูล...";
   btn.disabled = true;
   try {
-    const res = await callGAS("getProductData");
+    // โหลด product data + orders cache พร้อมกัน
+    const [res] = await Promise.all([
+      callGAS("getProductData"),
+      loadOrdersCache()
+    ]);
     productMap = res || {};
-    // เก็บ cache
     localStorage.setItem(CACHE_KEY, JSON.stringify(productMap));
     localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
     document.getElementById("app-header").style.display = "none";
