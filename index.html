@@ -821,10 +821,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (first) first.classList.add('selected');
 });
 
-// col index = เลข column - 1 (เริ่มจาก 0)
+// col index = เลข column - 1 (ใช้เป็น Fallback หากหาหัวตารางไม่เจอ)
 const colMappings = {
   'tiktok':  { tracking: 35, sku: 6,  qty: 9,  headerRows: 1 }, 
-  'shopee':  { tracking: 13, sku: 18, qty: 22, headerRows: 1 }, // ตรงกับไฟล์ Shopee เป๊ะๆ (N=14, S=19, W=23)
+  'shopee':  { tracking: 13, sku: 18, qty: 22, headerRows: 1 }, 
   'lazada':  { tracking: 58, sku: 5,  qty: -1, headerRows: 1 }, 
   'page365': { tracking: 11, sku: 24, qty: 28, headerRows: 1 }
 };
@@ -1438,7 +1438,7 @@ function validateCurrentOrder() {
 }
 
 // =========================================================================
-// 🚀 UPLOAD LOGIC 🚀 โค้ดที่แก้ใหม่ ให้รองรับ CSV ของทุกแพลตฟอร์ม 100%
+// 🚀 UPLOAD LOGIC: แก้ปัญหาภาษาต่างดาว + ค้นหาคอลัมน์แบบอัจฉริยะ (Dynamic Detection)
 // =========================================================================
 async function processFileUpload() {
   const fileInput = document.getElementById('fileInput');
@@ -1455,14 +1455,24 @@ async function processFileUpload() {
     let rows = [];
 
     if (isFileCsv) {
-      // 🌟 ใช้ PapaParse อ่านไฟล์ CSV Natively ทำให้แก้ปัญหาคอมม่าซ้อนกัน และรับภาษาไทยได้สมบูรณ์แบบ
-      rows = await new Promise((resolve, reject) => {
-        Papa.parse(file, {
-          skipEmptyLines: true,
-          complete: (results) => resolve(results.data),
-          error: (err) => reject(err)
+      // 1. อ่านไฟล์เป็นข้อความ
+      let text = await file.text();
+
+      // 2. ป้องกันปัญหาภาษาต่างดาวจาก UTF-16LE (มักเจอในไฟล์ TikTok/Shopee ที่รันบน Windows)
+      if (text.includes('\x00')) {
+        text = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.readAsText(file, 'UTF-16LE'); // บังคับอ่านแบบ UTF-16LE
         });
-      });
+      }
+      
+      text = text.replace(/^\uFEFF/, ''); // ลบอักขระ BOM ที่ซ่อนอยู่
+
+      // 3. ใช้ PapaParse อ่านโครงสร้างไฟล์
+      const parsed = Papa.parse(text, { skipEmptyLines: true });
+      rows = parsed.data;
+
     } else {
       // สำหรับไฟล์ Excel ปกติ (.xlsx)
       const buffer = await file.arrayBuffer();
@@ -1470,17 +1480,69 @@ async function processFileUpload() {
       rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, raw: false });
     }
 
+    // === 🌟 ส่วนนี้คือไฮไลท์! ค้นหาคอลัมน์แบบอัจฉริยะ (ป้องกันปัญหาคอลัมน์เลื่อน) 🌟 ===
+    let trackingIdx = -1;
+    let skuIdx = -1;
+    let qtyIdx = -1;
+    let startRow = map.headerRows || 1;
+
+    for (let i = 0; i < Math.min(rows.length, 15); i++) {
+      if (!rows[i] || !Array.isArray(rows[i])) continue;
+      
+      // แปลงหัวตารางให้เป็นตัวพิมพ์เล็กเพื่อค้นหาง่ายขึ้น
+      const strRow = rows[i].map(c => String(c).trim().toLowerCase());
+      
+      let tIdx = -1, sIdx = -1, qIdx = -1;
+
+      if (marketplace === 'shopee') {
+        tIdx = strRow.findIndex(c => c.includes('หมายเลขติดตามพัสดุ'));
+        sIdx = strRow.findIndex(c => c.includes('เลขอ้างอิง sku') || c === 'sku');
+        qIdx = strRow.findIndex(c => c === 'จำนวน' || c.includes('qty'));
+      } else if (marketplace === 'tiktok') {
+        tIdx = strRow.indexOf('tracking id');
+        sIdx = strRow.indexOf('seller sku');
+        qIdx = strRow.indexOf('quantity');
+      } else if (marketplace === 'lazada') {
+        tIdx = strRow.findIndex(c => c.includes('trackingcode') || c.includes('tracking code') || c.includes('หมายเลขพัสดุ'));
+        sIdx = strRow.findIndex(c => c.includes('sellersku') || c.includes('seller sku'));
+      } else if (marketplace === 'page365') {
+        tIdx = strRow.findIndex(c => c === 'tracking' || c.includes('หมายเลขพัสดุ'));
+        sIdx = strRow.findIndex(c => c === 'sku' || c.includes('รหัสสินค้า'));
+        qIdx = strRow.findIndex(c => c === 'qty' || c === 'จำนวน');
+      }
+
+      // ถ้าหาเจอทั้งคอลัมน์ Tracking และ SKU ถือว่าสมบูรณ์
+      if (tIdx !== -1 && sIdx !== -1) {
+        trackingIdx = tIdx;
+        skuIdx = sIdx;
+        qtyIdx = qIdx;
+        startRow = i + 1; // เริ่มดึงข้อมูลในบรรทัดถัดไป
+        break;
+      }
+    }
+
+    // เผื่อหาไม่เจอจริงๆ ให้กลับไปใช้ค่า Default ที่ตั้งไว้ (Fallback)
+    if (trackingIdx === -1) {
+      trackingIdx = map.tracking;
+      skuIdx = map.sku;
+      qtyIdx = map.qty;
+    }
+
     let extractData = [];
-    const startRow = map.headerRows || 1;
 
     if (marketplace === 'lazada') {
       const trackingMap = {};
       for (let i = startRow; i < rows.length; i++) {
         const row = rows[i];
-        if (!row) continue;
-        const tracking = String(row[map.tracking] || '').trim().toUpperCase();
-        const sku      = String(row[map.sku]      || '').trim().toUpperCase();
+        if (!row || row.length < 3) continue;
+        
+        // กรองเครื่องหมายคำพูด (") หรือ Tab ออกไปให้หมด
+        let tracking = String(row[trackingIdx] || '').replace(/['"=\t\r\n]/g, '').trim().toUpperCase();
+        let sku      = String(row[skuIdx] || '').replace(/['"=\t\r\n]/g, '').trim().toUpperCase();
+        
         if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
+        if (tracking.length < 5 || tracking.includes(' ')) continue;
+        
         const key = tracking + '|' + sku;
         trackingMap[key] = (trackingMap[key] || 0) + 1;
       }
@@ -1491,21 +1553,25 @@ async function processFileUpload() {
     } else {
       for (let i = startRow; i < rows.length; i++) {
         const row = rows[i];
-        if (!row) continue;
-        const tracking = String(row[map.tracking] || '').trim().toUpperCase();
-        const sku      = String(row[map.sku]      || '').trim().toUpperCase();
-        const qty      = parseInt(row[map.qty]) || 1;
+        if (!row || row.length < 3) continue;
+        
+        let tracking = String(row[trackingIdx] || '').replace(/['"=\t\r\n]/g, '').trim().toUpperCase();
+        let sku      = String(row[skuIdx] || '').replace(/['"=\t\r\n]/g, '').trim().toUpperCase();
+        let qty      = 1;
+        
+        if (qtyIdx !== undefined && qtyIdx !== -1) {
+          qty = parseInt(String(row[qtyIdx]).replace(/[^\d]/g, '')) || 1;
+        }
 
         if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
-        if (tracking.length < 5 || tracking.includes(' ')) continue; // กรองหัวตารางออก
+        if (tracking.length < 5 || tracking.includes(' ')) continue;
 
         extractData.push({ marketplace, tracking, sku, qty });
       }
     }
 
     if (extractData.length === 0) {
-      console.log("ตัวอย่างข้อมูลที่อ่านได้ (ตรวจสอบคอลัมน์):", rows.slice(0, 3));
-      Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลรายการสั่งซื้อ\nกรุณาเช็คว่าเลือกช่องทางตรงกับไฟล์หรือไม่', 'warning');
+      Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลรายการสั่งซื้อ\nกรุณาเช็คว่าเลือกช่องทางตรงกับไฟล์ หรือตรวจสอบโครงสร้างไฟล์นะคะ', 'warning');
       return;
     }
 
