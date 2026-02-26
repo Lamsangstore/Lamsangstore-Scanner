@@ -583,7 +583,7 @@
         <ul id="itemList" class="list-group"></ul>
       </div>
       
-      <button id="refreshCacheBtn" onclick="refreshProductCache()" class="btn btn-sm mb-2 w-100 mt-3" style="display:none; border-radius:18px; border:1.5px solid var(--pink-light); color:var(--pink); background:white; font-family:'Mitr',sans-serif; font-size:0.88rem; padding:8px;">🔄 รีเฟรชข้อมูลสินค้า</button>
+      <button id="refreshCacheBtn" onclick="refreshAllCache()" class="btn btn-sm mb-2 w-100 mt-3" style="display:none; border-radius:18px; border:1.5px solid var(--pink-light); color:var(--pink); background:white; font-family:'Mitr',sans-serif; font-size:0.88rem; padding:8px;">🔄 ดึงข้อมูลล่าสุด (สินค้า & ออเดอร์)</button>
       
       <div id="action-buttons" class="mt-4" style="display:none">
         <div class="row g-2">
@@ -953,9 +953,12 @@ async function fetchBackgroundCache(cacheKey, cacheTimeKey) {
     localStorage.setItem(cacheTimeKey, Date.now().toString());
   }
 
-  if (orderRes) {
+  // เซฟลงเครื่องมือถือเฉพาะเมื่อส่งข้อมูลกลับมาสำเร็จ ไม่มี Error ฝั่งระบบ
+  if (orderRes && !orderRes.error) {
     localStorage.setItem('localOrdersCache', JSON.stringify(orderRes));
     console.log("[Cache] ซิงค์ออเดอร์ลงมือถือสำเร็จ:", Object.keys(orderRes).length, "ออเดอร์");
+  } else if (orderRes && orderRes.error) {
+    console.error("Backend error:", orderRes.error);
   }
 }
 
@@ -1286,7 +1289,7 @@ async function checkExpectedItems(tracking) {
   try {
     let expectedData = null;
 
-    // 1. ลองดึงจาก Local Storage (ที่เคยอัปโหลดไฟล์ไว้ในเครื่องนี้)
+    // 1. ลองดึงจาก Local Storage
     let localOrders = JSON.parse(localStorage.getItem('localOrdersCache') || '{}');
     if (localOrders[tracking] && localOrders[tracking].length > 0) {
       expectedData = localOrders[tracking];
@@ -1456,24 +1459,9 @@ async function processFileUpload() {
     // ส่งข้อมูลไปบันทึกที่ Google Sheet ตามปกติ
     const response = await callGAS("saveMarketplaceData", { data: extractData, fileName: file.name, marketplace });
     
+    // === ลบส่วน Local Storage ที่ทำให้คอมแฮงค์ออกไปแล้ว ตรงนี้จะเป็นแค่ส่งข้อมูลขึ้น Sheet ===
+
     if (response && response.success) {
-
-      // ---- บันทึกข้อมูลลง Local Storage ในเครื่องทันที (เพื่อดึงใช้ไวๆ ตอนสแกน) ----
-      let localOrders = JSON.parse(localStorage.getItem('localOrdersCache') || '{}');
-      extractData.forEach(row => {
-        const t = row.tracking;
-        if (!localOrders[t]) localOrders[t] = [];
-        // รวมจำนวน qty ในกรณีที่ SKU ซ้ำในบิลเดียวกัน
-        let existing = localOrders[t].find(x => x.sku === row.sku);
-        if (existing) {
-          existing.qty += row.qty;
-        } else {
-          localOrders[t].push({ sku: row.sku, qty: row.qty });
-        }
-      });
-      localStorage.setItem('localOrdersCache', JSON.stringify(localOrders));
-      // -------------------------------------------------------------
-
       const dupMsg = response.duplicateSkipped > 0 ? `\n(ข้ามซ้ำ ${response.duplicateSkipped} รายการ)` : '';
       Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${response.count} รายการ${dupMsg}`, 'success');
       bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
