@@ -159,13 +159,11 @@
     #reader video {
       width: 100% !important;
       max-height: 220px !important;
-      object-fit: contain !important;
-      background: #000;
+      object-fit: cover !important;
     }
     #reader canvas {
       width: 100% !important;
       max-height: 220px !important;
-      object-fit: contain !important;
     }
     #reader > div:first-child {
       max-height: 220px !important;
@@ -1110,7 +1108,7 @@ async function refreshProductCache() {
 function startScan() {
   document.getElementById("reader").style.display = "block";
   if (!scanner) {
-    scanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: { width: 300, height: 350 }, rememberLastUsedCamera: true });
+    scanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: { width: 200, height: 160 }, rememberLastUsedCamera: true, aspectRatio: 1.777 });
     scanner.render(
       (text, result) => onScanBuffer(text, result),
       () => {} // error callback
