@@ -154,19 +154,19 @@
       width: 100%;
       overflow: hidden;
       background: #000;
-      max-height: 220px;
+      max-height: 340px;
     }
     #reader video {
       width: 100% !important;
-      max-height: 220px !important;
+      max-height: 340px !important;
       object-fit: cover !important;
     }
     #reader canvas {
       width: 100% !important;
-      max-height: 220px !important;
+      max-height: 340px !important;
     }
     #reader > div:first-child {
-      max-height: 220px !important;
+      max-height: 340px !important;
       overflow: hidden !important;
       background: #000;
     }
@@ -1108,7 +1108,7 @@ async function refreshProductCache() {
 function startScan() {
   document.getElementById("reader").style.display = "block";
   if (!scanner) {
-    scanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: { width: 200, height: 160 }, rememberLastUsedCamera: true, aspectRatio: 1.777 });
+    scanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: (w, h) => ({ width: Math.round(w * 0.88), height: Math.round(h * 0.88) }), rememberLastUsedCamera: true });
     scanner.render(
       (text, result) => onScanBuffer(text, result),
       () => {} // error callback
