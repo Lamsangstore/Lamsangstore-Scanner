@@ -152,9 +152,12 @@
     /* ===== SCANNER ===== */
     #reader {
       width: 100%;
-      border-radius: 20px 20px 0 0;
       overflow: hidden;
+      background: #000;
     }
+    /* ให้ video เต็มความกว้าง */
+    #reader video { width: 100% !important; }
+    #reader canvas { width: 100% !important; }
     #search-reader {
       width: 100%; max-width: 440px; margin: auto;
       border-radius: 14px; overflow: hidden;
@@ -521,12 +524,13 @@
   </button>
 </div>
 
+<!-- กล้อง: อยู่นอก page-content ชิดขอบจอ -->
+<div id="reader" style="display:none; width:100%; overflow:hidden;"></div>
+
 <div class="page-content">
 
   <!-- TAB: SCAN -->
   <div id="scan" class="fade-in-up">
-    <div id="reader" style="display:none; margin: -14px -14px 0; border-radius: 20px 20px 0 0; overflow:hidden;"></div>
-
     <div class="card p-3 text-center">
       <div id="rec-ui" style="display:none;">
         <div id="rec-status"><span id="rec-label"></span></div>
@@ -1024,6 +1028,7 @@ async function initScanner() {
     localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
     document.getElementById("app-header").style.display = "none";
     document.getElementById("app-tabs").style.display = "none";
+    document.body.style.paddingTop = "0";
     btn.style.display = "none";
     document.getElementById("action-buttons").style.display = "block";
     document.getElementById("refreshCacheBtn").style.display = "inline-block";
@@ -1303,6 +1308,7 @@ async function closeAppCompletely() {
   if (scanner) { await scanner.clear(); scanner = null; }
   document.getElementById("app-header").style.display = "block";
   document.getElementById("app-tabs").style.display = "flex";
+  document.body.style.paddingTop = "var(--topbar-h)";
   currentP = ""; items = []; isEditingId = false;
   expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
   resetRemark();
