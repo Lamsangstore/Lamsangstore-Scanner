@@ -4482,6 +4482,8 @@ async function processFileUpload() {
         extractData.push({ marketplace, tracking, sku, qty: trackingMap[key], remark: remarkMap[tracking] || "", orderId: oid });
       }
     } else {
+      // ✅ ใช้ trackingSkuMap สะสม qty ก่อน แก้ปัญหา Shopee แตก row ซ้ำ SKU เดียวกัน
+      const trackingSkuMap = {}; // { "TRACKING|SKU": qty }
       for (let i = startRow; i < rows.length; i++) {
         const row = rows[i]; if (!row) continue;
         const tracking = String(row[useMap.tracking] || '').trim().toUpperCase();
@@ -4489,6 +4491,9 @@ async function processFileUpload() {
         const qty      = parseInt(row[useMap.qty]) || 1;
         if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
         if (tracking.length < 5 || tracking.includes(' ')) continue;
+        // ✅ สะสม qty (Shopee อาจแตก row เดิม SKU เดิมหลาย row ให้ qty รวมถูกต้อง)
+        const key = tracking + '|' + sku;
+        trackingSkuMap[key] = (trackingSkuMap[key] || 0) + qty;
         // ✅ ดึง orderId — รองรับ "การจัดส่งแบบรวม" (tracking เดียว หลาย orderId)
         if (useMap.orderId !== undefined) {
           const oid = String(row[useMap.orderId] || '').trim();
@@ -4510,7 +4515,11 @@ async function processFileUpload() {
           }
           if (rv) remarkMap[tracking] = rv;
         }
-        extractData.push({ marketplace, tracking, sku, qty, remark: remarkMap[tracking] || "", orderId: orderInfoMap[tracking]?.orderId || "" });
+      }
+      // ✅ flatten trackingSkuMap → extractData (qty ถูกต้องแล้ว)
+      for (const key in trackingSkuMap) {
+        const [tracking, sku] = key.split('|');
+        extractData.push({ marketplace, tracking, sku, qty: trackingSkuMap[key], remark: remarkMap[tracking] || "", orderId: orderInfoMap[tracking]?.orderId || "" });
       }
     }
 
