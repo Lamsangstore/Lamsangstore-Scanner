@@ -68,6 +68,109 @@
       --corn-milk-light:#faf0c8;
       --corn-milk-dark: #d4b860;
     }
+
+    /* ===== DAY THEME — โทนสีตามวัน (pastel) ===== */
+    /* จันทร์ — เหลือง */
+    html.day-1 {
+      --pink:        #c8a830;
+      --pink-light:  #f0e090;
+      --pink-pale:   #fdf9e8;
+      --bg:          #fdfaec;
+      --bg-d:        #f5f0d0;
+      --sd:          rgba(195,175,100,0.40);
+      --sl:          rgba(255,255,248,0.92);
+      --day-accent:  #c8a830;
+      background:    #fdfaec;
+    }
+    html.day-1 body { background: #fdfaec !important; }
+    /* อังคาร — ชมพู */
+    html.day-2 {
+      --pink:        #d4748a;
+      --pink-light:  #f5c0cc;
+      --pink-pale:   #fef0f3;
+      --bg:          #fef2f4;
+      --bg-d:        #f8dce2;
+      --sd:          rgba(210,140,155,0.38);
+      --sl:          rgba(255,250,252,0.92);
+      --day-accent:  #d4748a;
+      background:    #fef2f4;
+    }
+    html.day-2 body { background: #fef2f4 !important; }
+    /* พุธ — เขียว */
+    html.day-3 {
+      --pink:        #70a870;
+      --pink-light:  #b8e0b8;
+      --pink-pale:   #f0faf0;
+      --bg:          #f2faf2;
+      --bg-d:        #d8eed8;
+      --sd:          rgba(130,190,130,0.35);
+      --sl:          rgba(248,255,248,0.92);
+      --day-accent:  #70a870;
+      background:    #f2faf2;
+    }
+    html.day-3 body { background: #f2faf2 !important; }
+    /* พฤหัส — ส้ม */
+    html.day-4 {
+      --pink:        #d08040;
+      --pink-light:  #f5c898;
+      --pink-pale:   #fef6ee;
+      --bg:          #fef6ee;
+      --bg-d:        #f8e0c0;
+      --sd:          rgba(210,165,110,0.38);
+      --sl:          rgba(255,252,248,0.92);
+      --day-accent:  #d08040;
+      background:    #fef6ee;
+    }
+    html.day-4 body { background: #fef6ee !important; }
+    /* ศุกร์ — ฟ้า */
+    html.day-5 {
+      --pink:        #5090c0;
+      --pink-light:  #a8d0f0;
+      --pink-pale:   #eef6fc;
+      --bg:          #eef6fd;
+      --bg-d:        #cce4f5;
+      --sd:          rgba(110,170,215,0.35);
+      --sl:          rgba(245,252,255,0.92);
+      --day-accent:  #5090c0;
+      background:    #eef6fd;
+    }
+    html.day-5 body { background: #eef6fd !important; }
+    /* เสาร์ — ม่วง */
+    html.day-6 {
+      --pink:        #8870b8;
+      --pink-light:  #ccc0e8;
+      --pink-pale:   #f5f0fc;
+      --bg:          #f5f0fc;
+      --bg-d:        #e0d4f5;
+      --sd:          rgba(160,140,210,0.35);
+      --sl:          rgba(252,250,255,0.92);
+      --day-accent:  #8870b8;
+      background:    #f5f0fc;
+    }
+    html.day-6 body { background: #f5f0fc !important; }
+    /* อาทิตย์ — แดง */
+    html.day-0 {
+      --pink:        #c85858;
+      --pink-light:  #f0b0b0;
+      --pink-pale:   #fef2f2;
+      --bg:          #fef2f2;
+      --bg-d:        #f8d8d8;
+      --sd:          rgba(210,140,140,0.38);
+      --sl:          rgba(255,250,250,0.92);
+      --day-accent:  #c85858;
+      background:    #fef2f2;
+    }
+    html.day-0 body { background: #fef2f2 !important; }
+
+    /* dark-mode + day: ปรับ shadow ให้เข้มขึ้น รักษา dark bg */
+    html.dark-mode.day-1 { --pink: #c8a830; --pink-light: #3a3010; }
+    html.dark-mode.day-2 { --pink: #d4748a; --pink-light: #3a1820; }
+    html.dark-mode.day-3 { --pink: #70a870; --pink-light: #183018; }
+    html.dark-mode.day-4 { --pink: #d08040; --pink-light: #3a2010; }
+    html.dark-mode.day-5 { --pink: #5090c0; --pink-light: #102838; }
+    html.dark-mode.day-6 { --pink: #8870b8; --pink-light: #281840; }
+    html.dark-mode.day-0 { --pink: #c85858; --pink-light: #381818; }
+
     
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
@@ -123,7 +226,7 @@
     }
     .topbar-logo {
       width: 38px; height: 38px; border-radius: 13px;
-      background: linear-gradient(135deg, var(--pink), #c89830);
+      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
       display: flex; align-items: center; justify-content: center;
       font-size: 1.2rem; flex-shrink: 0;
       box-shadow: 4px 4px 10px var(--sd), -3px -3px 8px var(--sl);
@@ -167,7 +270,7 @@
     .tab-btn.active .tab-icon { transform: scale(1.1); }
     .tab-btn:hover:not(.active) { color: var(--text2); }
     .tab-btn-upload { color: var(--pink) !important; }
-    .tab-btn-upload:hover { color: #c89830 !important; }
+    .tab-btn-upload:hover { color: var(--pink) !important; }
 
     /* ===== MAIN CONTENT ===== */
     .page-content { padding: 14px 14px 0; max-width: 500px; margin: 0 auto; }
@@ -210,7 +313,7 @@
     }
     .btn-custom:active { box-shadow: inset 3px 3px 8px rgba(0,0,0,0.2), inset -2px -2px 5px rgba(255,255,255,0.1) !important; transform: scale(0.98); }
     .btn-main {
-      background: linear-gradient(135deg, #f0d880, var(--pink), #c89830);
+      background: linear-gradient(135deg, var(--pink-light), var(--pink));
       background-size: 200% 200%;
       color: #5a4820;
       font-size: 1.15rem;
@@ -230,7 +333,7 @@
     }
     html.dark-mode .btn-main { color: #faf5e0; box-shadow: 6px 6px 18px rgba(120,90,10,0.55), -4px -4px 12px var(--sl); }
     .btn-save {
-      background: linear-gradient(135deg, var(--pink), #c89830);
+      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
       color: white;
       box-shadow: 6px 6px 14px rgba(212,168,67,0.4), -4px -4px 10px var(--sl);
     }
@@ -335,10 +438,10 @@
     /* dark mode controlled by .dark-mode class only (ไม่ใช้ prefers-color-scheme) */
 
     /* ===== STATUS BAR ===== */
-    .status-bar-full.bg-light    { background:#fdf8ed !important; color:#a09580; border-left-color:#e8dcc0; }
+    .status-bar-full.bg-light    { background:var(--bg) !important; color:var(--text3); border-left-color:var(--border2); }
     .status-bar-full.bg-success  { background:#d8f0d0 !important; color:#3a7a3a; border-left-color:var(--success); }
     .status-bar-full.bg-danger   { background:#f8e0e0 !important; color:#8a4040; border-left-color:var(--danger); }
-    .status-bar-full.bg-warning  { background:#faf0d0 !important; color:#8a6820; border-left-color:#e8c050; }
+    .status-bar-full.bg-warning  { background:var(--bg-d) !important; color:var(--text2); border-left-color:var(--pink); }
     .status-bar-full.bg-primary  { background:#d0e8f8 !important; color:#2a5a8a; border-left-color:#88b8d8; }
     .status-bar-full.bg-info     { background:#d0f0f8 !important; color:#1a6a8a; border-left-color:#70c0e0; }
     .status-bar-full.bg-secondary{ background:#f5f0e8 !important; color:#7a6840; border-left-color:#b0a890; }
@@ -405,7 +508,7 @@
     /* ===== SKELETON LOADER ===== */
     .skeleton-wrap { padding: 8px 4px; }
     .skeleton-line {
-      background: linear-gradient(90deg, #f5edd8 25%, #faf0d0 50%, #f5edd8 75%);
+      background: linear-gradient(90deg, var(--bg-d) 25%, var(--pink-light) 50%, var(--bg-d) 75%);
       background-size: 200% 100%;
       border-radius: 8px;
       animation: shimmer 1.4s infinite;
@@ -482,7 +585,7 @@
     /* ===== CUSTOMER REMARK DISPLAY BOX ===== */
     .remark-display-box {
       display: none;
-      background: #faf0d0;
+      background: var(--bg-d);
       border: 1.5px solid #e8c050;
       border-left: 5px solid #e8c050;
       border-radius: var(--radius-xs);
@@ -650,7 +753,7 @@
       box-shadow: 12px 12px 28px var(--sd), -12px -12px 28px var(--sl) !important;
     }
     .modal-header {
-      background: linear-gradient(135deg, var(--pink), #c89830) !important;
+      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink))) !important;
       border-radius: calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0 !important;
       padding: 14px 18px !important;
     }
@@ -668,7 +771,7 @@
     }
     .stat-num {
       font-size: 3rem; font-weight: 600;
-      background: linear-gradient(135deg, var(--pink), #c89830);
+      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
@@ -724,7 +827,7 @@
     }
     .dash-search-btn {
       border-radius: 12px; padding: 6px 14px;
-      background: linear-gradient(135deg, var(--pink), #c89830);
+      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
       border: none; color: white; font-size: 0.9rem;
       cursor: pointer; transition: all 0.2s;
       box-shadow: 4px 4px 10px rgba(212,168,67,0.4), -3px -3px 8px var(--sl);
@@ -858,7 +961,7 @@
     .btn-neu-sm:hover { box-shadow: inset 2px 2px 5px var(--sd), inset -2px -2px 5px var(--sl); }
     /* neumorphic gold action button */
     .btn-neu-gold {
-      background: linear-gradient(135deg, var(--pink), #c89830);
+      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
       color: white; border: none; border-radius: 12px;
       font-family: 'Mitr', sans-serif; font-weight: 600;
       cursor: pointer; transition: all 0.2s; flex-shrink: 0;
@@ -932,7 +1035,7 @@
     }
     .swal-remark-btn.swal-remark-selected {
       border-color: var(--pink);
-      background: linear-gradient(135deg, #fdf8ed, #f5edd8);
+      background: linear-gradient(135deg, var(--bg), var(--bg-d));
       color: var(--pink);
       font-weight: 600;
       box-shadow: 0 0 0 3px rgba(212,168,67,0.2);
@@ -954,7 +1057,7 @@
     /* ── Global Page Load ── */
     body {
       animation: bodyFadeIn 0.8s cubic-bezier(0.23, 1, 0.32, 1) both;
-      background: linear-gradient(160deg, #fdf8ed 0%, #faf0d0 40%, #fdf8ed 100%) !important;
+      background: linear-gradient(160deg, var(--bg) 0%, var(--bg-d) 40%, var(--bg) 100%) !important;
       background-size: 400% 400%;
       animation: bodyFadeIn 0.8s cubic-bezier(0.23,1,0.32,1) both, bgGradientShift 20s ease infinite;
     }
@@ -972,7 +1075,7 @@
     /* ── Top Bar Slide Down ── */
     #app-header {
       animation: slideDownBounce 0.6s cubic-bezier(0.34,1.56,0.64,1) both;
-      background: linear-gradient(135deg, #fdf8ed, #faf0d0) !important;
+      background: linear-gradient(135deg, var(--bg), var(--bg-d)) !important;
     }
     @keyframes slideDownBounce {
       from { transform: translateY(-100%); opacity: 0; }
@@ -981,7 +1084,7 @@
 
     /* ── Top Bar Logo Pulse ── */
     .topbar-logo {
-      background: linear-gradient(135deg, #f0d070, #d4a843, #c89830) !important;
+      background: linear-gradient(135deg, var(--pink-light), var(--pink), var(--day-accent, var(--pink))) !important;
       animation: logoPulse 3s ease-in-out infinite, logoAppear 0.8s cubic-bezier(0.34,1.56,0.64,1) 0.2s both;
     }
     @keyframes logoPulse {
@@ -996,7 +1099,7 @@
     /* ── Bottom Nav Slide Up ── */
     #app-tabs {
       animation: slideUpBounce 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.2s both;
-      background: linear-gradient(135deg, #fdf8ed, #faf0d0) !important;
+      background: linear-gradient(135deg, var(--bg), var(--bg-d)) !important;
     }
     @keyframes slideUpBounce {
       from { transform: translateY(100%); opacity: 0; }
@@ -1013,7 +1116,7 @@
       content: '';
       position: absolute;
       inset: 0;
-      background: radial-gradient(circle at center, rgba(212,168,67,0.15) 0%, transparent 70%);
+      background: radial-gradient(circle at center, rgba(var(--day-accent, 212,168,67),0.15) 0%, transparent 70%);
       opacity: 0;
       transition: opacity 0.3s;
       border-radius: inherit;
@@ -1036,7 +1139,7 @@
     /* ── Cards Entrance ── */
     .card {
       animation: cardFloatIn 0.6s cubic-bezier(0.23,1,0.32,1) 0.3s both;
-      background: linear-gradient(145deg, #fdf8ed, #faf0d0) !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
       transition: transform 0.3s ease, box-shadow 0.3s ease !important;
     }
     .card:hover {
@@ -1058,7 +1161,7 @@
 
     /* ── Buttons – Corn Milk Glow ── */
     .btn-main {
-      background: linear-gradient(135deg, #f5e0a0, #d4a843, #c89830) !important;
+      background: linear-gradient(135deg, var(--pink-light), var(--pink), var(--day-accent, var(--pink))) !important;
       color: #5a4820 !important;
       position: relative;
       overflow: hidden;
@@ -1090,14 +1193,14 @@
     .btn-save:active { transform: scale(0.97); }
 
     .btn-cancel {
-      background: linear-gradient(145deg, #fdf8ed, #f5edd8) !important;
-      color: #a09580 !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
+      color: var(--text3) !important;
       transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
     .btn-cancel:hover { transform: translateY(-1px); color: #7a7060 !important; }
 
     .btn-neu-gold {
-      background: linear-gradient(135deg, #f0d070, #d4a843) !important;
+      background: linear-gradient(135deg, var(--pink-light), var(--pink)) !important;
       color: #5a4820 !important;
       transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1) !important;
       position: relative;
@@ -1169,7 +1272,7 @@
       80%     { transform: translateX(2px); }
     }
     .status-bar-full.bg-warning { 
-      background: linear-gradient(135deg, #faf0d0, #f5e0a0) !important;
+      background: linear-gradient(135deg, var(--bg-d), var(--pink-light)) !important;
       color: #8a6820 !important;
       border-left-color: #e8b070 !important;
     }
@@ -1186,7 +1289,7 @@
 
     /* ── Parcel Box Animations ── */
     .parcel-box {
-      background: linear-gradient(145deg, #fdf8ed, #faf0d0) !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
       transition: all 0.4s cubic-bezier(0.23,1,0.32,1) !important;
       animation: parcelBoxAppear 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
     }
@@ -1197,12 +1300,12 @@
     @keyframes parcelFlash {
       0%   { box-shadow: 0 0 0 0 rgba(122,184,122,0.6); background: linear-gradient(135deg,#e8fae8,#d0f0d0); }
       50%  { box-shadow: 0 0 0 14px rgba(122,184,122,0); }
-      100% { box-shadow: 8px 8px 18px var(--sd), -8px -8px 18px var(--sl); background: linear-gradient(145deg, #fdf8ed, #faf0d0); }
+      100% { box-shadow: 8px 8px 18px var(--sd), -8px -8px 18px var(--sl); background: linear-gradient(145deg, var(--bg), var(--bg-d)); }
     }
 
     /* ── List Items Stagger ── */
     .list-group-item {
-      background: linear-gradient(145deg, #fdf8ed, #f8f0d8) !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
       animation: listItemSlide 0.35s cubic-bezier(0.23,1,0.32,1) both;
       transition: all 0.25s ease !important;
     }
@@ -1216,12 +1319,12 @@
 
     /* ── Count Number Animation ── */
     #count {
-      color: #c89830 !important;
+      color: var(--pink) !important;
       transition: color 0.3s;
     }
     @keyframes countBounce {
       0%   { transform: scale(1); }
-      30%  { transform: scale(1.45); color: #d4a843; }
+      30%  { transform: scale(1.45); color: var(--pink); }
       50%  { transform: scale(0.85); }
       70%  { transform: scale(1.15); }
       100% { transform: scale(1); }
@@ -1239,7 +1342,7 @@
 
     /* ── Stat Cards ── */
     .stat-card {
-      background: linear-gradient(145deg, #fdf8ed, #faf0d0) !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
       transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
       animation: statCardPop 0.6s cubic-bezier(0.34,1.56,0.64,1) both;
     }
@@ -1252,7 +1355,7 @@
     .stat-card:nth-child(2) { animation-delay: 0.2s; }
 
     .stat-num {
-      background: linear-gradient(135deg, #d4a843, #c89830) !important;
+      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink))) !important;
       -webkit-background-clip: text !important;
       -webkit-text-fill-color: transparent !important;
       background-clip: text !important;
@@ -1260,14 +1363,14 @@
 
     /* ── Dashboard Cards ── */
     .dash-table-card {
-      background: linear-gradient(145deg, #fdf8ed, #faf0d0) !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
       animation: cardFloatIn 0.6s cubic-bezier(0.23,1,0.32,1) both;
       transition: all 0.3s ease !important;
     }
     .dash-table-card:hover { transform: translateY(-2px); }
 
     .dash-row {
-      background: linear-gradient(145deg, #fdf8ed, #f8f0d8) !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
       transition: all 0.3s cubic-bezier(0.23,1,0.32,1) !important;
       animation: dashRowSlide 0.4s cubic-bezier(0.23,1,0.32,1) both;
     }
@@ -1279,18 +1382,18 @@
 
     /* ── Preset Buttons ── */
     .preset-btn {
-      background: linear-gradient(145deg, #fdf8ed, #f5edd8) !important;
-      color: #a09580 !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
+      color: var(--text3) !important;
       transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
     .preset-btn:hover, .preset-btn.active {
-      color: #c89830 !important;
+      color: var(--pink) !important;
       transform: scale(1.05);
     }
 
     /* ── Marketplace Options ── */
     .mp-option {
-      background: linear-gradient(145deg, #fdf8ed, #f8f0d8) !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
       transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1) !important;
       animation: mpSlideIn 0.4s cubic-bezier(0.23,1,0.32,1) both;
     }
@@ -1304,21 +1407,21 @@
     }
     .mp-option:hover { transform: translateY(-2px); }
     .mp-option.selected {
-      background: linear-gradient(145deg, #faf0d0, #f5e6a0) !important;
+      background: linear-gradient(145deg, var(--bg-d), var(--pink-light)) !important;
     }
-    .mp-name { color: #5a4820 !important; }
-    .mp-desc { color: #b89840 !important; }
+    .mp-name { color: var(--text) !important; }
+    .mp-desc { color: var(--pink) !important; }
     .mp-guide-btn {
-      background: linear-gradient(145deg, #fdf8ed, #f5edd8) !important;
-      color: #c89830 !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
+      color: var(--pink) !important;
       transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
-    .mp-guide-btn:hover { transform: scale(1.05); color: #b89840 !important; }
+    .mp-guide-btn:hover { transform: scale(1.05); color: var(--pink) !important; }
 
     /* ── Onboarding Tip ── */
     .onboarding-tip {
-      background: linear-gradient(145deg, #fdf8ed, #faf0d0) !important;
-      color: #7a7060 !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
+      color: var(--text2) !important;
       animation: tipBounceIn 0.6s cubic-bezier(0.34,1.56,0.64,1) both;
     }
     @keyframes tipBounceIn {
@@ -1329,7 +1432,7 @@
 
     /* ── Section Titles ── */
     .section-title {
-      color: #b89840 !important;
+      color: var(--pink) !important;
       animation: titleFadeIn 0.5s ease both;
     }
     @keyframes titleFadeIn {
@@ -1365,7 +1468,7 @@
 
     /* ── Progress Bars ── */
     #checklistProgressBar, #dailyTargetBar {
-      background: linear-gradient(90deg, #f0d070, #d4a843) !important;
+      background: linear-gradient(90deg, var(--pink-light), var(--pink)) !important;
       transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1) !important;
       position: relative;
       overflow: hidden;
@@ -1385,7 +1488,7 @@
 
     /* ── Remark Panel ── */
     .remark-panel {
-      background: linear-gradient(145deg, #faf0d0, #f5e6a0) !important;
+      background: linear-gradient(145deg, var(--bg-d), var(--pink-light)) !important;
       animation: remarkSlideUp 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
     }
     @keyframes remarkSlideUp {
@@ -1393,21 +1496,21 @@
       to   { opacity: 1; transform: translateY(0); max-height: 500px; }
     }
     .remark-btn {
-      background: linear-gradient(145deg, #fdf8ed, #f5edd8) !important;
-      color: #8a7040 !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
+      color: var(--text2) !important;
       transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
     .remark-btn:hover, .remark-btn.selected {
-      background: linear-gradient(145deg, #f5e6a0, #f0d070) !important;
-      color: #6a5020 !important;
+      background: linear-gradient(145deg, var(--pink-light), var(--pink)) !important;
+      color: var(--text) !important;
       transform: scale(1.03);
     }
 
     /* ── Customer Remark Box ── */
     .remark-display-box {
-      background: linear-gradient(135deg, #faf0d0, #f5e6a0) !important;
-      border-color: #e8c050 !important;
-      border-left-color: #d4a843 !important;
+      background: linear-gradient(135deg, var(--bg-d), var(--pink-light)) !important;
+      border-color: var(--pink-light) !important;
+      border-left-color: var(--pink) !important;
       color: #7a5820 !important;
       animation: fadeInUp 0.3s ease both, remarkBoxGlow 3s ease-in-out infinite;
     }
@@ -1418,10 +1521,10 @@
 
     /* ── Modal ── */
     .modal-header {
-      background: linear-gradient(135deg, #f0d070, #d4a843, #c89830) !important;
+      background: linear-gradient(135deg, var(--pink-light), var(--pink)) !important;
     }
     .modal-content {
-      background: linear-gradient(145deg, #fdf8ed, #faf0d0) !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
       animation: modalPop 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
     }
     @keyframes modalPop {
@@ -1429,7 +1532,7 @@
       to   { transform: scale(1); opacity: 1; }
     }
     .modal-footer {
-      background: linear-gradient(135deg, #f5edd8, #f0e5c8) !important;
+      background: linear-gradient(135deg, var(--bg-d), var(--bg-d)) !important;
     }
 
     /* ── Sparkle Enhancement ── */
@@ -1457,19 +1560,19 @@
 
     /* ── Skeleton Shimmer Enhancement ── */
     .skeleton-line {
-      background: linear-gradient(90deg, #f5edd8 25%, #faf0d0 50%, #f5edd8 75%) !important;
+      background: linear-gradient(90deg, var(--bg-d) 25%, var(--pink-light) 50%, var(--bg-d) 75%) !important;
       background-size: 200% 100% !important;
     }
 
     /* ── Network Badge ── */
     #networkBadge {
-      background: linear-gradient(145deg, #fdf8ed, #f5edd8) !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
       transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
 
     /* ── Search Input ── */
     .input-neu-wrap {
-      background: linear-gradient(145deg, #f5edd8, #fdf8ed) !important;
+      background: linear-gradient(145deg, var(--bg-d), var(--bg)) !important;
       transition: all 0.3s ease !important;
     }
     .input-neu-wrap:focus-within {
@@ -1479,22 +1582,22 @@
 
     /* ── Daily Target Progress ── */
     #dailyTargetWrap {
-      background: linear-gradient(145deg, #fdf8ed, #faf0d0) !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
     }
     #dailyTargetInput {
-      background: linear-gradient(145deg, #f5edd8, #fdf8ed) !important;
-      color: #5a4820 !important;
+      background: linear-gradient(145deg, var(--bg-d), var(--bg)) !important;
+      color: var(--text) !important;
     }
 
     /* ── File Input ── */
     .file-input-neu {
-      background: linear-gradient(145deg, #f5edd8, #fdf8ed) !important;
-      color: #8a7840 !important;
+      background: linear-gradient(145deg, var(--bg-d), var(--bg)) !important;
+      color: var(--text2) !important;
     }
 
     /* ── Order Checklist Panel ── */
     .order-checklist {
-      background: linear-gradient(145deg, #f5edd8, #fdf8ed) !important;
+      background: linear-gradient(145deg, var(--bg-d), var(--bg)) !important;
       animation: checklistAppear 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
     }
     @keyframes checklistAppear {
@@ -1507,13 +1610,13 @@
       background: rgba(122,100,60,0.92) !important;
     }
     #undoBtn {
-      background: #d4a843 !important;
+      background: var(--pink) !important;
       color: white !important;
     }
 
     /* ── Queue Modal ── */
     #queueModal > div:last-child {
-      background: linear-gradient(145deg, #fdf8ed, #faf0d0) !important;
+      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
       animation: modalSlideUp 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
     }
     @keyframes modalSlideUp {
@@ -1597,10 +1700,10 @@
     h6 { color: #6a5830 !important; }
     .form-text, .text-muted { color: #a09580 !important; }
     .small { color: #8a7860; }
-    .dash-count { color: #c89830 !important; }
-    .dash-rank { color: #c89830 !important; }
-    #parcelId { color: #c89830 !important; }
-    #checklistProgressLabel { color: #c89830 !important; }
+    .dash-count { color: var(--pink) !important; }
+    .dash-rank { color: var(--pink) !important; }
+    #parcelId { color: var(--pink) !important; }
+    #checklistProgressLabel { color: var(--pink) !important; }
     .topbar-title { color: #5a4820 !important; }
     .topbar-sub { color: #a09580 !important; }
 
@@ -1627,7 +1730,7 @@
 
     /* ── Dash Search Button ── */
     .dash-search-btn {
-      background: linear-gradient(135deg, #f0d070, #d4a843) !important;
+      background: linear-gradient(135deg, var(--pink-light), var(--pink)) !important;
       color: #5a4820 !important;
       transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
@@ -1635,14 +1738,14 @@
 
     /* ── Datepicker ── */
     .dash-datepicker {
-      background: linear-gradient(145deg, #f5edd8, #fdf8ed) !important;
+      background: linear-gradient(145deg, var(--bg-d), var(--bg)) !important;
     }
-    .dash-date-input { color: #5a4820 !important; }
+    .dash-date-input { color: var(--text) !important; }
 
     /* ── Period Badge ── */
     .dash-period-badge {
-      background: linear-gradient(135deg, #faf0d0, #f5e6a0) !important;
-      color: #8a6820 !important;
+      background: linear-gradient(135deg, var(--bg-d), var(--pink-light)) !important;
+      color: var(--text2) !important;
       animation: badgePop 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
     }
     @keyframes badgePop {
@@ -1997,7 +2100,7 @@
 <!-- Queue Pending Banner (online แต่มี queue ค้าง) -->
 <div id="queueBanner" onclick="showQueueModal()" style="
   display:none; position:fixed; top:calc(var(--topbar-h) + 8px); right:12px; z-index:199;
-  background:linear-gradient(135deg,#d4a843,#c89830);
+  background:linear-gradient(135deg,var(--pink),var(--day-accent,var(--pink)));
   color:white; cursor:pointer; border-radius:12px;
   padding:6px 14px; font-size:0.72rem; font-family:'Mitr',sans-serif;
   box-shadow:0 3px 12px rgba(0,0,0,0.25); max-width:220px;
@@ -2840,11 +2943,17 @@ async function retryFailedUploads() {
     const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
     if (q.length === 0) { _isRetrying = false; _flushedIds.clear(); return; }
     console.log(`[FailQueue] กำลัง retry ${q.length} รายการ...`);
+    const QUEUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // ✅ 7 วัน — หมดอายุอัตโนมัติ
     const remaining = [];
     for (const job of q) {
       // ✅ ถ้า GAS ยืนยันแล้ว → ลบออกจาก queue ทันที
       if (_isSent(job.pId)) {
         console.log(`[FailQueue] ข้าม ${job.pId} — sent แล้ว`);
+        continue;
+      }
+      // ✅ หมดอายุ 7 วัน → ทิ้งออก ไม่ retry ต่อ
+      if (job.ts && (Date.now() - job.ts) > QUEUE_MAX_AGE_MS) {
+        console.warn(`[FailQueue] หมดอายุ ${job.pId} (${Math.round((Date.now()-job.ts)/86400000)} วัน) — ลบออก`);
         continue;
       }
       try {
@@ -2879,8 +2988,12 @@ function isGasSuccess(res) {
   }
   if (typeof res === 'object') {
     if (res.error) return false;
+    // ✅ ต้องมี signal ชัดเจนว่าสำเร็จ — {} เปล่าๆ ถือว่าไม่สำเร็จ
     if (res.status) return ['success','ok','true'].includes(String(res.status).toLowerCase());
-    return true;
+    if (typeof res.success === 'boolean') return res.success;
+    if (typeof res.count === 'number') return true; // saveMarketplaceData ส่ง count กลับมา
+    if (typeof res.ok === 'boolean') return res.ok;
+    return false; // ✅ object ที่ไม่มี field ใดเลย → ถือว่าไม่สำเร็จ
   }
   return false;
 }
@@ -2910,7 +3023,7 @@ function updateFailQueueBadge() {
   const badge = document.getElementById('networkBadge');
   const queueBanner = document.getElementById('queueBanner');
   if (q.length > 0 && navigator.onLine) {
-    if (badge) { badge.style.background = '#faf0d0'; badge.style.color = '#8a6820'; badge.textContent = `⏳ ${q.length}`; }
+    if (badge) { badge.style.background = 'var(--bg-d)'; badge.style.color = 'var(--text2)'; badge.textContent = `⏳ ${q.length}`; }
     if (queueBanner) {
       document.getElementById('queueBannerCount').textContent = q.length;
       queueBanner.style.display = 'block';
@@ -2954,10 +3067,11 @@ async function syncAllNow() {
 }
 
 // ============================================================
-// 6. UNDO REMOVE ITEM
+// 6. UNDO REMOVE ITEM (multi-level undo, max 10 steps)
 // ============================================================
-let undoStack = null;
+let undoStack = []; // ✅ เปลี่ยนจาก null → array รองรับ undo หลายชั้น
 let undoHideTimer = null;
+const UNDO_MAX = 10;
 
 function showUndoToast(text) {
   const toast = document.getElementById('undoToast');
@@ -2974,21 +3088,37 @@ function hideUndoToast() {
   toast.style.opacity = '0';
   toast.style.pointerEvents = 'none';
   toast.style.transform = 'translateX(-50%) translateY(20px)';
-  undoStack = null;
+  // ✅ ไม่ล้าง undoStack ตรงนี้ — ยังสามารถ undo ได้จนกว่าจะเริ่มพัสดุใหม่
 }
 
 function undoRemove() {
-  if (!undoStack) return;
+  if (!undoStack.length) return;
   if (undoHideTimer) clearTimeout(undoHideTimer);
-  items.splice(undoStack.idx, 0, undoStack.sku);
+  const entry = undoStack.pop(); // ✅ ดึง entry ล่าสุดออก
+  items.splice(entry.idx, 0, entry.sku);
   if (isStrictValidationMode) {
-    scannedItemsMap[undoStack.sku] = (scannedItemsMap[undoStack.sku] || 0) + 1;
+    scannedItemsMap[entry.sku] = (scannedItemsMap[entry.sku] || 0) + 1;
     updateChecklistUI();
   }
   document.getElementById("count").innerText = items.length;
   renderList();
+  const remaining = undoStack.length;
   speak("คืนรายการแล้วค่ะ", false);
-  hideUndoToast();
+  if (remaining > 0) {
+    showUndoToast(`↩ ยังสามารถ undo ได้อีก ${remaining} ครั้ง`);
+  } else {
+    hideUndoToast();
+  }
+}
+
+function _getInactivityMsg() {
+  if (!isStrictValidationMode) return "พัสดุชิ้นนี้สินค้ายังไม่ครบนะคะ";
+  // ตรวจว่าเกินหรือขาด เพื่อบอกให้ถูกต้อง
+  for (let sSku in scannedItemsMap) {
+    const req = expectedItemsArray.find(ex => ex.sku === sSku);
+    if (!req || scannedItemsMap[sSku] > req.qty) return "พัสดุชิ้นนี้มีสินค้าเกินจำนวนค่ะ กรุณาตรวจสอบ";
+  }
+  return "พัสดุชิ้นนี้สินค้ายังไม่ครบนะคะ";
 }
 
 function startInactivityWatch() {
@@ -2998,11 +3128,11 @@ function startInactivityWatch() {
     // ไม่แจ้งเตือนถ้าสินค้าครบถ้วนแล้ว (strict mode) หรือจบงานไปแล้ว
     const isComplete = isStrictValidationMode && validateCurrentOrder();
     if (currentP && !isFinishing && !isComplete) {
-      speak("พัสดุชิ้นนี้สินค้ายังไม่ครบนะคะ", false);
+      speak(_getInactivityMsg(), false);
       inactivityRepeatTimer = setInterval(() => {
         const stillComplete = isStrictValidationMode && validateCurrentOrder();
         if (currentP && !isFinishing && !stillComplete) {
-          speak("พัสดุชิ้นนี้สินค้ายังไม่ครบนะคะ", false);
+          speak(_getInactivityMsg(), false);
         } else {
           clearInactivityWatch();
         }
@@ -3624,11 +3754,13 @@ async function processFinalScan(text) {
         vibrate([100, 50, 100, 50, 100]);
         speak(productName, true);
         setTimeout(() => speak("ไม่มีสินค้านี้ในรายการนะคะ", false), 800);
+        lastScanTime = Date.now(); return; // ✅ บล็อก — ไม่เพิ่มเข้า items
       } else if (currentScannedQty >= reqItem.qty) {
         beep('warn');
         vibrate([100, 50, 100, 50, 100]);
         speak(productName, true);
         setTimeout(() => speak("สินค้าเกินจำนวนค่ะ", false), 800);
+        lastScanTime = Date.now(); return; // ✅ บล็อก — ไม่เพิ่มเข้า items
       } else {
         beep('ok');
         vibrate(30);
@@ -3928,6 +4060,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
 async function resetAppForNext() {
   currentP = ""; items = []; isEditingId = false;
   expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
+  undoStack = []; // ✅ ล้าง undo history เมื่อเริ่มพัสดุใหม่
   resetRemark();
   hideCustomerRemark();
   document.getElementById("orderChecklistPanel").style.display = "none";
@@ -3957,6 +4090,7 @@ async function closeAppCompletely() {
   document.getElementById("app-tabs").style.display = "flex";
   currentP = ""; items = []; isEditingId = false;
   expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
+  undoStack = []; // ✅ ล้าง undo history
   resetRemark();
   hideCustomerRemark();
   document.getElementById("orderChecklistPanel").style.display = "none";
@@ -4027,7 +4161,8 @@ function renderList() {
 function removeLastScanned(sku) {
   const idx = items.lastIndexOf(sku);
   if (idx === -1) return;
-  undoStack = { idx, sku };
+  undoStack.push({ idx, sku }); // ✅ push แทน overwrite
+  if (undoStack.length > UNDO_MAX) undoStack.shift(); // จำกัด max 10
   items.splice(idx, 1);
   if (isStrictValidationMode) {
     if (scannedItemsMap[sku] > 0) {
@@ -4044,7 +4179,8 @@ function removeLastScanned(sku) {
 
 function removeItem(idx) {
   const sku = items[idx];
-  undoStack = { idx, sku };
+  undoStack.push({ idx, sku }); // ✅ push แทน overwrite
+  if (undoStack.length > UNDO_MAX) undoStack.shift(); // จำกัด max 10
   if (isStrictValidationMode) {
     if (scannedItemsMap[sku] > 0) {
       scannedItemsMap[sku]--;
@@ -5222,6 +5358,30 @@ function dismissOnboarding() {
   }).catch(() => {});
 })();
 
+
+// ===== DAY THEME =====
+const DAY_NAMES = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
+const DAY_THEME_COLORS = {
+  0: '#fef2f2', // อาทิตย์ — แดง
+  1: '#fdfaec', // จันทร์ — เหลือง
+  2: '#fef2f4', // อังคาร — ชมพู
+  3: '#f2faf2', // พุธ — เขียว
+  4: '#fef6ee', // พฤหัส — ส้ม
+  5: '#eef6fd', // ศุกร์ — ฟ้า
+  6: '#f5f0fc', // เสาร์ — ม่วง
+};
+function applyDayTheme() {
+  const day = new Date().getDay(); // 0=อาทิตย์ … 6=เสาร์
+  // ลบ class วันเก่าทั้งหมดก่อน
+  [0,1,2,3,4,5,6].forEach(d => document.documentElement.classList.remove('day-' + d));
+  document.documentElement.classList.add('day-' + day);
+  // อัพ theme-color meta (สีแถบ browser)
+  const isDark = document.documentElement.classList.contains('dark-mode');
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = isDark ? '#252320' : (DAY_THEME_COLORS[day] || '#fdf8ed');
+  console.log('[DayTheme] วัน' + DAY_NAMES[day] + ' → day-' + day);
+}
+
 // ===== DARK MODE TOGGLE =====
 (function initDarkMode() {
   try {
@@ -5238,10 +5398,12 @@ function dismissOnboarding() {
     }
   } catch(e) { document.documentElement.classList.remove('dark-mode'); }
 })();
+applyDayTheme(); // ✅ ใช้โทนสีตามวัน
 function toggleDarkMode() {
   const isDark = document.documentElement.classList.toggle('dark-mode');
   document.getElementById('darkModeBtn').textContent = isDark ? '☀️' : '🌙';
   try { localStorage.setItem('darkMode', isDark ? '1' : '0'); } catch(e) {}
+  applyDayTheme(); // ✅ อัพ theme-color ตาม dark/light
 }
 
 // ===== DEBOUNCE SEARCH =====
