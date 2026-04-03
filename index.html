@@ -3789,21 +3789,24 @@ async function finishWork(isManual = false) {
   const pId = currentP;
   if (!pId) { if (isManual) speak("กรุณาสแกนรหัสพัสดุก่อนนะคะ"); return; }
 
-  // ===== ตรวจสอบ strict mode: สินค้าเกิน → บล็อก =====
+  // ===== ตรวจสอบ strict mode: สินค้าเกิน → ต้องใส่หมายเหตุ แต่จบงานได้ =====
   if (isStrictValidationMode && !validateCurrentOrder()) {
     let hasOver = false;
     for (let sSku in scannedItemsMap) {
       const req = expectedItemsArray.find(ex => ex.sku === sSku);
       if (!req || scannedItemsMap[sSku] > req.qty) { hasOver = true; break; }
     }
-    if (hasOver) {
-      beep('warn'); speak("มีสินค้าเกินจำนวนค่ะ กรุณาลบออกก่อน", false);
-      setStatus("❌ สินค้าเกินจำนวน — กรุณาลบออกก่อนจบงาน", "danger"); return;
+    if (hasOver && !currentRemark) {
+      beep('warn'); speak("มีสินค้าเกินจำนวนค่ะ กรุณาระบุเหตุผล", false);
+      setStatus("⚠️ สินค้าเกินจำนวน — กรุณาระบุเหตุผลก่อนจบงาน", "warning");
+      const remarkResult = await showRemarkPopup();
+      if (!remarkResult) return; // ผู้ใช้กดยกเลิก
+      currentRemark = remarkResult;
     }
   }
 
   // ===== ถ้าสินค้าไม่ครบ (strict mode ไม่ผ่าน หรือ ไม่มีสินค้าเลย) → เด้ง popup เลือกเหตุผล =====
-  const isIncomplete = isStrictValidationMode && !validateCurrentOrder();
+  const isIncomplete = isStrictValidationMode && !validateCurrentOrder() && (() => { let o=false; for(let s in scannedItemsMap){const r=expectedItemsArray.find(e=>e.sku===s); if(!r||scannedItemsMap[s]>r.qty){o=true;break;}} return !o; })();
   const isEmpty = isManual && items.length === 0;
   if ((isIncomplete || isEmpty) && !currentRemark) {
     beep('warn');
@@ -4150,8 +4153,8 @@ function hideCustomerRemark() {
   if (box) box.style.display = 'none';
 }
 
-// ✅ พูดเลขพัสดุจบ → พูดหมายเหตุจบ → ปลดล็อคสแกนสินค้า
-// ถ้าไม่มีหมายเหตุ → พูดเลขพัสดุจบ → ปลดล็อคทันที
+// ✅ พูดเลขพัสดุ → ถ้ามีหมายเหตุ: พูดหมายเหตุจบแล้วค่อยปลดล็อค
+// ถ้าไม่มีหมายเหตุ → ปลดล็อคสแกนสินค้าทันที ไม่ต้องรอพูดเลขพัสดุจบ
 function _speakParcelThenRemark(parcelMsg, tracking, remarkDelayMs = 1200) {
   try {
     if (!window.speechSynthesis) { isSpeakingRemark = false; return; }
@@ -4164,7 +4167,7 @@ function _speakParcelThenRemark(parcelMsg, tracking, remarkDelayMs = 1200) {
     uParcel.lang = 'th-TH'; uParcel.rate = 1.3;
 
     if (remark) {
-      // มี remark: พูดเลขพัสดุจบ → delay → พูด remark → ปลดล็อค
+      // ✅ มีหมายเหตุ: ล็อคไว้จนพูดหมายเหตุจบ (พฤติกรรมเดิม)
       uParcel.onend = () => {
         setTimeout(() => {
           const uRemark = new SpeechSynthesisUtterance('หมายเหตุลูกค้า ' + remark);
@@ -4175,16 +4178,16 @@ function _speakParcelThenRemark(parcelMsg, tracking, remarkDelayMs = 1200) {
         }, remarkDelayMs);
       };
       uParcel.onerror = () => { isSpeakingRemark = false; };
+      // safety timeout 10 วินาที
+      setTimeout(() => { isSpeakingRemark = false; }, 10000);
     } else {
-      // ไม่มี remark: พูดเลขพัสดุจบ → ปลดล็อคทันที
-      uParcel.onend = () => { isSpeakingRemark = false; };
-      uParcel.onerror = () => { isSpeakingRemark = false; };
+      // ✅ ไม่มีหมายเหตุ: ปลดล็อคทันที ไม่รอพูดเลขพัสดุจบ → สแกนสินค้าได้เลย
+      isSpeakingRemark = false;
+      uParcel.onend = () => {};
+      uParcel.onerror = () => {};
     }
 
     speechSynthesis.speak(uParcel);
-
-    // safety timeout: ถ้า speech API ค้าง ปลดล็อคภายใน 10 วินาที
-    setTimeout(() => { isSpeakingRemark = false; }, 10000);
   } catch(e) { isSpeakingRemark = false; }
 }
 
