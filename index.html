@@ -4546,6 +4546,17 @@ function validateCurrentOrder() {
 }
 
 // --- Upload Marketplace ---
+// ✅ v2.9: cellToStr — แปลงค่าจาก xlsx/csv เป็น string ที่ถูกต้อง
+// ป้องกัน TikTok Order ID ยาวๆ กลายเป็น scientific notation เช่น 7.94472e+11
+function cellToStr(val) {
+  if (val === null || val === undefined || val === '') return '';
+  if (typeof val === 'number') {
+    // toLocaleString fullwide ไม่ใช้ comma ไม่ใช้ scientific notation
+    return val.toLocaleString('fullwide', { useGrouping: false, maximumFractionDigits: 0 });
+  }
+  return String(val).trim();
+}
+
 async function processFileUpload() {
   const fileInput = document.getElementById('fileInput');
   const marketplace = document.getElementById('marketplaceSelect').value;
@@ -4603,8 +4614,8 @@ async function processFileUpload() {
       let lazSkipped = 0, lazProcessed = 0;
       for (let i = startRow; i < rows.length; i++) {
         const row = rows[i]; if (!row) { lazSkipped++; continue; }
-        const tracking = String(row[useMap.tracking] || '').trim().toUpperCase();
-        const sku      = String(row[useMap.sku]      || '').trim().toUpperCase();
+        const tracking = cellToStr(row[useMap.tracking]).toUpperCase();
+        const sku      = cellToStr(row[useMap.sku]).toUpperCase();
         if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') {
           lazSkipped++;
           console.log(`[Lazada] skip row ${i}: tracking='${tracking}', sku='${sku}', raw_tracking=${JSON.stringify(row[useMap.tracking])}, raw_sku=${JSON.stringify(row[useMap.sku])}`);
@@ -4615,7 +4626,7 @@ async function processFileUpload() {
         trackingMap[key] = (trackingMap[key] || 0) + 1;
         // ✅ ดึง orderId
         if (!orderInfoMap[tracking] && useMap.orderId !== undefined) {
-          const oid = String(row[useMap.orderId] || '').trim();
+          const oid = cellToStr(row[useMap.orderId]);
           if (oid) orderInfoMap[tracking] = { orderId: oid, marketplace };
         }
         // ดึง remark (Lazada: sellerNote)
@@ -4639,8 +4650,8 @@ async function processFileUpload() {
       const trackingSkuMap = {}; // { "TRACKING|SKU": qty }
       for (let i = startRow; i < rows.length; i++) {
         const row = rows[i]; if (!row) continue;
-        const tracking = String(row[useMap.tracking] || '').trim().toUpperCase();
-        const sku      = String(row[useMap.sku]      || '').trim().toUpperCase();
+        const tracking = cellToStr(row[useMap.tracking]).toUpperCase();
+        const sku      = cellToStr(row[useMap.sku]).toUpperCase();
         const qty      = parseInt(row[useMap.qty]) || 1;
         if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
         if (tracking.length < 5 || tracking.includes(' ')) continue;
@@ -4649,7 +4660,7 @@ async function processFileUpload() {
         trackingSkuMap[key] = (trackingSkuMap[key] || 0) + qty;
         // ✅ ดึง orderId — รองรับ "การจัดส่งแบบรวม" (tracking เดียว หลาย orderId)
         if (useMap.orderId !== undefined) {
-          const oid = String(row[useMap.orderId] || '').trim();
+          const oid = cellToStr(row[useMap.orderId]);
           if (oid) {
             if (!orderInfoMap[tracking]) {
               orderInfoMap[tracking] = { orderId: oid, marketplace };
