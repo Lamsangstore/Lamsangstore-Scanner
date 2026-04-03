@@ -67,6 +67,7 @@
       --corn-milk:     #f5e0a0;
       --corn-milk-light:#faf0c8;
       --corn-milk-dark: #d4b860;
+      --accent-rgb:    212,168,67;
     }
 
     /* ===== DAY THEME — โทนสีตามวัน (pastel) ===== */
@@ -80,6 +81,7 @@
       --sd:          rgba(195,175,100,0.40);
       --sl:          rgba(255,255,248,0.92);
       --day-accent:  #c8a830;
+      --accent-rgb:  200,168,48;
       background:    #fdfaec;
     }
     html.day-1 body { background: #fdfaec !important; }
@@ -93,6 +95,7 @@
       --sd:          rgba(210,140,155,0.38);
       --sl:          rgba(255,250,252,0.92);
       --day-accent:  #d4748a;
+      --accent-rgb:  212,116,138;
       background:    #fef2f4;
     }
     html.day-2 body { background: #fef2f4 !important; }
@@ -106,6 +109,7 @@
       --sd:          rgba(130,190,130,0.35);
       --sl:          rgba(248,255,248,0.92);
       --day-accent:  #70a870;
+      --accent-rgb:  112,168,112;
       background:    #f2faf2;
     }
     html.day-3 body { background: #f2faf2 !important; }
@@ -119,6 +123,7 @@
       --sd:          rgba(210,165,110,0.38);
       --sl:          rgba(255,252,248,0.92);
       --day-accent:  #d08040;
+      --accent-rgb:  208,128,64;
       background:    #fef6ee;
     }
     html.day-4 body { background: #fef6ee !important; }
@@ -132,6 +137,7 @@
       --sd:          rgba(110,170,215,0.35);
       --sl:          rgba(245,252,255,0.92);
       --day-accent:  #5090c0;
+      --accent-rgb:  80,144,192;
       background:    #eef6fd;
     }
     html.day-5 body { background: #eef6fd !important; }
@@ -145,6 +151,7 @@
       --sd:          rgba(160,140,210,0.35);
       --sl:          rgba(252,250,255,0.92);
       --day-accent:  #8870b8;
+      --accent-rgb:  136,112,184;
       background:    #f5f0fc;
     }
     html.day-6 body { background: #f5f0fc !important; }
@@ -158,6 +165,7 @@
       --sd:          rgba(210,140,140,0.38);
       --sl:          rgba(255,250,250,0.92);
       --day-accent:  #c85858;
+      --accent-rgb:  200,88,88;
       background:    #fef2f2;
     }
     html.day-0 body { background: #fef2f2 !important; }
@@ -318,7 +326,7 @@
       color: #5a4820;
       font-size: 1.15rem;
       letter-spacing: 0.3px;
-      box-shadow: 6px 6px 18px rgba(212,168,67,0.45), -4px -4px 12px var(--sl),
+      box-shadow: 6px 6px 18px rgba(var(--accent-rgb),0.45), -4px -4px 12px var(--sl),
                   inset 0 1px 0 rgba(255,255,255,0.35);
       animation: startBtnShimmer 3s ease-in-out infinite;
     }
@@ -327,7 +335,7 @@
       50%      { background-position: 100% 50%; }
     }
     .btn-main:hover {
-      box-shadow: 8px 8px 22px rgba(212,168,67,0.6), -4px -4px 12px var(--sl),
+      box-shadow: 8px 8px 22px rgba(var(--accent-rgb),0.6), -4px -4px 12px var(--sl),
                   inset 0 1px 0 rgba(255,255,255,0.4);
       transform: translateY(-1px);
     }
@@ -335,9 +343,9 @@
     .btn-save {
       background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
       color: white;
-      box-shadow: 6px 6px 14px rgba(212,168,67,0.4), -4px -4px 10px var(--sl);
+      box-shadow: 6px 6px 14px rgba(var(--accent-rgb),0.4), -4px -4px 10px var(--sl);
     }
-    .btn-save:hover { box-shadow: 8px 8px 18px rgba(212,168,67,0.5), -4px -4px 10px var(--sl); }
+    .btn-save:hover { box-shadow: 8px 8px 18px rgba(var(--accent-rgb),0.5), -4px -4px 10px var(--sl); }
     .btn-cancel {
       background: var(--bg);
       color: var(--text2);
@@ -405,7 +413,7 @@
     .scanner-viewfinder::before {
       content: '';
       width: 200px; height: 120px;
-      border: 2.5px solid rgba(212,168,67,0.85);
+      border: 2.5px solid rgba(var(--accent-rgb),0.85);
       border-radius: 12px;
       box-shadow: 0 0 0 2000px rgba(0,0,0,0.18);
     }
@@ -493,7 +501,7 @@
       font-size: 0.7rem !important;
       border-radius: 20px !important;
       padding: 3px 14px !important;
-      background: rgba(212,168,67,0.15) !important;
+      background: rgba(var(--accent-rgb),0.15) !important;
       color: var(--pink) !important;
       border: 1px solid var(--pink-light) !important;
       box-shadow: none !important;
@@ -702,7 +710,7 @@
     html.dark-mode .input-group .btn-success  { background: #1a3a2a !important; border-color: #7ab87a !important; }
     html.dark-mode .table          { color: #e8e4dc !important; }
     html.dark-mode .table-light    { background: #2c2a25 !important; color: #b0a890 !important; }
-    html.dark-mode .table-hover tbody tr:hover { background: rgba(212,168,67,0.06) !important; }
+    html.dark-mode .table-hover tbody tr:hover { background: rgba(var(--accent-rgb),0.06) !important; }
     html.dark-mode .dash-date-input { background: #2c2a25 !important; color: #e8e4dc !important; border-color: #4a4535 !important; }
 
     /* Dashboard */
@@ -830,9 +838,9 @@
       background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
       border: none; color: white; font-size: 0.9rem;
       cursor: pointer; transition: all 0.2s;
-      box-shadow: 4px 4px 10px rgba(212,168,67,0.4), -3px -3px 8px var(--sl);
+      box-shadow: 4px 4px 10px rgba(var(--accent-rgb),0.4), -3px -3px 8px var(--sl);
     }
-    .dash-search-btn:hover { box-shadow: 5px 5px 14px rgba(212,168,67,0.5), -3px -3px 8px var(--sl); }
+    .dash-search-btn:hover { box-shadow: 5px 5px 14px rgba(var(--accent-rgb),0.5), -3px -3px 8px var(--sl); }
     .dash-period-badge {
       background: var(--bg);
       border: none;
@@ -887,6 +895,15 @@
       font-family: 'Mitr', sans-serif !important;
       font-size: 0.92rem !important; font-weight: 600 !important;
       padding: 10px 22px !important;
+    }
+    /* ✅ Swal confirm button ใช้สีตามวัน */
+    .swal2-confirm.swal-btn {
+      background: linear-gradient(135deg, var(--pink-light), var(--pink)) !important;
+      color: white !important;
+      border: none !important;
+    }
+    .swal2-cancel.swal-btn {
+      background: #b2bec3 !important;
     }
 
     /* === MARKETPLACE SELECTOR === */
@@ -946,7 +963,7 @@
       padding: 9px 14px; font-size: 1rem; cursor: pointer;
       box-shadow: 4px 4px 10px var(--sd), -4px -4px 10px var(--sl);
       color: var(--text2); transition: all 0.15s; flex-shrink: 0;
-      filter: sepia(0.35) saturate(1.2) hue-rotate(8deg);
+      filter: none;
     }
     .btn-neu-icon:hover, .btn-neu-icon:active {
       box-shadow: inset 3px 3px 7px var(--sd), inset -3px -3px 7px var(--sl);
@@ -965,9 +982,9 @@
       color: white; border: none; border-radius: 12px;
       font-family: 'Mitr', sans-serif; font-weight: 600;
       cursor: pointer; transition: all 0.2s; flex-shrink: 0;
-      box-shadow: 4px 4px 10px rgba(212,168,67,0.4), -3px -3px 8px var(--sl);
+      box-shadow: 4px 4px 10px rgba(var(--accent-rgb),0.4), -3px -3px 8px var(--sl);
     }
-    .btn-neu-gold:hover { box-shadow: 5px 5px 14px rgba(212,168,67,0.5), -3px -3px 8px var(--sl); }
+    .btn-neu-gold:hover { box-shadow: 5px 5px 14px rgba(var(--accent-rgb),0.5), -3px -3px 8px var(--sl); }
     /* neumorphic inset input wrapper */
     .input-neu-wrap {
       background: var(--bg); border-radius: 16px; flex: 1; position: relative;
@@ -1038,7 +1055,7 @@
       background: linear-gradient(135deg, var(--bg), var(--bg-d));
       color: var(--pink);
       font-weight: 600;
-      box-shadow: 0 0 0 3px rgba(212,168,67,0.2);
+      box-shadow: 0 0 0 3px rgba(var(--accent-rgb),0.2);
     }
     html.dark-mode .swal-remark-btn {
       background: #2c2a25; border-color: #4a4535; color: #e8e4dc;
@@ -1088,8 +1105,8 @@
       animation: logoPulse 3s ease-in-out infinite, logoAppear 0.8s cubic-bezier(0.34,1.56,0.64,1) 0.2s both;
     }
     @keyframes logoPulse {
-      0%,100% { box-shadow: 4px 4px 10px var(--sd), -3px -3px 8px var(--sl), 0 0 0 0 rgba(212,168,67,0); }
-      50%     { box-shadow: 4px 4px 10px var(--sd), -3px -3px 8px var(--sl), 0 0 18px 4px rgba(212,168,67,0.3); }
+      0%,100% { box-shadow: 4px 4px 10px var(--sd), -3px -3px 8px var(--sl), 0 0 0 0 rgba(var(--accent-rgb),0); }
+      50%     { box-shadow: 4px 4px 10px var(--sd), -3px -3px 8px var(--sl), 0 0 18px 4px rgba(var(--accent-rgb),0.3); }
     }
     @keyframes logoAppear {
       from { transform: scale(0) rotate(-180deg); opacity: 0; }
@@ -1228,13 +1245,13 @@
     .btn-neu-sm:hover { transform: scale(1.03); }
 
     .btn-neu-icon {
-      color: #b89840 !important;
+      color: var(--pink) !important;
       transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
     .btn-neu-icon:hover { transform: scale(1.1) rotate(5deg); }
 
     .btn-edit-inline {
-      color: #b89840 !important;
+      color: var(--pink) !important;
       transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
     .btn-edit-inline:hover { transform: scale(1.05); }
@@ -1332,12 +1349,12 @@
 
     /* ── Scanner Viewfinder ── */
     .scanner-viewfinder::before {
-      border-color: rgba(212,168,67,0.85) !important;
+      border-color: rgba(var(--accent-rgb),0.85) !important;
       animation: viewfinderPulse 2s ease-in-out infinite;
     }
     @keyframes viewfinderPulse {
-      0%,100% { border-color: rgba(212,168,67,0.85); box-shadow: 0 0 0 2000px rgba(0,0,0,0.18); }
-      50%     { border-color: rgba(245,224,160,0.95); box-shadow: 0 0 0 2000px rgba(0,0,0,0.12), 0 0 20px rgba(212,168,67,0.3); }
+      0%,100% { border-color: rgba(var(--accent-rgb),0.85); box-shadow: 0 0 0 2000px rgba(0,0,0,0.18); }
+      50%     { border-color: rgba(245,224,160,0.95); box-shadow: 0 0 0 2000px rgba(0,0,0,0.12), 0 0 20px rgba(var(--accent-rgb),0.3); }
     }
 
     /* ── Stat Cards ── */
@@ -1515,8 +1532,8 @@
       animation: fadeInUp 0.3s ease both, remarkBoxGlow 3s ease-in-out infinite;
     }
     @keyframes remarkBoxGlow {
-      0%,100% { box-shadow: 3px 3px 8px rgba(212,168,67,0.15); }
-      50%     { box-shadow: 3px 3px 8px rgba(212,168,67,0.15), 0 0 12px rgba(212,168,67,0.1); }
+      0%,100% { box-shadow: 3px 3px 8px rgba(var(--accent-rgb),0.15); }
+      50%     { box-shadow: 3px 3px 8px rgba(var(--accent-rgb),0.15), 0 0 12px rgba(var(--accent-rgb),0.1); }
     }
 
     /* ── Modal ── */
@@ -1576,7 +1593,7 @@
       transition: all 0.3s ease !important;
     }
     .input-neu-wrap:focus-within {
-      box-shadow: inset 4px 4px 10px var(--sd), inset -4px -4px 10px var(--sl), 0 0 0 3px rgba(212,168,67,0.15) !important;
+      box-shadow: inset 4px 4px 10px var(--sd), inset -4px -4px 10px var(--sl), 0 0 0 3px rgba(var(--accent-rgb),0.15) !important;
     }
     .input-neu-wrap input::placeholder { color: #c0b090 !important; }
 
@@ -1684,13 +1701,13 @@
       z-index: -1;
       background: 
         radial-gradient(circle at 15% 25%, rgba(245,224,160,0.15) 0%, transparent 40%),
-        radial-gradient(circle at 80% 70%, rgba(212,168,67,0.08) 0%, transparent 35%),
+        radial-gradient(circle at 80% 70%, rgba(var(--accent-rgb),0.08) 0%, transparent 35%),
         radial-gradient(circle at 50% 50%, rgba(248,216,176,0.06) 0%, transparent 50%);
     }
     html.dark-mode body::before {
       background: 
-        radial-gradient(circle at 15% 25%, rgba(212,168,67,0.05) 0%, transparent 40%),
-        radial-gradient(circle at 80% 70%, rgba(212,168,67,0.03) 0%, transparent 35%);
+        radial-gradient(circle at 15% 25%, rgba(var(--accent-rgb),0.05) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(var(--accent-rgb),0.03) 0%, transparent 35%);
     }
 
     /* ── Smooth Scroll ── */
@@ -1790,7 +1807,7 @@
       position: absolute;
       top: 50%; left: 50%;
       width: 0; height: 0;
-      background: radial-gradient(circle, rgba(212,168,67,0.2) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(var(--accent-rgb),0.2) 0%, transparent 70%);
       border-radius: 50%;
       transform: translate(-50%,-50%);
       transition: width 0.5s, height 0.5s;
@@ -1907,7 +1924,7 @@
     }
     @keyframes targetWrapGlow {
       0%   { opacity: 0; transform: translateY(20px); box-shadow: 8px 8px 20px var(--sd), -8px -8px 20px var(--sl); }
-      50%  { box-shadow: 8px 8px 20px var(--sd), -8px -8px 20px var(--sl), 0 0 20px rgba(212,168,67,0.2); }
+      50%  { box-shadow: 8px 8px 20px var(--sd), -8px -8px 20px var(--sl), 0 0 20px rgba(var(--accent-rgb),0.2); }
       100% { opacity: 1; transform: translateY(0); box-shadow: 8px 8px 20px var(--sd), -8px -8px 20px var(--sl); }
     }
 
@@ -2002,7 +2019,7 @@
     }
     @keyframes radioPulse {
       0%   { transform: scale(1); box-shadow: inset 0 0 0 3px var(--bg); }
-      40%  { transform: scale(1.4); box-shadow: inset 0 0 0 3px var(--bg), 0 0 12px rgba(212,168,67,0.5); }
+      40%  { transform: scale(1.4); box-shadow: inset 0 0 0 3px var(--bg), 0 0 12px rgba(var(--accent-rgb),0.5); }
       100% { transform: scale(1); box-shadow: inset 0 0 0 3px var(--bg); }
     }
 
@@ -2021,8 +2038,8 @@
       animation: uploadBtnPulse 2s ease-in-out infinite;
     }
     @keyframes uploadBtnPulse {
-      0%,100% { box-shadow: 4px 4px 10px rgba(212,168,67,0.4), -3px -3px 8px var(--sl); }
-      50%     { box-shadow: 4px 4px 10px rgba(212,168,67,0.4), -3px -3px 8px var(--sl), 0 0 22px rgba(212,168,67,0.35); }
+      0%,100% { box-shadow: 4px 4px 10px rgba(var(--accent-rgb),0.4), -3px -3px 8px var(--sl); }
+      50%     { box-shadow: 4px 4px 10px rgba(var(--accent-rgb),0.4), -3px -3px 8px var(--sl), 0 0 22px rgba(var(--accent-rgb),0.35); }
     }
 
     /* ── UPLOAD: Upload Button Arrow Animation ── */
@@ -2119,7 +2136,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
       <div style="font-weight:700; font-size:0.95rem; color:var(--text);">⏳ รายการรอ Sync</div>
       <button onclick="syncAllNow()" style="
-        background:linear-gradient(135deg,var(--pink),#c89830); color:white; border:none;
+        background:linear-gradient(135deg,var(--pink-light),var(--pink)); color:white; border:none;
         border-radius:20px; padding:6px 18px; font-family:'Mitr',sans-serif;
         font-size:0.82rem; font-weight:600; cursor:pointer;">🔄 Sync ทันที</button>
     </div>
@@ -2143,7 +2160,7 @@
     <div style="display:flex; align-items:center; gap:6px;">
       <a id="sheetLink" href="#" target="_blank" rel="noopener"
         title="เปิด Google Sheet" style="font-size:1.1rem; padding:5px 7px; text-decoration:none; filter:sepia(0.4) saturate(1.3) hue-rotate(8deg); cursor:pointer; display:none;">📋</a>
-      <button id="darkModeBtn" onclick="toggleDarkMode()" title="สลับธีม" style="font-size:1.1rem; padding:5px 7px; filter:sepia(0.4) saturate(1.3) hue-rotate(8deg);">🌙</button>
+      <button id="darkModeBtn" onclick="toggleDarkMode()" title="สลับธีม" style="font-size:1.1rem; padding:5px 7px;">🌙</button>
       <span id="networkBadge" style="font-size:0.72rem; font-weight:600; padding:4px 10px; letter-spacing:0.2px; color:var(--success); filter:sepia(0.3) saturate(1.2);">🟢 ออนไลน์</span>
     </div>
     <span id="syncTimeBadge" style="font-size:0.72rem; color:var(--text3);">—</span>
@@ -2220,7 +2237,7 @@
             <span id="checklistProgressLabel" style="font-size:0.7rem; font-weight:600; color:var(--pink);">0 / 0 ชิ้น</span>
           </div>
           <div style="background:var(--pink-light); border-radius:20px; height:7px; overflow:hidden;">
-            <div id="checklistProgressBar" style="height:100%; border-radius:20px; background:linear-gradient(90deg,var(--pink),#c89830); width:0%; transition:width 0.4s cubic-bezier(0.34,1.56,0.64,1);"></div>
+            <div id="checklistProgressBar" style="height:100%; border-radius:20px; background:linear-gradient(90deg,var(--pink-light),var(--pink)); width:0%; transition:width 0.4s cubic-bezier(0.34,1.56,0.64,1);"></div>
           </div>
         </div>
         <div id="checklistContent"></div>
@@ -4373,7 +4390,7 @@ async function showRemarkPopup() {
     `,
     showConfirmButton: true,
     confirmButtonText: '💾 บันทึกพร้อมหมายเหตุ',
-    confirmButtonColor: '#c8a84b',
+    confirmButtonColor: 'transparent',
     showCancelButton: true,
     cancelButtonText: 'ยกเลิก',
     allowOutsideClick: false,
@@ -4452,7 +4469,7 @@ function updateChecklistUI() {
     bar.style.width = pct + '%';
     bar.style.background = pct >= 100
       ? 'linear-gradient(90deg,#7ab87a,#90d890)'
-      : 'linear-gradient(90deg,var(--pink),#c89830)';
+      : 'linear-gradient(90deg,var(--pink-light),var(--pink))';
   }
 
   // แสดงแต่ละรายการ expected พร้อมปุ่มลบชิ้นล่าสุด
@@ -4702,8 +4719,8 @@ async function processFileUpload() {
     showCancelButton: true,
     confirmButtonText: '📤 อัปโหลดเลย',
     cancelButtonText: 'ยกเลิก',
-    confirmButtonColor: '#c8a84b',
-    cancelButtonColor: '#b2bec3',
+    confirmButtonColor: 'transparent',
+    cancelButtonColor: 'transparent',
     background: '#fff0f3',
     customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn', cancelButton: 'swal-btn' },
     reverseButtons: true,
@@ -4914,7 +4931,7 @@ function animateSearch() {
   const iw = document.querySelector('#search .input-neu-wrap');
   if (iw) {
     iw.style.transition = 'box-shadow 0.5s ease';
-    iw.style.boxShadow = 'inset 4px 4px 10px var(--sd), inset -4px -4px 10px var(--sl), 0 0 16px rgba(212,168,67,0.2)';
+    iw.style.boxShadow = 'inset 4px 4px 10px var(--sd), inset -4px -4px 10px var(--sl), 0 0 16px rgba(var(--accent-rgb),0.2)';
     setTimeout(() => { iw.style.boxShadow = ''; }, 1200);
   }
   // Search button icons
@@ -5101,8 +5118,8 @@ async function resetSession() {
     showCancelButton: true,
     confirmButtonText: '🗑️ ล้างเลย',
     cancelButtonText: 'ยกเลิก',
-    confirmButtonColor: '#c8a84b',
-    cancelButtonColor: '#b2bec3',
+    confirmButtonColor: 'transparent',
+    cancelButtonColor: 'transparent',
     background: '#fff0f3',
     reverseButtons: true,
   });
@@ -5559,7 +5576,7 @@ function updateDailyTargetUI() {
   barEl.style.width = pct + '%';
   barEl.style.background = done
     ? 'linear-gradient(90deg,#7ab87a,#90d890)'
-    : 'linear-gradient(90deg,var(--pink),#c89830)';
+    : 'linear-gradient(90deg,var(--pink-light),var(--pink))';
 
   const targetLabel = currentReportDays === 1
     ? `${dailyTarget} ชิ้น`
