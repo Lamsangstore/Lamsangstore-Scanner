@@ -897,6 +897,12 @@
       padding: 10px 22px !important;
     }
     /* ✅ Swal confirm button ใช้สีตามวัน */
+    .swal2-confirm.swal-btn,
+    .swal2-confirm.swal-remark-confirm {
+      background: linear-gradient(135deg, var(--pink-light), var(--pink)) !important;
+      color: white !important;
+      border: none !important;
+    }
     .swal2-confirm.swal-btn {
       background: linear-gradient(135deg, var(--pink-light), var(--pink)) !important;
       color: white !important;
@@ -1048,7 +1054,7 @@
     }
     .swal-remark-btn:hover {
       border-color: var(--pink-light);
-      background: #faf5e0;
+      background: var(--bg-d);
     }
     .swal-remark-btn.swal-remark-selected {
       border-color: var(--pink);
@@ -4384,7 +4390,7 @@ async function showRemarkPopup() {
   const { value } = await Swal.fire({
     title: '⚠️ สินค้าไม่ครบ',
     html: `
-      <p style="font-size:0.9rem; color:#8a6820; margin-bottom:12px;">กรุณาเลือกเหตุผลก่อนจบงาน</p>
+      <p style="font-size:0.9rem; color:var(--text2); margin-bottom:12px;">กรุณาเลือกเหตุผลก่อนจบงาน</p>
       <div id="swalRemarkBtns" style="display:flex; flex-direction:column; gap:8px;">${buttonsHtml}</div>
       <input id="swalRemarkOther" class="swal2-input" placeholder="ระบุเหตุผล..." style="display:none; margin-top:10px; font-size:0.9rem; border-radius:12px;">
     `,
@@ -4394,7 +4400,7 @@ async function showRemarkPopup() {
     showCancelButton: true,
     cancelButtonText: 'ยกเลิก',
     allowOutsideClick: false,
-    customClass: { popup: 'swal-remark-popup' },
+    customClass: { popup: 'swal-remark-popup', confirmButton: 'swal-btn swal-remark-confirm', cancelButton: 'swal-btn' },
     didOpen: () => {
       const popup = Swal.getPopup();
       let selected = '';
