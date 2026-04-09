@@ -3788,6 +3788,10 @@ async function processFinalScan(text) {
         beep('ok');
         vibrate(30);
         speak(productName, true);
+        // ✅ แจ้งจำนวนครั้งแรกที่สแกน SKU นี้ — ถ้าสินค้านั้นต้องแพคมากกว่า 1 ชิ้น
+        if (currentScannedQty === 0 && reqItem.qty > 1) {
+          setTimeout(() => speak(`ลูกค้าสั่ง ${productName} ${reqItem.qty} ชิ้นนะคะ`, false), 800);
+        }
       }
       scannedItemsMap[upperText] = currentScannedQty + 1;
     } else {
