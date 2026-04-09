@@ -2680,6 +2680,9 @@ function autoDetectColumns(marketplace, headerRow) {
 }
 
 // --- Variables ---
+const FAIL_QUEUE_KEY = 'failedUploadQueue';
+let _isRetrying = false;
+let _flushedIds = new Set(); // ป้องกัน duplicate flush
 let productMap = {}, currentP = "", items = [], scanner, searchScanner, lastScanTime = 0;
 let sessionParcels = {}, scanBuffer = [], bufferTimeout = null, isFinishing = false, isEditingId = false;
 let isSpeakingRemark = false; // ✅ ล็อคสแกนสินค้าระหว่างพูดเลขพัสดุ + remark
@@ -2781,7 +2784,6 @@ window.addEventListener('pagehide', (e) => {
 // 1. visibilitychange=hidden → flush ด้วย fetch (keepalive)
 // 2. pagehide → flush ด้วย navigator.sendBeacon (เชื่อถือได้ที่สุด)
 // 3. beforeunload → flush สุดท้าย (fallback)
-let _flushedIds = new Set(); // ป้องกัน duplicate flush
 
 function _flushPendingUploads() {
   try {
@@ -2919,7 +2921,6 @@ updateSyncTimeBadge();
 // ============================================================
 // 5. FAILED UPLOAD QUEUE — retry เมื่อออนไลน์
 // ============================================================
-const FAIL_QUEUE_KEY = 'failedUploadQueue';
 const SENT_KEY = 'sentParcels'; // ✅ dedup guard: pId ที่ GAS ยืนยันสำเร็จแล้ว
 
 function _markSent(pId) {
@@ -2958,7 +2959,6 @@ function saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoB
   } catch(e) { console.error('saveToFailQueue:', e); }
 }
 
-let _isRetrying = false;
 async function retryFailedUploads() {
   if (!navigator.onLine || _isRetrying) return;
   _isRetrying = true;
