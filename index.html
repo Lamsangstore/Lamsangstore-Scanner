@@ -268,8 +268,8 @@
       cursor: pointer; font-family: 'Mitr', sans-serif;
       flex: 1;
     }
-    .tab-btn .tab-icon { font-size: 1.4rem; line-height: 1; transition: transform 0.2s; filter: sepia(0.4) saturate(1.2) hue-rotate(10deg) brightness(0.95); }
-    .tab-btn.active .tab-icon { filter: sepia(0.6) saturate(1.5) hue-rotate(5deg) brightness(1.05); }
+    .tab-btn .tab-icon { width:28px; height:28px; display:block; transition: transform 0.2s; opacity:0.72; }
+    .tab-btn.active .tab-icon { opacity:1; }
     .tab-btn.active {
       background: var(--bg);
       color: var(--pink);
@@ -1147,8 +1147,7 @@
     .tab-btn:active::after { opacity: 1; }
     .tab-btn .tab-icon {
       transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1) !important;
-    }
-    .tab-btn:hover .tab-icon { transform: scale(1.2) translateY(-2px); }
+    }    .tab-btn:hover .tab-icon { transform: scale(1.2) translateY(-2px); }
     .tab-btn.active .tab-icon { 
       transform: scale(1.15) translateY(-1px);
       animation: tabIconBounce 0.5s cubic-bezier(0.34,1.56,0.64,1); 
@@ -2117,7 +2116,7 @@
   padding:6px 14px; font-size:0.72rem; font-family:'Mitr',sans-serif;
   box-shadow:0 3px 12px rgba(0,0,0,0.25); max-width:240px;
   animation:calFadeIn 0.3s ease;">
-  🔴 ออฟไลน์ <span id="offlineQueueCount" style="opacity:0.85;"></span>
+  <svg viewBox="0 0 10 10" fill="none" style="width:0.75em;height:0.75em;display:inline-block;vertical-align:0.05em;margin-right:3px"><circle cx="5" cy="5" r="4" fill="#e07a3a"/><line x1="3" y1="3" x2="7" y2="7" stroke="white" stroke-width="1.3" stroke-linecap="round"/><line x1="7" y1="3" x2="3" y2="7" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg> ออฟไลน์ <span id="offlineQueueCount" style="opacity:0.85;"></span>
 </div>
 
 <!-- Queue Pending Banner (online แต่มี queue ค้าง) -->
@@ -2144,7 +2143,7 @@
       <button onclick="syncAllNow()" style="
         background:linear-gradient(135deg,var(--pink-light),var(--pink)); color:white; border:none;
         border-radius:20px; padding:6px 18px; font-family:'Mitr',sans-serif;
-        font-size:0.82rem; font-weight:600; cursor:pointer;">🔄 Sync ทันที</button>
+        font-size:0.82rem; font-weight:600; cursor:pointer;"><svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:4px"><path d="M16.5 10 A6.5 6.5 0 1 1 13 4.2" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/><polyline points="13,1.5 13,4.8 16.3,4.8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Sync ทันที</button>
     </div>
     <div id="queueList" style="overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px;"></div>
   </div>
@@ -2165,9 +2164,9 @@
   <div style="display:flex; flex-direction:column; align-items:flex-end; gap:3px; flex-shrink:0;">
     <div style="display:flex; align-items:center; gap:6px;">
       <a id="sheetLink" href="#" target="_blank" rel="noopener"
-        title="เปิด Google Sheet" style="font-size:1.1rem; padding:5px 7px; text-decoration:none; filter:sepia(0.4) saturate(1.3) hue-rotate(8deg); cursor:pointer; display:none;">📋</a>
+        title="เปิด Google Sheet" style="font-size:1.1rem; padding:5px 7px; text-decoration:none; cursor:pointer; display:none;"><svg viewBox="0 0 20 20" fill="none" style="width:1.1em;height:1.1em;display:block"><rect x="2" y="2" width="16" height="16" rx="4" fill="#bfdbfe"/><circle cx="5.5" cy="7" r="1.3" fill="#3b82f6"/><rect x="8" y="6.2" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><circle cx="5.5" cy="11" r="1.3" fill="#60a5fa"/><rect x="8" y="10.2" width="6" height="1.5" rx="0.75" fill="#60a5fa" opacity="0.7"/><circle cx="5.5" cy="15" r="1.3" fill="#93c5fd"/><rect x="8" y="14.2" width="7" height="1.5" rx="0.75" fill="#93c5fd" opacity="0.7"/></svg></a>
       <button id="darkModeBtn" onclick="toggleDarkMode()" title="สลับธีม" style="font-size:1.1rem; padding:5px 7px;">🌙</button>
-      <span id="networkBadge" style="font-size:0.72rem; font-weight:600; padding:4px 10px; letter-spacing:0.2px; color:var(--success); filter:sepia(0.3) saturate(1.2);">🟢 ออนไลน์</span>
+      <span id="networkBadge" style="font-size:0.72rem; font-weight:600; padding:4px 10px; letter-spacing:0.2px; color:var(--success); filter:sepia(0.3) saturate(1.2);"><svg viewBox="0 0 10 10" fill="none" style="width:0.75em;height:0.75em;display:inline-block;vertical-align:0.05em;margin-right:2px"><circle cx="5" cy="5" r="4" fill="#52b788"/><circle cx="5" cy="5" r="2.2" fill="#b5ead7"/></svg> ออนไลน์</span>
     </div>
     <span id="syncTimeBadge" style="font-size:0.72rem; color:var(--text3);">—</span>
   </div>
@@ -2176,16 +2175,16 @@
 <!-- BOTTOM NAV -->
 <div id="app-tabs">
   <button class="tab-btn active" onclick="openTab('scan', this)">
-    <span class="tab-icon">📦</span>สแกน
+    <span class="tab-icon"><svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="11" width="22" height="15" rx="4" fill="#f4a261"/><path d="M3 11 Q3 7 7 6.5L14 6.5L14 11Z" fill="#e9c46a"/><path d="M14 6.5L21 6.5 Q25 7 25 11L14 11Z" fill="#ffd166"/><path d="M11 6.5 Q14 4 17 6.5" fill="none" stroke="#e07a3a" stroke-width="1.8" stroke-linecap="round"/><rect x="7" y="15.5" width="2.5" height="7" rx="1.2" fill="white" opacity="0.85"/><rect x="11" y="15.5" width="4" height="7" rx="1.2" fill="white" opacity="0.85"/><rect x="16.5" y="15.5" width="2.5" height="7" rx="1.2" fill="white" opacity="0.85"/><rect x="20" y="15.5" width="2" height="7" rx="1.2" fill="white" opacity="0.85"/></svg></span>สแกน
   </button>
   <button class="tab-btn" onclick="openTab('search', this)">
-    <span class="tab-icon">🔍</span>ค้นหา
+    <span class="tab-icon"><svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8.5" fill="#a8dadc"/><circle cx="12" cy="12" r="6" fill="#e8f8f8"/><ellipse cx="9.5" cy="9" rx="2.5" ry="1.6" fill="white" opacity="0.55" transform="rotate(-20,9.5,9)"/><circle cx="12" cy="12" r="8.5" fill="none" stroke="#457b9d" stroke-width="2"/><circle cx="12" cy="12" r="6" fill="none" stroke="#457b9d" stroke-width="1.4"/><line x1="18" y1="18" x2="25" y2="25" stroke="#457b9d" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="18" x2="25" y2="25" stroke="#a8dadc" stroke-width="1.5" stroke-linecap="round"/><circle cx="18" cy="18" r="2" fill="#457b9d"/><line x1="12" y1="8.5" x2="12" y2="15.5" stroke="#457b9d" stroke-width="1.3" stroke-linecap="round"/><line x1="8.5" y1="12" x2="15.5" y2="12" stroke="#457b9d" stroke-width="1.3" stroke-linecap="round"/></svg></span>ค้นหา
   </button>
   <button class="tab-btn" onclick="openTab('dash', this)">
-    <span class="tab-icon">📊</span>รายงาน
+    <span class="tab-icon"><svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="4" width="24" height="20" rx="5" fill="#cdb4db"/><rect x="2" y="4" width="24" height="7" rx="5" fill="#d8c3e8"/><rect x="2" y="8" width="24" height="3" fill="#d8c3e8"/><rect x="7" y="18" width="4" height="5" rx="2" fill="#f4a261"/><rect x="12" y="14" width="4" height="9" rx="2" fill="#a8dadc"/><rect x="17" y="11" width="4" height="12" rx="2" fill="#b5ead7"/><polyline points="9,18 14,14 19,11" fill="none" stroke="#9b72cf" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2,2" opacity="0.8"/><circle cx="9" cy="18" r="1.5" fill="#9b72cf"/><circle cx="14" cy="14" r="1.5" fill="#9b72cf"/><circle cx="19" cy="11" r="1.5" fill="#9b72cf"/></svg></span>รายงาน
   </button>
   <button class="tab-btn tab-btn-upload" onclick="openTab('upload', this)">
-    <span class="tab-icon">📥</span>อัพโหลด
+    <span class="tab-icon"><svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9.5" cy="16" r="5.5" fill="#bfdbfe"/><circle cx="16" cy="14.5" r="7" fill="#bfdbfe"/><circle cx="21" cy="17" r="4.5" fill="#bfdbfe"/><rect x="4" y="17" width="20" height="5" rx="0" fill="#bfdbfe"/><path d="M4 19.5 Q4 22 6 22 L22 22 Q24 22 24 19.5" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/><ellipse cx="11" cy="13" rx="3" ry="2" fill="white" opacity="0.4" transform="rotate(-15,11,13)"/><line x1="14" y1="25" x2="14" y2="14" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/><polyline points="9,19 14,13 19,19" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><line x1="9.5" y1="25" x2="18.5" y2="25" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-dasharray="2,2"/></svg></span>อัพโหลด
   </button>
 </div>
 
@@ -2203,7 +2202,7 @@
 
       <!-- Onboarding tip: แสดงครั้งแรก ซ่อนหลัง dismiss -->
       <div id="onboardingTip" class="onboarding-tip" style="display:none; text-align:left;">
-        <span class="ob-icon">💡</span>
+        <span class="ob-icon"><svg viewBox="0 0 20 20" fill="none" style="width:1.3em;height:1.3em;display:block"><circle cx="10" cy="10" r="8.5" fill="#ffd166"/><circle cx="10" cy="10" r="8.5" fill="none" stroke="#e9c46a" stroke-width="1.2"/><circle cx="10" cy="7" r="1.3" fill="#9b72cf"/><rect x="9.1" y="10" width="1.8" height="5" rx="0.9" fill="#9b72cf"/></svg></span>
         <div>
           <strong>วิธีใช้งาน:</strong><br>
           1️⃣ กด <em>"เริ่มระบบสแกน"</em> แล้วสแกน <strong>รหัสพัสดุ</strong> ก่อน<br>
@@ -2214,14 +2213,14 @@
       </div>
 
       <button id="startBtn" onclick="initScanner()" class="btn-custom btn-main mb-3 w-100">
-        <span style="font-size:1.5rem; display:block; margin-bottom:2px;">📦</span>
+        <span style="width:2rem;height:2rem;display:block;margin:0 auto 4px"><svg viewBox="0 0 20 20" fill="none"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><path d="M7.5 4.5 Q10 2.5 12.5 4.5" fill="none" stroke="#e07a3a" stroke-width="1.4" stroke-linecap="round"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="8.5" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg></span>
         เริ่มระบบสแกน
       </button>
       
       <!-- Custom Camera Selector -->
       <div id="cameraSelectorWrap" style="display:none; margin-bottom:8px;">
         <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.6); border-radius:16px; padding:6px 12px; box-shadow:2px 2px 8px var(--sd),-2px -2px 8px var(--sl);">
-          <span style="font-size:0.75rem; color:var(--text3); white-space:nowrap;">📷 กล้อง</span>
+          <span style="font-size:0.75rem; color:var(--text3); white-space:nowrap;"><svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="1" y="5" width="18" height="13" rx="3.5" fill="#a8dadc"/><circle cx="10" cy="11.5" r="3.5" fill="#457b9d"/><circle cx="10" cy="11.5" r="2" fill="#e8f8f8"/><rect x="6" y="3" width="4" height="3" rx="1.5" fill="#cdb4db"/></svg> กล้อง</span>
           <select id="cameraSelect" onchange="switchCamera(this.value)" style="flex:1; font-family:'Mitr',sans-serif; font-size:0.75rem; background:transparent; border:none; color:var(--text); outline:none; cursor:pointer;">
             <option value="">กำลังโหลด...</option>
           </select>
@@ -2253,11 +2252,11 @@
         <div id="remarkPanel" class="remark-panel">
           <p class="mb-2 small fw-bold" style="color:var(--warning);">⚠ สินค้าไม่ครบ — เลือกเหตุผล</p>
           <div id="remarkButtons">
-            <button class="remark-btn" onclick="selectRemark(this, 'สินค้าหมด')"><span class="section-emoji">📦</span> สินค้าหมด</button>
-            <button class="remark-btn" onclick="selectRemark(this, 'ลูกค้าแจ้งเปลี่ยนสี')"><span class="section-emoji">🎨</span> เปลี่ยนสี</button>
-            <button class="remark-btn" onclick="selectRemark(this, 'ลูกค้าแจ้งเปลี่ยนรุ่น')"><span class="section-emoji">🔄</span> เปลี่ยนรุ่น</button>
-            <button class="remark-btn" onclick="selectRemark(this, 'ใช้พัสดุเดิม')"><span class="section-emoji">📬</span> ใช้พัสดุเดิม</button>
-            <button class="remark-btn" onclick="selectRemark(this, 'อื่นๆ')"><span class="section-emoji">✏️</span> อื่นๆ</button>
+            <button class="remark-btn" onclick="selectRemark(this, 'สินค้าหมด')"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="8.5" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg></span> สินค้าหมด</button>
+            <button class="remark-btn" onclick="selectRemark(this, 'ลูกค้าแจ้งเปลี่ยนสี')"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><path d="M10 2 Q17 2 18 8 Q19 13 15 15 Q13 16 12 14 Q11 12 9 13 Q4 14 3 10 Q2 5 7 3 Q8.5 2 10 2Z" fill="#cdb4db"/><circle cx="7" cy="8" r="1.5" fill="#f4a261"/><circle cx="11" cy="5.5" r="1.5" fill="#a8dadc"/><circle cx="14.5" cy="8.5" r="1.5" fill="#b5ead7"/><circle cx="13" cy="13" r="2" fill="#9b72cf"/></svg></span> เปลี่ยนสี</button>
+            <button class="remark-btn" onclick="selectRemark(this, 'ลูกค้าแจ้งเปลี่ยนรุ่น')"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><path d="M3 7 H14 L11 4" fill="none" stroke="#f4a261" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 13 H6 L9 16" fill="none" stroke="#a8dadc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span> เปลี่ยนรุ่น</button>
+            <button class="remark-btn" onclick="selectRemark(this, 'ใช้พัสดุเดิม')"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="7" width="12" height="9" rx="3" fill="#a8dadc"/><path d="M2 10 L8 13.5 L14 10" fill="none" stroke="#457b9d" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><rect x="12" y="3" width="6" height="10" rx="2.5" fill="#e9c46a"/><rect x="14" y="5" width="2" height="1.2" rx="0.6" fill="white" opacity="0.8"/><rect x="14" y="7.5" width="2" height="1.2" rx="0.6" fill="white" opacity="0.8"/></svg></span> ใช้พัสดุเดิม</button>
+            <button class="remark-btn" onclick="selectRemark(this, 'อื่นๆ')"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="2" width="16" height="16" rx="4" fill="#cdb4db"/><path d="M5 12 L13 4 Q15 2 17 4 Q19 6 17 8 L9 16 Z" fill="#9b72cf"/><rect x="2" y="17" width="16" height="1" rx="0.5" fill="#cdb4db" opacity="0.6"/></svg></span> อื่นๆ</button>
           </div>
           <div id="remarkOtherBox" style="display:none; margin-top:8px;">
             <input id="remarkOtherInput" class="form-control form-control-sm" placeholder="ระบุเหตุผล..." style="border-radius:10px;">
@@ -2270,18 +2269,18 @@
       
       <!-- Customer Remark Box — แสดงหมายเหตุลูกค้าจากไฟล์ Marketplace -->
       <div id="customerRemarkBox" class="remark-display-box">
-        <span class="emoji-theme">📝</span> <strong>หมายเหตุลูกค้า:</strong> <span id="customerRemarkText"></span>
+        <span class="emoji-theme"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/></svg></span> <strong>หมายเหตุลูกค้า:</strong> <span id="customerRemarkText"></span>
       </div>
 
       <div class="parcel-box mt-3" id="parcelBox">
         <div class="row align-items-center g-0">
           <div class="col-8 text-start pe-2" style="border-right: 1.5px solid var(--pink-light);">
-            <div class="section-title" style="margin-top:0; margin-bottom:2px; font-size:0.68rem;"><span class="section-emoji">📦</span> พัสดุปัจจุบัน</div>
+            <div class="section-title" style="margin-top:0; margin-bottom:2px; font-size:0.68rem;"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="8.5" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg></span> พัสดุปัจจุบัน</div>
             <div style="font-weight:700; color:var(--pink); font-size:0.85rem; letter-spacing:0.3px; word-break:break-all; line-height:1.3;" id="parcelId">-</div>
-            <button id="editParcelBtn" onclick="editParcelId()" class="btn btn-edit-inline mt-1" style="display:none; font-size:0.68rem; padding:2px 10px;"><span class="section-emoji">✏️</span> แก้รหัส</button>
+            <button id="editParcelBtn" onclick="editParcelId()" class="btn btn-edit-inline mt-1" style="display:none; font-size:0.68rem; padding:2px 10px;"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="2" width="16" height="16" rx="4" fill="#cdb4db"/><path d="M5 12 L13 4 Q15 2 17 4 Q19 6 17 8 L9 16 Z" fill="#9b72cf"/><rect x="2" y="17" width="16" height="1" rx="0.5" fill="#cdb4db" opacity="0.6"/></svg></span> แก้รหัส</button>
           </div>
           <div class="col-4 text-center ps-2">
-            <div class="section-title" style="margin-top:0; margin-bottom:1px; font-size:0.68rem;"><span class="section-emoji">🛍</span> สินค้า</div>
+            <div class="section-title" style="margin-top:0; margin-bottom:1px; font-size:0.68rem;"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg></span> สินค้า</div>
             <div id="count" style="font-size:1.8rem; font-weight:700; color:var(--pink); line-height:1;">0</div>
             <div style="font-size:0.68rem; color:var(--text3);">ชิ้น</div>
           </div>
@@ -2293,13 +2292,13 @@
       
       <ul id="itemList" style="display:none;"></ul>
 
-      <button id="refreshCacheBtn" onclick="refreshAllCache()" class="btn-neu-sm mb-2 w-100 mt-3" style="display:none; font-size:0.88rem; padding:9px;"><span class="section-emoji">🔄</span> ดึงข้อมูลล่าสุด (สินค้า & ออเดอร์)</button>
+      <button id="refreshCacheBtn" onclick="refreshAllCache()" class="btn-neu-sm mb-2 w-100 mt-3" style="display:none; font-size:0.88rem; padding:9px;"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><path d="M16.5 10 A6.5 6.5 0 1 1 13 4.2" fill="none" stroke="#a8dadc" stroke-width="2" stroke-linecap="round"/><polyline points="13,1.5 13,4.8 16.3,4.8" fill="none" stroke="#457b9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span> ดึงข้อมูลล่าสุด (สินค้า & ออเดอร์)</button>
       
       <!-- Fix 6: sticky action bar ไม่ถูก nav บัง + Fix 1: col-7/col-5 -->
       <div id="action-buttons" class="action-bar-sticky" style="display:none">
         <div class="row g-2">
           <div class="col-7">
-            <button id="saveBtn" onclick="finishWork(true)" class="btn-custom btn-save w-100"><span class="section-emoji">💾</span> บันทึกและจบงาน</button>
+            <button id="saveBtn" onclick="finishWork(true)" class="btn-custom btn-save w-100"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="2" width="16" height="16" rx="4" fill="#b5ead7"/><rect x="5" y="2" width="7" height="6" rx="1" fill="#52b788"/><rect x="7" y="3" width="2" height="3" rx="1" fill="white" opacity="0.7"/><rect x="4" y="10" width="12" height="7" rx="2" fill="#52b788"/><rect x="6" y="12" width="8" height="3" rx="1" fill="#b5ead7" opacity="0.8"/></svg></span> บันทึกและจบงาน</button>
           </div>
           <div class="col-5">
             <button id="cancelBtn" onclick="cancelWork()" class="btn-custom btn-cancel w-100">✖ ยกเลิก</button>
@@ -2320,10 +2319,10 @@
             <input id="searchInput" placeholder="พิมพ์หรือสแกนรหัสพัสดุ..." onkeypress="handleEnter(event)" oninput="debouncedSearch(); toggleClearBtn()">
             <button id="clearSearchBtn" onclick="clearSearch()" style="display:none; position:absolute; right:8px; background:none; border:none; color:var(--text3); font-size:1rem; cursor:pointer; padding:4px; line-height:1; z-index:2;">✕</button>
           </div>
-          <button class="btn-neu-icon" onclick="startSearchScan()" title="สแกนด้วยกล้อง">📷</button>
+          <button class="btn-neu-icon" onclick="startSearchScan()" title="สแกนด้วยกล้อง"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:block;margin:0 auto"><rect x="1" y="5" width="18" height="13" rx="3.5" fill="#a8dadc"/><circle cx="10" cy="11.5" r="3.5" fill="#457b9d"/><circle cx="10" cy="11.5" r="2" fill="#e8f8f8"/><rect x="6" y="3" width="4" height="3" rx="1.5" fill="#cdb4db"/><circle cx="16" cy="7" r="1.5" fill="#e9c46a"/></svg></button>
           <button class="btn-neu-gold" onclick="runSearch()" style="padding:9px 18px; font-size:0.9rem;">ค้นหา</button>
         </div>
-        <div class="form-text text-muted ms-2 small"><span class="section-emoji">💡</span> ค้นหาได้ทั้งตัวพิมพ์เล็กและใหญ่</div>
+        <div class="form-text text-muted ms-2 small"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><circle cx="10" cy="10" r="8.5" fill="#ffd166"/><circle cx="10" cy="7" r="1.3" fill="#9b72cf"/><rect x="9.1" y="10" width="1.8" height="5" rx="0.9" fill="#9b72cf"/></svg></span> ค้นหาได้ทั้งตัวพิมพ์เล็กและใหญ่</div>
       </div>
       <!-- ข้อ 1: Skeleton loader -->
       <div id="loadingSearch" style="display:none">
@@ -2336,7 +2335,7 @@
       </div>
       <!-- ข้อ 8: Empty state -->
       <div id="emptySearch" style="display:none; text-align:center; padding:32px 16px;">
-        <div style="font-size:3rem; margin-bottom:10px; opacity:0.5;">🔍</div>
+        <div style="width:3.5rem;height:3.5rem;margin:0 auto 10px;opacity:0.45"><svg viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="6" fill="#a8dadc"/><circle cx="8.5" cy="8.5" r="4.2" fill="#e8f8f8"/><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="#457b9d" stroke-width="1.6"/><circle cx="8.5" cy="8.5" r="4.2" fill="none" stroke="#457b9d" stroke-width="1.1"/><line x1="13" y1="13" x2="18" y2="18" stroke="#457b9d" stroke-width="2.2" stroke-linecap="round"/></svg></div>
         <div style="font-size:0.95rem; font-weight:600; color:var(--text2); margin-bottom:6px;">ไม่พบข้อมูล</div>
         <div style="font-size:0.78rem; color:var(--text3);">ลองตรวจสอบรหัสพัสดุอีกครั้ง<br>หรืออาจยังไม่ได้สแกนพัสดุใบนี้</div>
       </div>
@@ -2364,7 +2363,7 @@
       <input type="date" id="dashStart" class="dash-date-input">
       <span style="color:#9a9085; font-size:0.85rem;">ถึง</span>
       <input type="date" id="dashEnd" class="dash-date-input">
-      <button onclick="fetchReport()" class="dash-search-btn">🔍</button>
+      <button onclick="fetchReport()" class="dash-search-btn"><svg viewBox="0 0 20 20" fill="none" style="width:1.1em;height:1.1em;display:block;margin:0 auto"><circle cx="8.5" cy="8.5" r="6" fill="#a8dadc"/><circle cx="8.5" cy="8.5" r="4.2" fill="#e8f8f8"/><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="#457b9d" stroke-width="1.6"/><line x1="13" y1="13" x2="18" y2="18" stroke="#457b9d" stroke-width="2.2" stroke-linecap="round"/></svg></button>
     </div>
     <!-- Loading -->
     <div id="dashLoading" style="display:none; text-align:center; padding:20px;">
@@ -2380,14 +2379,14 @@
       <div class="row g-2 mb-3">
         <div class="col-6">
           <div class="stat-card">
-            <div style="font-size:1.8rem;">📦</div>
+            <div style="width:1.8rem;height:1.8rem;margin:0 auto 4px"><svg viewBox="0 0 20 20" fill="none"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><path d="M7.5 4.5 Q10 2.5 12.5 4.5" fill="none" stroke="#e07a3a" stroke-width="1.4" stroke-linecap="round"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="8.5" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg></div>
             <div class="small mb-1" style="color:#9a9085;">ออเดอร์ (แพ็ค)</div>
             <div id="d-box" class="stat-num">0</div>
           </div>
         </div>
         <div class="col-6">
           <div class="stat-card">
-            <div style="font-size:1.8rem;">🎀</div>
+            <div style="width:1.8rem;height:1.8rem;margin:0 auto 4px"><svg viewBox="0 0 20 20" fill="none"><path d="M10 2 L12.5 7.5 L18.5 8 L14 12.5 L15.5 18.5 L10 15.5 L4.5 18.5 L6 12.5 L1.5 8 L7.5 7.5 Z" fill="#ffd166" stroke="#e9c46a" stroke-width="0.8" stroke-linejoin="round"/><circle cx="10" cy="10.5" r="2.5" fill="#fff" opacity="0.4"/></svg></div>
             <div class="small mb-1" style="color:#9a9085;">สินค้า (ชิ้น)</div>
             <div id="d-item" class="stat-num">0</div>
           </div>
@@ -2418,7 +2417,7 @@
       </div>
       <!-- ✅ Daily Chart — กราฟแท่งรายวัน -->
       <div id="dailyChartWrap" class="dash-table-card mb-3" style="display:none;">
-        <h6 class="fw-bold mb-2" style="color:var(--pink);"><span class="section-emoji">📊</span> กราฟรายวัน</h6>
+        <h6 class="fw-bold mb-2" style="color:var(--pink);"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="1" y="3" width="18" height="15" rx="4" fill="#cdb4db"/><rect x="1" y="3" width="18" height="5" rx="4" fill="#d8c3e8"/><rect x="1" y="6" width="18" height="2" fill="#d8c3e8"/><rect x="4" y="13" width="3" height="4" rx="1.5" fill="#f4a261"/><rect x="8.5" y="10" width="3" height="7" rx="1.5" fill="#a8dadc"/><rect x="13" y="8" width="3" height="9" rx="1.5" fill="#b5ead7"/></svg></span> กราฟรายวัน</h6>
         <div id="dailyChartContainer" style="display:flex; align-items:flex-end; gap:3px; padding:0; overflow-x:auto;"></div>
         <div style="display:flex; gap:14px; justify-content:center; margin-top:6px;">
           <span style="font-size:0.68rem; color:var(--text3);"><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:var(--gold); vertical-align:middle;"></span> ยังไม่ถึงเป้า</span>
@@ -2428,17 +2427,17 @@
       </div>
       <!-- ✅ Calendar — ปฏิทินสถานะรายวัน -->
       <div id="dailyCalendarWrap" class="dash-table-card mb-3" style="display:none;">
-        <h6 class="fw-bold mb-2" style="color:var(--pink);"><span class="section-emoji">📅</span> ปฏิทินการแพ็ค</h6>
+        <h6 class="fw-bold mb-2" style="color:var(--pink);"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="4" width="16" height="14" rx="3.5" fill="#a8dadc"/><rect x="2" y="4" width="16" height="5.5" rx="3.5" fill="#457b9d"/><rect x="2" y="7" width="16" height="2.5" fill="#457b9d"/><rect x="5.5" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="13" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="8.75" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="12.5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/></svg></span> ปฏิทินการแพ็ค</h6>
         <div id="dailyCalendarGrid" style="display:grid; grid-template-columns:repeat(7,1fr); gap:4px; font-size:0.72rem;"></div>
         <div style="display:flex; gap:10px; justify-content:center; margin-top:8px; flex-wrap:wrap;">
-          <span style="font-size:0.65rem; color:var(--text3);">🟢 ถึงเป้า</span>
-          <span style="font-size:0.65rem; color:var(--text3);">🟡 ยังไม่ถึง</span>
-          <span style="font-size:0.65rem; color:var(--text3);">⚪ ไม่มีข้อมูล</span>
+          <span style="font-size:0.65rem; color:var(--text3);"><svg viewBox="0 0 10 10" fill="none" style="width:0.7em;height:0.7em;display:inline-block;vertical-align:0.05em;margin-right:2px"><circle cx="5" cy="5" r="4" fill="#52b788"/></svg> ถึงเป้า</span>
+          <span style="font-size:0.65rem; color:var(--text3);"><svg viewBox="0 0 10 10" fill="none" style="width:0.7em;height:0.7em;display:inline-block;vertical-align:0.05em;margin-right:2px"><circle cx="5" cy="5" r="4" fill="#e9c46a"/></svg> ยังไม่ถึง</span>
+          <span style="font-size:0.65rem; color:var(--text3);"><svg viewBox="0 0 10 10" fill="none" style="width:0.7em;height:0.7em;display:inline-block;vertical-align:0.05em;margin-right:2px"><circle cx="5" cy="5" r="4" fill="var(--border2)"/></svg> ไม่มีข้อมูล</span>
         </div>
       </div>
       <!-- Top Products Table -->
       <div class="dash-table-card">
-        <h6 class="fw-bold mb-3" style="color:var(--pink);"><span class="section-emoji">🏆</span> สินค้าขายดี</h6>
+        <h6 class="fw-bold mb-3" style="color:var(--pink);"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><path d="M6 3 H14 V10 Q14 15 10 15 Q6 15 6 10 Z" fill="#e9c46a"/><path d="M3 4 H6 V9 Q3 9 3 6 Z" fill="#ffd166"/><path d="M17 4 H14 V9 Q17 9 17 6 Z" fill="#ffd166"/><rect x="8.5" y="15" width="3" height="2.5" rx="0.5" fill="#d4a82a"/><rect x="6" y="17.5" width="8" height="1.5" rx="0.75" fill="#e9c46a"/><circle cx="10" cy="8" r="2" fill="#fff" opacity="0.4"/></svg></span> สินค้าขายดี</h6>
         <div id="dashProductTable">
           <div class="text-center text-muted small py-3">กดค้นหาเพื่อดูข้อมูลค่ะ 🐱</div>
         </div>
@@ -2446,7 +2445,7 @@
       <!-- Session Log -->
       <div class="dash-table-card mt-3">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-          <h6 class="fw-bold mb-0" style="color:var(--pink);"><span class="section-emoji">📋</span> แพ็กไปแล้ว (รอบนี้)</h6>
+          <h6 class="fw-bold mb-0" style="color:var(--pink);"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="2" width="16" height="16" rx="4" fill="#bfdbfe"/><circle cx="5.5" cy="7" r="1.3" fill="#3b82f6"/><rect x="8" y="6.2" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><circle cx="5.5" cy="11" r="1.3" fill="#60a5fa"/><rect x="8" y="10.2" width="6" height="1.5" rx="0.75" fill="#60a5fa" opacity="0.7"/><circle cx="5.5" cy="15" r="1.3" fill="#93c5fd"/><rect x="8" y="14.2" width="7" height="1.5" rx="0.75" fill="#93c5fd" opacity="0.7"/></svg></span> แพ็กไปแล้ว (รอบนี้)</h6>
           <div style="display:flex; gap:6px; align-items:center;">
             <span id="sessionLogCount" style="font-size:0.72rem; color:var(--text3);">0 ใบ</span>
             <button onclick="exportSessionCSV()" class="btn-neu-sm" style="font-size:0.72rem; padding:3px 10px;">⬇ CSV</button>
@@ -2469,7 +2468,7 @@
   <!-- TAB: UPLOAD -->
   <div id="upload" style="display:none" class="fade-in-up">
     <div class="card p-3">
-      <div class="section-title" style="margin-top:4px;">🏪 เลือกช่องทาง (Marketplace)</div>
+      <div class="section-title" style="margin-top:4px;"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em;margin-right:4px"><rect x="1" y="6" width="18" height="12" rx="4" fill="#a8dadc"/><rect x="1" y="6" width="18" height="5" rx="4" fill="#457b9d"/><rect x="1" y="9" width="18" height="2" fill="#457b9d"/><rect x="5" y="2" width="3" height="5" rx="1.5" fill="#cdb4db"/><rect x="12" y="2" width="3" height="5" rx="1.5" fill="#cdb4db"/></svg> เลือกช่องทาง (Marketplace)</div>
       <div id="mpSelector" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
         <label class="mp-option selected" data-value="tiktok" onclick="selectMarketplace('tiktok', this)">
           <div class="mp-radio"></div>
@@ -2523,11 +2522,11 @@
         <option value="page365">page365</option>
       </select>
 
-      <div class="section-title" style="margin-top:16px;">📄 เลือกไฟล์ (.xlsx, .csv)</div>
+      <div class="section-title" style="margin-top:16px;"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em;margin-right:4px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#bfdbfe"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/></svg> เลือกไฟล์ (.xlsx, .csv)</div>
       <input type="file" id="fileInput" class="form-control file-input-neu mt-2" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
 
       <button onclick="processFileUpload()" class="btn-neu-gold w-100 mt-3" style="padding:12px; font-size:1rem;">
-        <span class="upload-arrow">📤</span> อัปโหลดข้อมูล
+        <span class="upload-arrow"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><circle cx="6.5" cy="12" r="4" fill="#bfdbfe"/><circle cx="11" cy="10.5" r="5" fill="#bfdbfe"/><circle cx="15" cy="12.5" r="3.2" fill="#bfdbfe"/><rect x="2.5" y="12.5" width="15" height="4" rx="0" fill="#bfdbfe"/><path d="M2.5 14 Q2.5 16.5 4.5 16.5 L15.5 16.5 Q17.5 16.5 17.5 14" fill="none" stroke="#60a5fa" stroke-width="1.3" stroke-linecap="round"/><line x1="10" y1="18" x2="10" y2="10" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/><polyline points="6.5,14 10,9.5 13.5,14" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></span> อัปโหลดข้อมูล
       </button>
     </div>
   </div>
@@ -2678,6 +2677,29 @@ function autoDetectColumns(marketplace, headerRow) {
   console.log(`[Auto-Detect ${marketplace}]`, JSON.stringify(detected));
   return detected;
 }
+
+// --- SVG Icons (แทน emoji ทุกจุด) ---
+const SVG_ICONS = {
+  parcel:  `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><path d="M7.5 4.5 Q10 2.5 12.5 4.5" fill="none" stroke="#e07a3a" stroke-width="1.4" stroke-linecap="round"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="8.5" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg>`,
+  search:  `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><circle cx="8.5" cy="8.5" r="6" fill="#a8dadc"/><circle cx="8.5" cy="8.5" r="4.2" fill="#e8f8f8"/><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="#457b9d" stroke-width="1.6"/><circle cx="8.5" cy="8.5" r="4.2" fill="none" stroke="#457b9d" stroke-width="1.1"/><line x1="13" y1="13" x2="18" y2="18" stroke="#457b9d" stroke-width="2.2" stroke-linecap="round"/><line x1="8.5" y1="6" x2="8.5" y2="11" stroke="#457b9d" stroke-width="1.1" stroke-linecap="round"/><line x1="6" y1="8.5" x2="11" y2="8.5" stroke="#457b9d" stroke-width="1.1" stroke-linecap="round"/></svg>`,
+  chart:   `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="1" y="3" width="18" height="15" rx="4" fill="#cdb4db"/><rect x="1" y="3" width="18" height="5" rx="4" fill="#d8c3e8"/><rect x="1" y="6" width="18" height="2" fill="#d8c3e8"/><rect x="4" y="13" width="3" height="4" rx="1.5" fill="#f4a261"/><rect x="8.5" y="10" width="3" height="7" rx="1.5" fill="#a8dadc"/><rect x="13" y="8" width="3" height="9" rx="1.5" fill="#b5ead7"/><polyline points="5.5,13 10,10 14.5,8" fill="none" stroke="#9b72cf" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1.5,1.5" opacity="0.9"/><circle cx="5.5" cy="13" r="1.1" fill="#9b72cf"/><circle cx="10" cy="10" r="1.1" fill="#9b72cf"/><circle cx="14.5" cy="8" r="1.1" fill="#9b72cf"/></svg>`,
+  upload:  `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><circle cx="6.5" cy="12" r="4" fill="#bfdbfe"/><circle cx="11" cy="10.5" r="5" fill="#bfdbfe"/><circle cx="15" cy="12.5" r="3.2" fill="#bfdbfe"/><rect x="2.5" y="12.5" width="15" height="4" rx="0" fill="#bfdbfe"/><path d="M2.5 14 Q2.5 16.5 4.5 16.5 L15.5 16.5 Q17.5 16.5 17.5 14" fill="none" stroke="#60a5fa" stroke-width="1.3" stroke-linecap="round"/><line x1="10" y1="18" x2="10" y2="10" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/><polyline points="6.5,14 10,9.5 13.5,14" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><line x1="7" y1="18" x2="13" y2="18" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="1.5,1.5"/></svg>`,
+  bag:     `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg>`,
+  save:    `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="2" width="16" height="16" rx="4" fill="#b5ead7"/><rect x="5" y="2" width="7" height="6" rx="1" fill="#52b788"/><rect x="7" y="3" width="2" height="3" rx="1" fill="white" opacity="0.7"/><rect x="4" y="10" width="12" height="7" rx="2" fill="#52b788"/><rect x="6" y="12" width="8" height="3" rx="1" fill="#b5ead7" opacity="0.8"/></svg>`,
+  refresh: `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><path d="M16.5 10 A6.5 6.5 0 1 1 13 4.2" fill="none" stroke="#a8dadc" stroke-width="2" stroke-linecap="round"/><polyline points="13,1.5 13,4.8 16.3,4.8" fill="none" stroke="#457b9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  note:    `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/><circle cx="15" cy="15" r="4" fill="#f4a261"/><line x1="15" y1="12.5" x2="15" y2="17.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/><line x1="12.5" y1="15" x2="17.5" y2="15" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  edit:    `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="13" width="16" height="2" rx="1" fill="#cdb4db"/><path d="M5 12 L13 4 Q15 2 17 4 Q19 6 17 8 L9 16 Z" fill="#9b72cf"/><path d="M5 12 L13 4" fill="none" stroke="#d8c3e8" stroke-width="1.2"/><rect x="2" y="17" width="16" height="1.5" rx="0.75" fill="#cdb4db" opacity="0.6"/></svg>`,
+  trophy:  `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><path d="M6 3 H14 V10 Q14 15 10 15 Q6 15 6 10 Z" fill="#e9c46a"/><path d="M3 4 H6 V9 Q3 9 3 6 Z" fill="#ffd166"/><path d="M17 4 H14 V9 Q17 9 17 6 Z" fill="#ffd166"/><rect x="8.5" y="15" width="3" height="2.5" rx="0.5" fill="#d4a82a"/><rect x="6" y="17.5" width="8" height="1.5" rx="0.75" fill="#e9c46a"/><circle cx="10" cy="8" r="2" fill="#fff" opacity="0.4"/></svg>`,
+  calendar:`<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="4" width="16" height="14" rx="3.5" fill="#a8dadc"/><rect x="2" y="4" width="16" height="5.5" rx="3.5" fill="#457b9d"/><rect x="2" y="7" width="16" height="2.5" fill="#457b9d"/><circle cx="6.5" cy="2" r="1.5" fill="#cdb4db"/><circle cx="13.5" cy="2" r="1.5" fill="#cdb4db"/><rect x="5.5" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="13" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="8.75" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="12.5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/></svg>`,
+  list:    `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="2" width="16" height="16" rx="4" fill="#bfdbfe"/><circle cx="5.5" cy="7" r="1.3" fill="#3b82f6"/><rect x="8" y="6.2" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><circle cx="5.5" cy="11" r="1.3" fill="#60a5fa"/><rect x="8" y="10.2" width="6" height="1.5" rx="0.75" fill="#60a5fa" opacity="0.7"/><circle cx="5.5" cy="15" r="1.3" fill="#93c5fd"/><rect x="8" y="14.2" width="7" height="1.5" rx="0.75" fill="#93c5fd" opacity="0.7"/></svg>`,
+  tip:     `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><circle cx="10" cy="10" r="8.5" fill="#ffd166"/><circle cx="10" cy="10" r="8.5" fill="none" stroke="#e9c46a" stroke-width="1.2"/><circle cx="10" cy="7" r="1.3" fill="#9b72cf"/><rect x="9.1" y="10" width="1.8" height="5" rx="0.9" fill="#9b72cf"/></svg>`,
+  mailbox: `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="7" width="12" height="9" rx="3" fill="#a8dadc"/><path d="M2 10 L8 13.5 L14 10" fill="none" stroke="#457b9d" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><rect x="12" y="3" width="6" height="10" rx="2.5" fill="#e9c46a"/><rect x="14" y="5" width="2" height="1.2" rx="0.6" fill="white" opacity="0.8"/><rect x="14" y="7.5" width="2" height="1.2" rx="0.6" fill="white" opacity="0.8"/></svg>`,
+  palette: `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><path d="M10 2 Q17 2 18 8 Q19 13 15 15 Q13 16 12 14 Q11 12 9 13 Q4 14 3 10 Q2 5 7 3 Q8.5 2 10 2Z" fill="#cdb4db"/><circle cx="7" cy="8" r="1.5" fill="#f4a261"/><circle cx="11" cy="5.5" r="1.5" fill="#a8dadc"/><circle cx="14.5" cy="8.5" r="1.5" fill="#b5ead7"/><circle cx="13" cy="13" r="2" fill="#9b72cf"/></svg>`,
+  swap:    `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><path d="M3 7 H14 L11 4" fill="none" stroke="#f4a261" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 13 H6 L9 16" fill="none" stroke="#a8dadc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  online:  `<svg viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:0.7em;height:0.7em;display:inline-block;vertical-align:0.1em"><circle cx="5" cy="5" r="4" fill="#52b788"/><circle cx="5" cy="5" r="2.2" fill="#b5ead7"/></svg>`,
+  offline: `<svg viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:0.7em;height:0.7em;display:inline-block;vertical-align:0.1em"><circle cx="5" cy="5" r="4" fill="#e07a3a"/><line x1="3" y1="3" x2="7" y2="7" stroke="white" stroke-width="1.3" stroke-linecap="round"/><line x1="7" y1="3" x2="3" y2="7" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+  ribbon:  `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><path d="M10 2 L12.5 7.5 L18.5 8 L14 12.5 L15.5 18.5 L10 15.5 L4.5 18.5 L6 12.5 L1.5 8 L7.5 7.5 Z" fill="#ffd166" stroke="#e9c46a" stroke-width="0.8" stroke-linejoin="round"/><circle cx="10" cy="10.5" r="2.5" fill="#fff" opacity="0.4"/></svg>`,
+};
 
 // --- Variables ---
 const FAIL_QUEUE_KEY = 'failedUploadQueue';
@@ -2859,12 +2881,12 @@ function updateNetworkBadge() {
   if (!badge) return;
   if (navigator.onLine) {
     badge.style.color = 'var(--success)';
-    badge.textContent = '🟢 ออนไลน์';
+    badge.innerHTML = '<svg viewBox="0 0 10 10" fill="none" style="width:0.75em;height:0.75em;display:inline-block;vertical-align:0.05em;margin-right:2px"><circle cx="5" cy="5" r="4" fill="#52b788"/><circle cx="5" cy="5" r="2.2" fill="#b5ead7"/></svg> ออนไลน์';
     if (banner) banner.style.display = 'none';
     retryFailedUploads();
   } else {
     badge.style.color = 'var(--danger)';
-    badge.textContent = '🔴 ออฟไลน์';
+    badge.innerHTML = '<svg viewBox="0 0 10 10" fill="none" style="width:0.75em;height:0.75em;display:inline-block;vertical-align:0.05em;margin-right:2px"><circle cx="5" cy="5" r="4" fill="#e07a3a"/><line x1="3" y1="3" x2="7" y2="7" stroke="white" stroke-width="1.3" stroke-linecap="round"/><line x1="7" y1="3" x2="3" y2="7" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg> ออฟไลน์';
     if (banner) {
       banner.style.display = 'block';
       try {
@@ -2996,7 +3018,7 @@ async function retryFailedUploads() {
     }
     localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(remaining));
     const synced = q.length - remaining.length;
-    if (synced > 0) showSyncToast(`✅ sync สำเร็จ ${synced} รายการ`);
+    if (synced > 0) showSyncToast(`sync สำเร็จ ${synced} รายการ`);
     updateFailQueueBadge();
   } catch(e) { console.error('retryFailedUploads:', e); }
   _isRetrying = false;
@@ -3062,14 +3084,17 @@ function showQueueModal() {
   const list = document.getElementById('queueList');
   if (!list) return;
   if (q.length === 0) {
-    list.innerHTML = '<div style="text-align:center; color:var(--text3); padding:20px;">✅ ไม่มีรายการค้าง</div>';
+    list.innerHTML = '<div style="text-align:center; color:var(--text3); padding:20px;"><svg viewBox="0 0 20 20" fill="none" style="width:1.2em;height:1.2em;display:inline-block;vertical-align:-0.2em;margin-right:4px"><rect x="2" y="2" width="16" height="16" rx="4" fill="#b5ead7"/><rect x="5" y="2" width="7" height="6" rx="1" fill="#52b788"/><rect x="4" y="10" width="12" height="7" rx="2" fill="#52b788"/><rect x="6" y="12" width="8" height="3" rx="1" fill="#b5ead7" opacity="0.8"/></svg> ไม่มีรายการค้าง</div>';
   } else {
     list.innerHTML = q.map((job, i) => {
       const d = job.ts ? new Date(job.ts).toLocaleString('th-TH', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '';
+      const icoParcel = `<svg viewBox="0 0 20 20" fill="none" style="width:0.95em;height:0.95em;display:inline-block;vertical-align:-0.12em;margin-right:3px"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="9" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg>`;
+      const icoBag = `<svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg>`;
+      const icoNote = `<svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/></svg>`;
       return '<div style="background:var(--pink-light); border-radius:12px; padding:10px 12px; font-size:0.82rem; color:var(--text);">'
-        + '<div style="font-weight:600; color:var(--pink);">📦 ' + escHtml(job.pId) + '</div>'
-        + '<div style="color:var(--text2); margin-top:2px;">🛍 ' + (job.itemsArr?.length || 0) + ' ชิ้น' + (job.remarkNote ? ' · 📝 ' + escHtml(job.remarkNote) : '') + '</div>'
-        + (d ? '<div style="font-size:0.72rem; color:var(--text3); margin-top:2px;">🕐 ' + d + '</div>' : '')
+        + '<div style="font-weight:600; color:var(--pink);">' + icoParcel + escHtml(job.pId) + '</div>'
+        + '<div style="color:var(--text2); margin-top:2px;">' + icoBag + (job.itemsArr?.length || 0) + ' ชิ้น' + (job.remarkNote ? ' · ' + icoNote + escHtml(job.remarkNote) : '') + '</div>'
+        + (d ? '<div style="font-size:0.72rem; color:var(--text3); margin-top:2px;">' + d + '</div>' : '')
         + '</div>';
     }).join('');
   }
@@ -3086,7 +3111,7 @@ async function syncAllNow() {
   await retryFailedUploads();
   closeQueueModal();
   updateFailQueueBadge();
-  if (btn) { btn.textContent = '🔄 Sync ทันที'; btn.disabled = false; }
+  if (btn) { btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:4px"><path d="M16.5 10 A6.5 6.5 0 1 1 13 4.2" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/><polyline points="13,1.5 13,4.8 16.3,4.8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Sync ทันที'; btn.disabled = false; }
 }
 
 // ============================================================
@@ -3253,11 +3278,9 @@ async function startCameraRecording(resetChunks = true) {
       if (currentP) {
         const info = cachedOrderInfoMap[currentP];
         if (info) {
-          const platformEmoji = { shopee: '🟠', tiktok: '🎵', lazada: '🔵', page365: '💬' };
           const platformName = { shopee: 'Shopee', tiktok: 'TikTok', lazada: 'Lazada', page365: 'Page365' };
-          const emoji = platformEmoji[info.marketplace] || '🏪';
           const name = platformName[info.marketplace] || info.marketplace;
-          orderLine = `${emoji} ${name} #${info.orderId}`;
+          orderLine = `${name} #${info.orderId}`;
         }
       }
 
@@ -3282,10 +3305,10 @@ async function startCameraRecording(resetChunks = true) {
       const now = new Date().toLocaleString("th-TH");
       let y = canvas.height - overlayHeight + pad + lineH;
 
-      ctx.fillText("📅 " + now, 10, y); y += lineH + gap;
-      ctx.fillText("📦 " + (currentP || "-"), 10, y); y += lineH + gap;
+      ctx.fillText("วันที่ " + now, 10, y); y += lineH + gap;
+      ctx.fillText("พัสดุ: " + (currentP || "-"), 10, y); y += lineH + gap;
       if (orderLine) { ctx.fillText(orderLine, 10, y); y += lineH + gap; }
-      ctx.fillText("🧾 สินค้า: " + items.length + " ชิ้น", 10, y);
+      ctx.fillText("สินค้า: " + items.length + " ชิ้น", 10, y);
 
       ctx.font = "13px sans-serif";
       // ✅ แสดง "...อีก x รายการ" ก่อน แล้วตามด้วยสินค้าล่าสุด
@@ -3314,7 +3337,7 @@ async function startCameraRecording(resetChunks = true) {
     document.getElementById('rec-label').innerHTML = '<div class="rec-indicator"><span class="rec-dot"></span> กำลังบันทึกวิดีโอพร้อมข้อมูลกำกับ</div>';
   } catch (err) {
     console.error("Camera error:", err);
-    document.getElementById('rec-label').innerText = "⚠️ ไม่สามารถเปิดกล้องได้: " + err.message;
+    document.getElementById('rec-label').innerText = "ไม่สามารถเปิดกล้องได้: " + err.message;
   }
 }
 
@@ -3533,13 +3556,13 @@ async function refreshAllCache() {
   try {
     const gotProducts = await fetchBackgroundCache("productMap_cache", "productMap_time");
     if (gotProducts) {
-      btn.innerText = `✅ อัปเดตแล้ว (${Object.keys(productMap).length} สินค้า)`;
+      btn.innerText = `อัปเดตแล้ว (${Object.keys(productMap).length} สินค้า)`;
     } else {
-      btn.innerText = "⚠️ ไม่พบข้อมูลสินค้า ใช้ cache เดิม";
+      btn.innerText = "ไม่พบข้อมูลสินค้า ใช้ cache เดิม";
     }
-    setTimeout(() => { btn.innerText = "🔄 ดึงข้อมูลล่าสุด (สินค้า & ออเดอร์)"; btn.disabled = false; }, 2500);
+    setTimeout(() => { btn.innerHTML = `<span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><path d="M16.5 10 A6.5 6.5 0 1 1 13 4.2" fill="none" stroke="#a8dadc" stroke-width="2" stroke-linecap="round"/><polyline points="13,1.5 13,4.8 16.3,4.8" fill="none" stroke="#457b9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span> ดึงข้อมูลล่าสุด (สินค้า & ออเดอร์)`; btn.disabled = false; }, 2500);
   } catch (e) {
-    btn.innerText = "❌ ลองใหม่";
+    btn.innerText = "ลองใหม่อีกครั้ง";
     btn.disabled = false;
   }
 }
@@ -3804,7 +3827,7 @@ async function processFinalScan(text) {
     bumpCount();
     renderList();
     if (isStrictValidationMode) updateChecklistUI();
-    setStatus("✔ เพิ่มสินค้า: " + upperText, "success");
+    setStatus(_S.ok + "เพิ่มสินค้า: " + upperText, "success");
     startInactivityWatch(); // รีเซ็ตจับเวลาทุกครั้งที่สแกนสินค้า
   } else if (isParcel) {
     lastScanTime = Date.now();
@@ -3814,10 +3837,10 @@ async function processFinalScan(text) {
       if (Date.now() - lastAlert < DUPLICATE_ALERT_COOLDOWN_MS) return; // ข้ามเงียบๆ
       duplicateParcelAlerts[upperText] = Date.now();
       speak("พัสดุใบนี้สแกนปิดงานไปแล้วค่ะ");
-      setStatus("❌ พัสดุ " + upperText + " ปิดงานไปแล้ว", "danger"); return;
+      setStatus(_S.err + "พัสดุ " + upperText + " ปิดงานไปแล้ว", "danger"); return;
     }
     if (upperText === currentP && !isEditingId) {
-      if (items.length === 0) { speak("กล่องยังไม่มีสินค้าค่ะ"); setStatus("⚠️ กล่องว่าง", "warning"); return; }
+      if (items.length === 0) { speak("กล่องยังไม่มีสินค้าค่ะ"); setStatus(_S.warn + "กล่องว่าง", "warning"); return; }
       if (isStrictValidationMode && !validateCurrentOrder()) {
         let hasOver = false;
         for (let sSku in scannedItemsMap) {
@@ -3826,10 +3849,10 @@ async function processFinalScan(text) {
         }
         if (hasOver) {
           beep('warn'); speak("มีสินค้าเกินจำนวนค่ะ กรุณาลบออกก่อน", false);
-          setStatus("❌ สินค้าเกินจำนวน — กรุณาลบออกก่อนจบงาน", "danger"); return;
+          setStatus(_S.err + "สินค้าเกินจำนวน — กรุณาลบออกก่อนจบงาน", "danger"); return;
         }
         beep('warn'); speak("สินค้าไม่ครบค่ะ กรุณากดบันทึกบนหน้าจอเพื่อจบงาน", false);
-        setStatus("⚠️ สินค้าไม่ครบ — กดปุ่มบันทึกเพื่อจบงาน", "warning"); return;
+        setStatus(_S.warn + "สินค้าไม่ครบ — กดปุ่มบันทึกเพื่อจบงาน", "warning"); return;
       }
       speak("สแกนปิดงานเรียบร้อยค่ะ กำลังบันทึก");
       finishWork(false); return;
@@ -3843,10 +3866,10 @@ async function processFinalScan(text) {
         }
         if (hasOver) {
           beep('warn'); speak("มีสินค้าเกินจำนวนค่ะ กรุณาแก้ไขก่อน", false);
-          setStatus("❌ สินค้าเกินจำนวน — แก้ไขก่อนเปิดงานใหม่", "danger"); return;
+          setStatus(_S.err + "สินค้าเกินจำนวน — แก้ไขก่อนเปิดงานใหม่", "danger"); return;
         }
         beep('warn'); speak("สินค้าไม่ครบค่ะ กรุณากดบันทึกบนหน้าจอก่อน", false);
-        setStatus("⚠️ สินค้าไม่ครบ — กดปุ่มบันทึกก่อนเปิดงานใหม่", "warning"); return;
+        setStatus(_S.warn + "สินค้าไม่ครบ — กดปุ่มบันทึกก่อนเปิดงานใหม่", "warning"); return;
       }
       if (items.length > 0) await finishWork(false);
     }
@@ -3857,32 +3880,39 @@ async function processFinalScan(text) {
     beep('warn');
     vibrate([100, 50, 100]);
     speak(`เลขพัสดุ${detection.carrier}ไม่ครบค่ะ ได้ ${detection.got} หลัก ต้อง ${detection.expected} หลัก กรุณาสแกนใหม่`);
-    setStatus(`⚠️ ${detection.carrier}: เลขไม่ครบ ${detection.got}/${detection.expected} หลัก — สแกนใหม่`, "warning");
+    setStatus(_S.warn + `${detection.carrier}: เลขไม่ครบ ${detection.got}/${detection.expected} หลัก — สแกนใหม่`, "warning");
   } else {
     // ✅ ไม่ตรงรูปแบบพัสดุหรือสินค้าใดเลย
     lastScanTime = Date.now();
     beep('warn');
     speak("ตรวจสอบเลขพัสดุด้วยค่ะ รูปแบบไม่ตรงกับขนส่งที่รองรับ");
-    setStatus("⚠️ ตรวจสอบเลขพัสดุ: " + upperText + " — รูปแบบไม่ถูกต้อง", "warning");
+    setStatus(_S.warn + "ตรวจสอบเลขพัสดุ: " + upperText + " — รูปแบบไม่ถูกต้อง", "warning");
   }
 }
 
 function setStatus(msg, type) {
   const el = document.getElementById("statusLabel");
-  // wrap leading emoji with theme filter
-  const themed = msg.replace(/^([\u{1F300}-\u{1FFFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}✅❌⚠️✏️📦🛍💾🔄💡📝]+\s*)/u,
-    '<span style="filter:sepia(0.5) saturate(1.4) hue-rotate(8deg);display:inline-block;">$1</span>');
-  el.innerHTML = themed;
+  el.innerHTML = msg;
   const map = { success: "bg-success", danger: "bg-danger", warning: "bg-warning", primary: "bg-primary", info: "bg-info", secondary: "bg-secondary" };
   el.className = "status-bar-full " + (map[type] || "bg-light text-muted");
 }
+
+const _S = {
+  parcel: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:3px"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="9" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg>`,
+  edit:   `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:3px"><rect x="2" y="2" width="16" height="16" rx="4" fill="#cdb4db"/><path d="M5 12 L13 4 Q15 2 17 4 Q19 6 17 8 L9 16 Z" fill="#9b72cf"/><rect x="2" y="17" width="16" height="1" rx="0.5" fill="#cdb4db" opacity="0.6"/></svg>`,
+  ok:     `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:3px"><circle cx="10" cy="10" r="8.5" fill="#b5ead7"/><polyline points="6,10 9,13 14,7" fill="none" stroke="#52b788" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  warn:   `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:3px"><path d="M10 2 L18 17 H2 Z" fill="#ffd166" stroke="#e9c46a" stroke-width="1"/><rect x="9.1" y="8" width="1.8" height="5" rx="0.9" fill="#9b72cf"/><circle cx="10" cy="15" r="1.2" fill="#9b72cf"/></svg>`,
+  err:    `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:3px"><circle cx="10" cy="10" r="8.5" fill="#f4a261"/><line x1="6.5" y1="6.5" x2="13.5" y2="13.5" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="13.5" y1="6.5" x2="6.5" y2="13.5" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>`,
+  save:   `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:3px"><rect x="2" y="2" width="16" height="16" rx="4" fill="#b5ead7"/><rect x="5" y="2" width="7" height="6" rx="1" fill="#52b788"/><rect x="7" y="3" width="2" height="3" rx="1" fill="white" opacity="0.7"/><rect x="4" y="10" width="12" height="7" rx="2" fill="#52b788"/><rect x="6" y="12" width="8" height="3" rx="1" fill="#b5ead7" opacity="0.8"/></svg>`,
+  bag:    `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:3px"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg>`,
+};
 
 function editParcelId() {
   speak("เตรียมสแกนรหัสพัสดุที่ถูกต้องนะคะ");
   isEditingId = true; currentP = "";
   hideCustomerRemark();
   document.getElementById("parcelId").innerText = "รอสแกนรหัสใหม่...";
-  setStatus("✏️ กำลังแก้ไขรหัสพัสดุ...", "info");
+  setStatus(_S.edit + "กำลังแก้ไขรหัสพัสดุ...", "info");
   document.getElementById("editParcelBtn").style.display = "none";
 }
 
@@ -3907,7 +3937,7 @@ function processNewParcel(text, carrier) {
     }
   } catch(e) {}
 
-  setStatus((wasEditing ? "✏️ แก้ไขรหัสพัสดุเป็น: " : `📦 ${carrier}: `) + text + orderTag, "primary");
+  setStatus((wasEditing ? _S.edit + "แก้ไขรหัสพัสดุเป็น: " : _S.parcel + `${carrier}: `) + text + orderTag, "primary");
   document.getElementById("editParcelBtn").style.display = "inline-block";
   // Flash animation บน parcel box
   const box = document.getElementById('parcelBox');
@@ -3966,7 +3996,7 @@ async function finishWork(isManual = false) {
     }
     if (hasOver && !currentRemark) {
       beep('warn'); speak("มีสินค้าเกินจำนวนค่ะ กรุณาระบุเหตุผล", false);
-      setStatus("⚠️ สินค้าเกินจำนวน — กรุณาระบุเหตุผลก่อนจบงาน", "warning");
+      setStatus(_S.warn + "สินค้าเกินจำนวน — กรุณาระบุเหตุผลก่อนจบงาน", "warning");
       const remarkResult = await showRemarkPopup();
       if (!remarkResult) return;
       currentRemark = remarkResult;
@@ -3977,7 +4007,7 @@ async function finishWork(isManual = false) {
   if (isIncomplete && !currentRemark) {
     beep('warn');
     speak("สินค้าไม่ครบค่ะ กรุณาเลือกเหตุผลก่อนจบงาน", false);
-    setStatus("⚠️ สินค้าไม่ครบ — กรุณาเลือกเหตุผลก่อนจบงาน", "warning");
+    setStatus(_S.warn + "สินค้าไม่ครบ — กรุณาเลือกเหตุผลก่อนจบงาน", "warning");
     const remarkResult = await showRemarkPopup();
     if (!remarkResult) return;
     currentRemark = remarkResult;
@@ -3988,13 +4018,15 @@ async function finishWork(isManual = false) {
 
 // ===== popup ยืนยันจบงานด้วยตนเอง =====
 async function showManualFinishConfirm() {
-  const reasons = [
-    { emoji: '📦', label: 'สินค้าหมด' },
-    { emoji: '🎨', label: 'ลูกค้าแจ้งเปลี่ยนสี' },
-    { emoji: '🔄', label: 'ลูกค้าแจ้งเปลี่ยนรุ่น' },
-    { emoji: '📬', label: 'ใช้พัสดุเดิม' },
-    { emoji: '✏️', label: 'อื่นๆ' }
+  const reasonsSvg = [
+    { ico: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="9" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg>`, label: 'สินค้าหมด' },
+    { ico: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><path d="M10 2 Q17 2 18 8 Q19 13 15 15 Q13 16 12 14 Q11 12 9 13 Q4 14 3 10 Q2 5 7 3 Q8.5 2 10 2Z" fill="#cdb4db"/><circle cx="7" cy="8" r="1.5" fill="#f4a261"/><circle cx="11" cy="5.5" r="1.5" fill="#a8dadc"/><circle cx="14.5" cy="8.5" r="1.5" fill="#b5ead7"/><circle cx="13" cy="13" r="2" fill="#9b72cf"/></svg>`, label: 'ลูกค้าแจ้งเปลี่ยนสี' },
+    { ico: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><path d="M3 7 H14 L11 4" fill="none" stroke="#f4a261" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 13 H6 L9 16" fill="none" stroke="#a8dadc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`, label: 'ลูกค้าแจ้งเปลี่ยนรุ่น' },
+    { ico: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><rect x="2" y="7" width="12" height="9" rx="3" fill="#a8dadc"/><path d="M2 10 L8 13.5 L14 10" fill="none" stroke="#457b9d" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><rect x="12" y="3" width="6" height="10" rx="2.5" fill="#e9c46a"/></svg>`, label: 'ใช้พัสดุเดิม' },
+    { ico: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><rect x="2" y="2" width="16" height="16" rx="4" fill="#cdb4db"/><path d="M5 12 L13 4 Q15 2 17 4 Q19 6 17 8 L9 16 Z" fill="#9b72cf"/></svg>`, label: 'อื่นๆ' },
   ];
+  const icoOk  = `<svg viewBox="0 0 16 16" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><circle cx="8" cy="8" r="7" fill="#b5ead7"/><polyline points="4.5,8 7,10.5 11.5,5.5" fill="none" stroke="#52b788" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const icoWrn = `<svg viewBox="0 0 16 16" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><path d="M8 1.5 L14.5 13.5 H1.5 Z" fill="#ffd166" stroke="#e9c46a" stroke-width="0.8"/><rect x="7.3" y="6" width="1.4" height="4" rx="0.7" fill="#9b72cf"/><circle cx="8" cy="11.5" r="1" fill="#9b72cf"/></svg>`;
 
   // คำนวณสินค้าที่ยังขาด (strict mode) และสินค้าทั้งหมดที่ต้องแพค
   const totalRequired = isStrictValidationMode
@@ -4010,12 +4042,11 @@ async function showManualFinishConfirm() {
   const hasMissing = missingSku.length > 0;
   const isEmpty = scannedCount === 0;
 
-  // --- สร้าง summary row สินค้า ---
   const summaryRows = isStrictValidationMode ? expectedItemsArray.map(ex => {
     const scanned = scannedItemsMap[ex.sku] || 0;
     const name = productMap[ex.sku] || ex.sku;
     const done = scanned >= ex.qty;
-    const icon = done ? '✅' : `⚠️`;
+    const icon = done ? icoOk : icoWrn;
     const color = done ? 'var(--text3)' : 'var(--warning,#c8860a)';
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 2px;border-bottom:1px solid var(--border2);font-size:0.82rem;">
       <span style="color:${color};">${icon} ${name}</span>
@@ -4023,14 +4054,16 @@ async function showManualFinishConfirm() {
     </div>`;
   }).join('') : `<div style="font-size:0.85rem;color:var(--text2);text-align:center;padding:6px 0;">สแกนสินค้า ${scannedCount} ชิ้น</div>`;
 
-  // --- สร้าง remark section สำหรับ SKU ที่ขาด ---
-  const remarkButtonsHtml = reasons.map(r =>
-    `<button type="button" class="swal-remark-btn" data-value="${r.label}" style="padding:9px 14px;font-size:0.88rem;">${r.emoji} ${r.label}</button>`
+  const remarkButtonsHtml = reasonsSvg.map(r =>
+    `<button type="button" class="swal-remark-btn" data-value="${r.label}" style="padding:9px 14px;font-size:0.88rem;">${r.ico} ${r.label}</button>`
   ).join('');
+
+  const icoNote = `<svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:4px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/></svg>`;
+  const icoSave = `<svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:4px"><rect x="2" y="2" width="16" height="16" rx="4" fill="#b5ead7"/><rect x="5" y="2" width="7" height="6" rx="1" fill="#52b788"/><rect x="7" y="3" width="2" height="3" rx="1" fill="white" opacity="0.7"/><rect x="4" y="10" width="12" height="7" rx="2" fill="#52b788"/><rect x="6" y="12" width="8" height="3" rx="1" fill="#b5ead7" opacity="0.8"/></svg>`;
 
   const missingSection = (hasMissing || isEmpty) ? `
     <div style="margin-top:14px;padding-top:12px;border-top:2px solid var(--border2);">
-      <p style="font-size:0.85rem;color:var(--text2);margin-bottom:8px;">📝 กรุณาเลือกสาเหตุสินค้าที่ยังไม่ได้สแกน</p>
+      <p style="font-size:0.85rem;color:var(--text2);margin-bottom:8px;">${icoNote} กรุณาเลือกสาเหตุสินค้าที่ยังไม่ได้สแกน</p>
       <div id="swalManualRemarkBtns" style="display:flex;flex-direction:column;gap:6px;">${remarkButtonsHtml}</div>
       <input id="swalManualRemarkOther" class="swal2-input" placeholder="ระบุเหตุผล..." style="display:none;margin-top:8px;font-size:0.88rem;border-radius:12px;">
     </div>` : '';
@@ -4038,7 +4071,7 @@ async function showManualFinishConfirm() {
   const confirmText = isEmpty ? 'ยืนยันจบงาน (กล่องว่าง)' : 'ยืนยันจบงาน';
 
   const { value } = await Swal.fire({
-    title: '💾 ยืนยันจบงาน?',
+    title: `${icoSave} ยืนยันจบงาน?`,
     html: `
       <p style="font-size:0.85rem;color:var(--text2);margin-bottom:10px;">
         พัสดุชิ้นนี้ต้องมีสินค้าทั้งหมด
@@ -4049,7 +4082,7 @@ async function showManualFinishConfirm() {
       ${missingSection}
     `,
     showConfirmButton: true,
-    confirmButtonText: `💾 ${confirmText}`,
+    confirmButtonText: `${icoSave} ${confirmText}`,
     confirmButtonColor: 'transparent',
     showCancelButton: true,
     cancelButtonText: 'ยกเลิก',
@@ -4150,7 +4183,7 @@ async function _doFinishWork(isManual = false) {
       await closeAppCompletely();
     } else {
       await resetAppForNext();
-      setStatus("✔ พร้อมรับพัสดุใบถัดไป", "success");
+      setStatus(_S.ok + "พร้อมรับพัสดุใบถัดไป", "success");
     }
     isFinishing = false;
     clearTimeout(finishSafetyTimer);
@@ -4294,11 +4327,11 @@ function renderList() {
     const known = productMap[c];
     const label = known
       ? escHtml(known)
-      : `<span style="color:#e8b070;font-weight:600;">⚠️ ไม่รู้จัก</span> <span style="font-size:0.8em;color:#888;">${escHtml(c)}</span>`;
+      : `<span style="color:#e8b070;font-weight:600;"><svg viewBox="0 0 16 16" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:2px"><path d="M8 1.5 L14.5 13.5 H1.5 Z" fill="#ffd166" stroke="#e9c46a" stroke-width="0.8"/><rect x="7.3" y="6" width="1.4" height="4" rx="0.7" fill="#9b72cf"/><circle cx="8" cy="11.5" r="1" fill="#9b72cf"/></svg> ไม่รู้จัก</span> <span style="font-size:0.8em;color:#888;">${escHtml(c)}</span>`;
     const realIdx = items.length - 1 - i;
     const borderColor = known ? 'var(--pink-light)' : '#e8b070';
     html += `<div class="checklist-item" style="display:flex;align-items:center;justify-content:space-between;gap:6px;border-left-color:${borderColor};">
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🛍 ${label}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg> ${label}</span>
       <button class="btn-delete-item" onclick="removeItem(${realIdx})" title="ลบ" style="flex-shrink:0;">✕</button>
     </div>`;
   });
@@ -4506,25 +4539,27 @@ function _speakRemarkIfExists(tracking, delayMs = 1200) {
 
 async function showRemarkPopup() {
   const reasons = [
-    { emoji: '📦', label: 'สินค้าหมด' },
-    { emoji: '🎨', label: 'ลูกค้าแจ้งเปลี่ยนสี' },
-    { emoji: '🔄', label: 'ลูกค้าแจ้งเปลี่ยนรุ่น' },
-    { emoji: '📬', label: 'ใช้พัสดุเดิม' },
-    { emoji: '✏️', label: 'อื่นๆ' }
+    { ico: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="9" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg>`, label: 'สินค้าหมด' },
+    { ico: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><path d="M10 2 Q17 2 18 8 Q19 13 15 15 Q13 16 12 14 Q11 12 9 13 Q4 14 3 10 Q2 5 7 3 Q8.5 2 10 2Z" fill="#cdb4db"/><circle cx="7" cy="8" r="1.5" fill="#f4a261"/><circle cx="11" cy="5.5" r="1.5" fill="#a8dadc"/><circle cx="14.5" cy="8.5" r="1.5" fill="#b5ead7"/><circle cx="13" cy="13" r="2" fill="#9b72cf"/></svg>`, label: 'ลูกค้าแจ้งเปลี่ยนสี' },
+    { ico: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><path d="M3 7 H14 L11 4" fill="none" stroke="#f4a261" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 13 H6 L9 16" fill="none" stroke="#a8dadc" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`, label: 'ลูกค้าแจ้งเปลี่ยนรุ่น' },
+    { ico: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><rect x="2" y="7" width="12" height="9" rx="3" fill="#a8dadc"/><path d="M2 10 L8 13.5 L14 10" fill="none" stroke="#457b9d" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><rect x="12" y="3" width="6" height="10" rx="2.5" fill="#e9c46a"/></svg>`, label: 'ใช้พัสดุเดิม' },
+    { ico: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><rect x="2" y="2" width="16" height="16" rx="4" fill="#cdb4db"/><path d="M5 12 L13 4 Q15 2 17 4 Q19 6 17 8 L9 16 Z" fill="#9b72cf"/></svg>`, label: 'อื่นๆ' },
   ];
+  const icoWrn = `<svg viewBox="0 0 16 16" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:4px"><path d="M8 1.5 L14.5 13.5 H1.5 Z" fill="#ffd166" stroke="#e9c46a" stroke-width="0.8"/><rect x="7.3" y="6" width="1.4" height="4" rx="0.7" fill="#9b72cf"/><circle cx="8" cy="11.5" r="1" fill="#9b72cf"/></svg>`;
+  const icoSave = `<svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:4px"><rect x="2" y="2" width="16" height="16" rx="4" fill="#b5ead7"/><rect x="5" y="2" width="7" height="6" rx="1" fill="#52b788"/><rect x="7" y="3" width="2" height="3" rx="1" fill="white" opacity="0.7"/><rect x="4" y="10" width="12" height="7" rx="2" fill="#52b788"/><rect x="6" y="12" width="8" height="3" rx="1" fill="#b5ead7" opacity="0.8"/></svg>`;
   const buttonsHtml = reasons.map(r =>
-    `<button type="button" class="swal-remark-btn" data-value="${r.label}">${r.emoji} ${r.label}</button>`
+    `<button type="button" class="swal-remark-btn" data-value="${r.label}">${r.ico} ${r.label}</button>`
   ).join('');
 
   const { value } = await Swal.fire({
-    title: '⚠️ สินค้าไม่ครบ',
+    title: `${icoWrn} สินค้าไม่ครบ`,
     html: `
       <p style="font-size:0.9rem; color:var(--text2); margin-bottom:12px;">กรุณาเลือกเหตุผลก่อนจบงาน</p>
       <div id="swalRemarkBtns" style="display:flex; flex-direction:column; gap:8px;">${buttonsHtml}</div>
       <input id="swalRemarkOther" class="swal2-input" placeholder="ระบุเหตุผล..." style="display:none; margin-top:10px; font-size:0.9rem; border-radius:12px;">
     `,
     showConfirmButton: true,
-    confirmButtonText: '💾 บันทึกพร้อมหมายเหตุ',
+    confirmButtonText: `${icoSave} บันทึกพร้อมหมายเหตุ`,
     confirmButtonColor: 'transparent',
     showCancelButton: true,
     cancelButtonText: 'ยกเลิก',
@@ -4852,18 +4887,18 @@ async function processFileUpload() {
   // --- Preview ก่อนยืนยัน ---
   const uniqueTracking = new Set(extractData.map(d => d.tracking)).size;
   const confirm = await Swal.fire({
-    title: '📋 ตรวจสอบข้อมูลก่อนอัปโหลด',
+    title: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><rect x="2" y="2" width="16" height="16" rx="4" fill="#bfdbfe"/><circle cx="5.5" cy="7" r="1.3" fill="#3b82f6"/><rect x="8" y="6.2" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><circle cx="5.5" cy="11" r="1.3" fill="#60a5fa"/><rect x="8" y="10.2" width="6" height="1.5" rx="0.75" fill="#60a5fa" opacity="0.7"/><circle cx="5.5" cy="15" r="1.3" fill="#93c5fd"/><rect x="8" y="14.2" width="7" height="1.5" rx="0.75" fill="#93c5fd" opacity="0.7"/></svg> ตรวจสอบข้อมูลก่อนอัปโหลด`,
     html: `
       <div style="text-align:left; font-size:0.9rem; color:#7a6440; line-height:1.8;">
-        <div>📦 พัสดุ: <strong>${uniqueTracking} ใบ</strong></div>
-        <div>🛍️ รายการสินค้า: <strong>${extractData.length} รายการ</strong></div>
-        <div>📝 หมายเหตุลูกค้า: <strong>${Object.keys(remarkMap).length} ใบ</strong></div>
-        <div>🏪 Marketplace: <strong>${escHtml(marketplace)}</strong></div>
-        <div>📄 ไฟล์: <strong>${escHtml(file.name)}</strong></div>
+        <div><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="9" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg> พัสดุ: <strong>${uniqueTracking} ใบ</strong></div>
+        <div><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg> รายการสินค้า: <strong>${extractData.length} รายการ</strong></div>
+        <div><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/></svg> หมายเหตุลูกค้า: <strong>${Object.keys(remarkMap).length} ใบ</strong></div>
+        <div><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><rect x="1" y="6" width="18" height="12" rx="4" fill="#a8dadc"/><rect x="1" y="6" width="18" height="5" rx="4" fill="#457b9d"/><rect x="1" y="9" width="18" height="2" fill="#457b9d"/><rect x="5" y="2" width="3" height="5" rx="1.5" fill="#cdb4db"/><rect x="12" y="2" width="3" height="5" rx="1.5" fill="#cdb4db"/></svg> Marketplace: <strong>${escHtml(marketplace)}</strong></div>
+        <div><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#bfdbfe"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/></svg> ไฟล์: <strong>${escHtml(file.name)}</strong></div>
       </div>`,
     icon: 'info',
     showCancelButton: true,
-    confirmButtonText: '📤 อัปโหลดเลย',
+    confirmButtonText: `<svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:4px"><circle cx="6.5" cy="12" r="4" fill="#bfdbfe"/><circle cx="11" cy="10.5" r="5" fill="#bfdbfe"/><circle cx="15" cy="12.5" r="3.2" fill="#bfdbfe"/><rect x="2.5" y="12.5" width="15" height="4" fill="#bfdbfe"/><path d="M2.5 14 Q2.5 16.5 4.5 16.5 L15.5 16.5 Q17.5 16.5 17.5 14" fill="none" stroke="#60a5fa" stroke-width="1.3" stroke-linecap="round"/><line x1="10" y1="18" x2="10" y2="10" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/><polyline points="6.5,14 10,9.5 13.5,14" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg> อัปโหลดเลย`,
     cancelButtonText: 'ยกเลิก',
     confirmButtonColor: 'transparent',
     cancelButtonColor: 'transparent',
@@ -5089,17 +5124,20 @@ function animateSearch() {
 }
 
 function spawnTabEmoji(tab, btn) {
-  const emojiMap = { scan: '📦', search: '🔍', dash: '📊', upload: '📥' };
-  const emoji = emojiMap[tab] || '✨';
+  const svgMap = {
+    scan:   `<svg viewBox="0 0 20 20" fill="none"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="8.5" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg>`,
+    search: `<svg viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="6" fill="#a8dadc"/><circle cx="8.5" cy="8.5" r="4.2" fill="#e8f8f8"/><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="#457b9d" stroke-width="1.6"/><line x1="13" y1="13" x2="18" y2="18" stroke="#457b9d" stroke-width="2.2" stroke-linecap="round"/></svg>`,
+    dash:   `<svg viewBox="0 0 20 20" fill="none"><rect x="1" y="3" width="18" height="15" rx="4" fill="#cdb4db"/><rect x="4" y="13" width="3" height="4" rx="1.5" fill="#f4a261"/><rect x="8.5" y="10" width="3" height="7" rx="1.5" fill="#a8dadc"/><rect x="13" y="8" width="3" height="9" rx="1.5" fill="#b5ead7"/></svg>`,
+    upload: `<svg viewBox="0 0 20 20" fill="none"><circle cx="6.5" cy="12" r="4" fill="#bfdbfe"/><circle cx="11" cy="10.5" r="5" fill="#bfdbfe"/><circle cx="15" cy="12.5" r="3.2" fill="#bfdbfe"/><rect x="2.5" y="12.5" width="15" height="4" rx="0" fill="#bfdbfe"/><line x1="10" y1="18" x2="10" y2="10" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/><polyline points="6.5,14 10,9.5 13.5,14" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`,
+  };
+  const svg = svgMap[tab] || svgMap.scan;
   const rect = btn.getBoundingClientRect();
   for (let i = 0; i < 3; i++) {
     const el = document.createElement('div');
     el.className = 'floating-emoji';
-    el.textContent = emoji;
-    el.style.left = (rect.left + rect.width/2 - 12 + (Math.random()-0.5)*30) + 'px';
-    el.style.top = (rect.top - 10) + 'px';
-    el.style.animationDelay = (i * 0.12) + 's';
-    el.style.fontSize = (1.2 + Math.random()*0.6) + 'rem';
+    el.innerHTML = svg;
+    const sz = 20 + Math.random() * 12;
+    el.style.cssText = `width:${sz}px;height:${sz}px;position:fixed;pointer-events:none;z-index:9999;left:${rect.left + rect.width/2 - sz/2 + (Math.random()-0.5)*30}px;top:${rect.top - 10}px;animation-delay:${i*0.12}s;font-size:${sz}px;`;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 1500);
   }
@@ -5258,11 +5296,11 @@ function renderReport(data, start, end) {
 
 async function resetSession() {
   const r = await Swal.fire({
-    title: '🎀 ล้างสถิติ?',
+    title: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><path d="M10 2 L12.5 7.5 L18.5 8 L14 12.5 L15.5 18.5 L10 15.5 L4.5 18.5 L6 12.5 L1.5 8 L7.5 7.5 Z" fill="#ffd166" stroke="#e9c46a" stroke-width="0.8" stroke-linejoin="round"/><circle cx="10" cy="10.5" r="2.5" fill="#fff" opacity="0.4"/></svg> ล้างสถิติ?`,
     html: '<div style="font-size:0.88rem; color:#444;">ยืนยันการล้างสถิติรอบนี้ทั้งหมด และล้างความจำออเดอร์ในเครื่องนะคะ</div>',
     icon: 'question',
     showCancelButton: true,
-    confirmButtonText: '🗑️ ล้างเลย',
+    confirmButtonText: `<svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:4px"><rect x="3" y="6" width="14" height="11" rx="3" fill="#f4a261"/><path d="M7 6 V4 Q7 2 10 2 Q13 2 13 4 V6" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><line x1="8" y1="10" x2="8" y2="14" stroke="white" stroke-width="1.4" stroke-linecap="round"/><line x1="12" y1="10" x2="12" y2="14" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg> ล้างเลย`,
     cancelButtonText: 'ยกเลิก',
     confirmButtonColor: 'transparent',
     cancelButtonColor: 'transparent',
@@ -5375,7 +5413,7 @@ async function runSearch() {
 
       // ✅ Remark badge
       const remarkHtml = remark
-        ? `<div style="font-size:0.73rem; color:#c06030; margin-top:4px;">📝 ${escHtml(remark)}</div>`
+        ? `<div style="font-size:0.73rem; color:#c06030; margin-top:4px;"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/></svg> ${escHtml(remark)}</div>`
         : '';
 
       // ✅ Video button
@@ -5397,12 +5435,12 @@ async function runSearch() {
       return `<div style="background:var(--bg); border-radius:var(--radius); box-shadow:4px 4px 12px var(--sd),-4px -4px 12px var(--sl); padding:14px 16px; margin-bottom:12px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:4px;">
           <div>
-            <div style="font-size:0.73rem; color:var(--text3);">📅 ${escHtml(date)}</div>
+            <div style="font-size:0.73rem; color:var(--text3);"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="2" y="4" width="16" height="14" rx="3.5" fill="#a8dadc"/><rect x="2" y="4" width="16" height="5.5" rx="3.5" fill="#457b9d"/><rect x="2" y="7" width="16" height="2.5" fill="#457b9d"/><rect x="5.5" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="13" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="8.75" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="12.5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/></svg> ${escHtml(date)}</div>
             <div style="margin-top:4px;">${trackingHtml}${orderBadge}</div>
             ${remarkHtml}
           </div>
           <div style="text-align:right;">
-            <div style="font-size:0.8rem; font-weight:600; color:var(--text2);">🧾 ${rawItems.length} ชิ้น</div>
+            <div style="font-size:0.8rem; font-weight:600; color:var(--text2);"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg> ${rawItems.length} ชิ้น</div>
             ${videoBtn}
           </div>
         </div>
@@ -5473,11 +5511,11 @@ function _buildTrackingLink(tracking) {
 (function() {
   const pawBg = document.getElementById('pawBg');
   if (!pawBg) return;
-  const pawEmojis = ['🐾','🌸','✦','💕','🎀','⭐'];
+  const pawShapes = ['✦','·','○','◇','△','✧'];
   for (let i = 0; i < 18; i++) {
     const el = document.createElement('div');
     el.className = 'paw';
-    el.textContent = pawEmojis[i % pawEmojis.length];
+    el.textContent = pawShapes[i % pawShapes.length];
     el.style.left = Math.random() * 100 + 'vw';
     el.style.animationDuration = (12 + Math.random() * 16) + 's';
     el.style.animationDelay = (Math.random() * 14) + 's';
@@ -5840,7 +5878,9 @@ function renderDailyChart(dailyBreakdown, startStr, endStr) {
       bg = met ? 'rgba(122,184,122,0.13)' : 'rgba(200,168,75,0.1)';
       border = met ? '1.5px solid rgba(122,184,122,0.45)' : '1.5px solid rgba(200,168,75,0.25)';
       dateColor = isSun ? '#c66' : 'var(--text)';
-      statusIcon = met ? '✅' : '🟡';
+      statusIcon = met
+        ? `<svg viewBox="0 0 12 12" fill="none" style="width:0.8em;height:0.8em;display:inline-block"><circle cx="6" cy="6" r="5" fill="#b5ead7"/><polyline points="3.5,6 5.2,7.8 8.5,4.2" fill="none" stroke="#52b788" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+        : `<svg viewBox="0 0 12 12" fill="none" style="width:0.8em;height:0.8em;display:inline-block"><circle cx="6" cy="6" r="5" fill="#ffd166"/><rect x="5.3" y="3.5" width="1.4" height="3" rx="0.7" fill="#9b72cf"/><circle cx="6" cy="8.5" r="0.9" fill="#9b72cf"/></svg>`;
     } else if (!isInRange) {
       bg = 'rgba(0,0,0,0.02)';
       dateColor = 'rgba(0,0,0,0.15)';
@@ -5854,8 +5894,8 @@ function renderDailyChart(dailyBreakdown, startStr, endStr) {
       display:grid; grid-template-columns:auto 1fr; gap:2px 6px; min-height:52px; align-items:start;">
       <div style="font-weight:700; color:${dateColor}; font-size:1.15rem; line-height:1; grid-row:1/4;">${d.getDate()}</div>
       ${hasData ? `
-        <div style="font-size:0.58rem; color:var(--text3); text-align:right; white-space:nowrap;">📦 ${info.orders}</div>
-        <div style="font-size:0.58rem; color:var(--text3); text-align:right; white-space:nowrap;">🎀 ${info.items}</div>
+        <div style="font-size:0.58rem; color:var(--text3); text-align:right; white-space:nowrap;"><svg viewBox="0 0 12 12" fill="none" style="width:0.75em;height:0.75em;display:inline-block;vertical-align:-0.08em;margin-right:1px"><rect x="1" y="4.5" width="10" height="7" rx="2" fill="#f4a261"/><path d="M1 4.5 Q1 3 3 2.8L6 2.8L6 4.5Z" fill="#e9c46a"/><path d="M6 2.8L9 2.8 Q11 3 11 4.5L6 4.5Z" fill="#ffd166"/></svg>${info.orders}</div>
+        <div style="font-size:0.58rem; color:var(--text3); text-align:right; white-space:nowrap;"><svg viewBox="0 0 12 12" fill="none" style="width:0.75em;height:0.75em;display:inline-block;vertical-align:-0.08em;margin-right:1px"><path d="M6 1 L7.5 4.5 L11 5 L8.5 7.5 L9.2 11 L6 9.3 L2.8 11 L3.5 7.5 L1 5 L4.5 4.5 Z" fill="#ffd166" stroke="#e9c46a" stroke-width="0.5" stroke-linejoin="round"/></svg>${info.items}</div>
         <div style="font-size:0.6rem; text-align:right;">${statusIcon}</div>
       ` : '<div></div>'}
     </div>`;
