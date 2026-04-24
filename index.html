@@ -3453,15 +3453,15 @@ async function fetchBackgroundCache(cacheKey, cacheTimeKey) {
         }
       }
       if (Object.keys(remarkFromOrders).length > 0) {
-        const existingRemark = JSON.parse(localStorage.getItem('orderRemarkMap') || '{}');
-        localStorage.setItem('orderRemarkMap', JSON.stringify({ ...existingRemark, ...remarkFromOrders }));
-        console.log("[Cache] บันทึก remark ลูกค้า:", Object.keys(remarkFromOrders).length, "ใบ");
+        // ✅ ใช้ replace (ไม่ merge) เพื่อให้ข้อมูลจาก GAS ชนะ cache เก่าเสมอ
+        // ป้องกัน SKU เก่า (ก่อนแก้ใน Sheet) ค้างปนกับ SKU ใหม่
+        localStorage.setItem('orderRemarkMap', JSON.stringify(remarkFromOrders));
+        console.log("[Cache] บันทึก remark ลูกค้า (replace):", Object.keys(remarkFromOrders).length, "ใบ");
       }
-      // ✅ merge orderInfoMap จาก GAS
+      // ✅ replace orderInfoMap จาก GAS (ไม่ merge)
       if (Object.keys(infoFromOrders).length > 0) {
-        const existingInfo = JSON.parse(localStorage.getItem('orderInfoMap') || '{}');
-        localStorage.setItem('orderInfoMap', JSON.stringify({ ...existingInfo, ...infoFromOrders }));
-        console.log("[Cache] บันทึก orderInfo:", Object.keys(infoFromOrders).length, "รายการ");
+        localStorage.setItem('orderInfoMap', JSON.stringify(infoFromOrders));
+        console.log("[Cache] บันทึก orderInfo (replace):", Object.keys(infoFromOrders).length, "รายการ");
       }
     } catch(e) { console.warn('[Cache] บันทึก orders ไม่ได้:', e.message); }
   } else if (orderRes && orderRes.error) {
@@ -3533,6 +3533,17 @@ async function refreshAllCache() {
   btn.innerText = "⏳ กำลังดึงข้อมูล...";
   btn.disabled = true;
   try {
+    // ✅ ล้าง cache เก่าทั้งหมดก่อน fetch ใหม่
+    // เพื่อป้องกันข้อมูล SKU เก่า (ก่อนแก้ใน Sheet) ค้างปนกับข้อมูลใหม่
+    const CACHE_KEYS_TO_CLEAR = [
+      'productMap_cache', 'productMap_time',
+      'localOrdersCache',
+      'orderRemarkMap',
+      'orderInfoMap'
+    ];
+    CACHE_KEYS_TO_CLEAR.forEach(k => localStorage.removeItem(k));
+    console.log('[refreshAllCache] ล้าง cache เก่าแล้ว ก่อนดึงข้อมูลใหม่');
+
     const gotProducts = await fetchBackgroundCache("productMap_cache", "productMap_time");
     if (gotProducts) {
       btn.innerText = `อัปเดตแล้ว (${Object.keys(productMap).length} สินค้า)`;
