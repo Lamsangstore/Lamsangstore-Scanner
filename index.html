@@ -3389,21 +3389,13 @@ async function initScanner() {
   const btn = document.getElementById("startBtn");
   const CACHE_KEY = "productMap_cache";
   const CACHE_TIME_KEY = "productMap_time";
-  const CACHE_TTL = 60 * 60 * 1000;
-  
+
   try {
-    const cached = localStorage.getItem(CACHE_KEY);
-    const cachedTime = parseInt(localStorage.getItem(CACHE_TIME_KEY) || "0");
-    const isFresh = (Date.now() - cachedTime) < CACHE_TTL;
-    
-    if (cached) {
-      productMap = JSON.parse(cached);
-      setupScanUI();
-      // ✅ sync orders (remark) เสมอ ไม่ว่า cache จะ fresh แค่ไหน — background ไม่บล็อก UI
-      fetchBackgroundCache(CACHE_KEY, CACHE_TIME_KEY).catch(() => {});
-      return;
-    }
-    
+    // ✅ ล้าง cache เก่าทุกครั้งก่อนเริ่ม เพื่อให้ข้อมูลสินค้า/ออเดอร์เป็นปัจจุบันเสมอ
+    ['productMap_cache','productMap_time','localOrdersCache','orderRemarkMap','orderInfoMap']
+      .forEach(k => localStorage.removeItem(k));
+    console.log('[initScanner] ล้าง cache เก่าแล้ว — กำลังดึงข้อมูลใหม่จาก GAS');
+
     btn.innerText = "กำลังโหลดข้อมูล...";
     btn.disabled = true;
     await fetchBackgroundCache(CACHE_KEY, CACHE_TIME_KEY);
@@ -3448,7 +3440,7 @@ async function fetchBackgroundCache(cacheKey, cacheTimeKey) {
           // ✅ ดึง orderId + marketplace (ถ้ามี)
           const firstItem = items[0];
           if (firstItem && firstItem.marketplace) {
-            infoFromOrders[tracking] = { orderId: firstItem.orderId || '', marketplace: firstItem.marketplace };
+            infoFromOrders[tracking] = { orderId: normOrderId(firstItem.orderId || ''), marketplace: firstItem.marketplace };
           }
         }
       }
@@ -3488,7 +3480,7 @@ async function _refreshOrderCacheBackground() {
           const remark = its.find(i => i.remark)?.remark || '';
           if (remark) remarkFromOrders[tracking] = remark;
           const first = its[0];
-          if (first?.marketplace) infoFromOrders[tracking] = { orderId: first.orderId || '', marketplace: first.marketplace };
+          if (first?.marketplace) infoFromOrders[tracking] = { orderId: normOrderId(first.orderId || ''), marketplace: first.marketplace };
         }
       }
       if (Object.keys(remarkFromOrders).length > 0) {
@@ -4695,6 +4687,15 @@ function cellToStr(val) {
   return String(val).trim();
 }
 
+// ✅ normalize TikTok Order ID — เติม prefix "B" ถ้ายังไม่มี เพื่อให้ 1734417334917695307 == B1734417334917695307
+// ใช้กับทุกจุดที่ set/get orderId เพื่อให้ key ใน orderInfoMap สม่ำเสมอ
+function normOrderId(id) {
+  if (!id) return '';
+  const s = String(id).trim();
+  // ถ้าเป็นตัวเลขล้วน (ยังไม่มี B) ให้เติม B นำหน้า
+  return /^\d+$/.test(s) ? 'B' + s : s;
+}
+
 async function processFileUpload() {
   const fileInput = document.getElementById('fileInput');
   const marketplace = document.getElementById('marketplaceSelect').value;
@@ -4764,7 +4765,7 @@ async function processFileUpload() {
         trackingMap[key] = (trackingMap[key] || 0) + 1;
         // ✅ ดึง orderId
         if (!orderInfoMap[tracking] && useMap.orderId !== undefined) {
-          const oid = cellToStr(row[useMap.orderId]);
+          const oid = normOrderId(cellToStr(row[useMap.orderId]));
           if (oid) orderInfoMap[tracking] = { orderId: oid, marketplace };
         }
         // ดึง remark (Lazada: sellerNote)
@@ -4798,7 +4799,7 @@ async function processFileUpload() {
         trackingSkuMap[key] = (trackingSkuMap[key] || 0) + qty;
         // ✅ ดึง orderId — รองรับ "การจัดส่งแบบรวม" (tracking เดียว หลาย orderId)
         if (useMap.orderId !== undefined) {
-          const oid = cellToStr(row[useMap.orderId]);
+          const oid = normOrderId(cellToStr(row[useMap.orderId]));
           if (oid) {
             if (!orderInfoMap[tracking]) {
               orderInfoMap[tracking] = { orderId: oid, marketplace };
