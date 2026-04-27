@@ -3387,19 +3387,26 @@ async function convertChunksToBase64(chunks) {
 // --- Initialize Scanner ---
 async function initScanner() {
   const btn = document.getElementById("startBtn");
-  const CACHE_KEY = "productMap_cache";
-  const CACHE_TIME_KEY = "productMap_time";
-
   try {
-    // ✅ ล้าง cache เก่าทุกครั้งก่อนเริ่ม เพื่อให้ข้อมูลสินค้า/ออเดอร์เป็นปัจจุบันเสมอ
-    ['productMap_cache','productMap_time','localOrdersCache','orderRemarkMap','orderInfoMap']
-      .forEach(k => localStorage.removeItem(k));
-    console.log('[initScanner] ล้าง cache เก่าแล้ว — กำลังดึงข้อมูลใหม่จาก GAS');
+    const cachedProduct = localStorage.getItem('productMap_cache');
 
-    btn.innerText = "กำลังโหลดข้อมูล...";
-    btn.disabled = true;
-    await fetchBackgroundCache(CACHE_KEY, CACHE_TIME_KEY);
-    setupScanUI();
+    if (cachedProduct) {
+      // ✅ มี product cache → โหลดทันที ไม่รอ GAS
+      productMap = JSON.parse(cachedProduct);
+      console.log('[initScanner] โหลด productMap จาก cache ทันที:', Object.keys(productMap).length, 'สินค้า');
+      setupScanUI();
+      // fetch order cache + เช็ค product hash background (ไม่บล็อก UI)
+      _fetchOrderCacheBackground();
+      _checkProductCacheUpdate();
+    } else {
+      // ✅ ไม่มี cache → fetch ทั้งคู่ก่อน แล้วค่อย setup
+      btn.innerText = "กำลังโหลดข้อมูล...";
+      btn.disabled = true;
+      // ล้าง order cache เก่าด้วย (fresh start)
+      ['localOrdersCache','orderRemarkMap','orderInfoMap'].forEach(k => localStorage.removeItem(k));
+      await Promise.all([_fetchProductCacheNow(), _fetchOrderCacheBackground()]);
+      setupScanUI();
+    }
   } catch (err) {
     console.error('[initScanner error]', err);
     btn.innerText = "โหลดไม่สำเร็จ — กดเพื่อลองใหม่";
@@ -3408,92 +3415,96 @@ async function initScanner() {
   }
 }
 
-async function fetchBackgroundCache(cacheKey, cacheTimeKey) {
-  const [prodRes, orderRes] = await Promise.all([
-    callGAS("getProductData").catch(() => ({})),
-    callGAS("getAllPendingOrders").catch(() => null)
-  ]);
-
-  let gotProducts = false;
+// ✅ ดึง productMap จาก GAS แล้วบันทึก cache (ใช้ตอนไม่มี cache)
+async function _fetchProductCacheNow() {
+  const prodRes = await callGAS("getProductData").catch(() => ({}));
   if (prodRes && Object.keys(prodRes).length > 0) {
     productMap = prodRes;
-    gotProducts = true;
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify(prodRes));
-      localStorage.setItem(cacheTimeKey, Date.now().toString());
-    } catch(e) { console.warn('[Cache] localStorage เต็มหรือไม่รองรับ:', e.message); }
+    const json = JSON.stringify(prodRes);
+    localStorage.setItem('productMap_cache', json);
+    localStorage.setItem('productMap_hash', _simpleHash(json));
+    localStorage.setItem('productMap_time', Date.now().toString());
     updateSyncTimeBadge();
+    console.log('[Product Cache] บันทึกใหม่:', Object.keys(prodRes).length, 'สินค้า');
   }
+}
 
-  if (orderRes && !orderRes.error) {
-    try {
-      localStorage.setItem('localOrdersCache', JSON.stringify(orderRes));
-      console.log("[Cache] ซิงค์ออเดอร์ลงมือถือสำเร็จ:", Object.keys(orderRes).length, "ออเดอร์");
-      // ✅ Merge remark จาก pending orders ลง orderRemarkMap (ให้มือถือเห็น remark ที่อัปโหลดจากคอม)
-      const remarkFromOrders = {};
-      const infoFromOrders = {}; // ✅ orderId + marketplace จาก GAS
-      for (const tracking in orderRes) {
-        const items = orderRes[tracking];
-        if (Array.isArray(items)) {
-          const remark = items.find(i => i.remark)?.remark || '';
-          if (remark) remarkFromOrders[tracking] = remark;
-          // ✅ ดึง orderId + marketplace (ถ้ามี)
-          const firstItem = items[0];
-          if (firstItem && firstItem.marketplace) {
-            infoFromOrders[tracking] = { orderId: normOrderId(firstItem.orderId || ''), marketplace: firstItem.marketplace };
-          }
-        }
-      }
-      if (Object.keys(remarkFromOrders).length > 0) {
-        // ✅ ใช้ replace (ไม่ merge) เพื่อให้ข้อมูลจาก GAS ชนะ cache เก่าเสมอ
-        // ป้องกัน SKU เก่า (ก่อนแก้ใน Sheet) ค้างปนกับ SKU ใหม่
-        localStorage.setItem('orderRemarkMap', JSON.stringify(remarkFromOrders));
-        console.log("[Cache] บันทึก remark ลูกค้า (replace):", Object.keys(remarkFromOrders).length, "ใบ");
-      }
-      // ✅ replace orderInfoMap จาก GAS (ไม่ merge)
-      if (Object.keys(infoFromOrders).length > 0) {
-        localStorage.setItem('orderInfoMap', JSON.stringify(infoFromOrders));
-        console.log("[Cache] บันทึก orderInfo (replace):", Object.keys(infoFromOrders).length, "รายการ");
-      }
-    } catch(e) { console.warn('[Cache] บันทึก orders ไม่ได้:', e.message); }
-  } else if (orderRes && orderRes.error) {
-    console.error("Backend error:", orderRes.error);
+// ✅ เช็คว่า productMap ใน GAS เปลี่ยนไปไหม ถ้าเปลี่ยนค่อย replace cache (background)
+async function _checkProductCacheUpdate() {
+  try {
+    const prodRes = await callGAS("getProductData").catch(() => null);
+    if (!prodRes || Object.keys(prodRes).length === 0) return;
+    const newJson = JSON.stringify(prodRes);
+    const newHash = _simpleHash(newJson);
+    const oldHash = localStorage.getItem('productMap_hash') || '';
+    if (newHash !== oldHash) {
+      productMap = prodRes;
+      localStorage.setItem('productMap_cache', newJson);
+      localStorage.setItem('productMap_hash', newHash);
+      localStorage.setItem('productMap_time', Date.now().toString());
+      updateSyncTimeBadge();
+      console.log('[Product Cache] ข้อมูลสินค้าเปลี่ยนแปลง — อัปเดต cache แล้ว');
+    } else {
+      console.log('[Product Cache] ข้อมูลสินค้าไม่เปลี่ยนแปลง — ใช้ cache เดิม');
+    }
+  } catch(e) { console.warn('[Product Cache] เช็ค update ไม่ได้:', e.message); }
+}
+
+// ✅ simple hash สำหรับเปรียบเทียบ productMap (ไม่ต้องแก้ GAS)
+function _simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(31, h) + str.charCodeAt(i) | 0;
   }
-  return gotProducts;
+  return h.toString(36);
+}
+
+// ✅ fetch order cache จาก GAS แล้วบันทึก (ใช้ได้ทั้ง background และ await)
+async function _fetchOrderCacheBackground() {
+  try {
+    const orderRes = await callGAS("getAllPendingOrders").catch(() => null);
+    if (!orderRes || orderRes.error) return;
+    const normalizedOrderRes = {};
+    for (const tracking in orderRes) {
+      const items = orderRes[tracking];
+      normalizedOrderRes[tracking] = Array.isArray(items)
+        ? items.map(item => ({ ...item, sku: normSku(item.sku || '', item.marketplace || '') }))
+        : items;
+    }
+    localStorage.setItem('localOrdersCache', JSON.stringify(normalizedOrderRes));
+    console.log("[Order Cache] ซิงค์สำเร็จ:", Object.keys(normalizedOrderRes).length, "ออเดอร์");
+    const remarkFromOrders = {}, infoFromOrders = {};
+    for (const tracking in normalizedOrderRes) {
+      const items = normalizedOrderRes[tracking];
+      if (!Array.isArray(items)) continue;
+      const remark = items.find(i => i.remark)?.remark || '';
+      if (remark) remarkFromOrders[tracking] = remark;
+      const first = items[0];
+      if (first?.marketplace) {
+        infoFromOrders[tracking] = { orderId: normOrderId(first.orderId || '', first.marketplace), marketplace: first.marketplace };
+      }
+    }
+    if (Object.keys(remarkFromOrders).length > 0) localStorage.setItem('orderRemarkMap', JSON.stringify(remarkFromOrders));
+    if (Object.keys(infoFromOrders).length > 0) localStorage.setItem('orderInfoMap', JSON.stringify(infoFromOrders));
+  } catch(e) { console.warn('[Order Cache] fetch ไม่ได้:', e.message); }
+}
+
+async function fetchBackgroundCache(cacheKey, cacheTimeKey) {
+  // ✅ legacy wrapper — ใช้โดย refreshAllCache (ปุ่มดึงข้อมูลใหม่)
+  // ล้าง product cache เพื่อบังคับ fetch ใหม่
+  localStorage.removeItem('productMap_hash');
+  await Promise.all([_fetchProductCacheNow(), _fetchOrderCacheBackground()]);
+  return Object.keys(productMap).length > 0;
+}
 }
 
 // ✅ v2.8: refresh เฉพาะ orders จาก GAS (ไม่ดึง product ซ้ำ — ประหยัด quota)
 // เรียกหลัง save สำเร็จ เพื่อให้ localOrdersCache สะท้อนสถานะล่าสุดจาก Sheet
 let _isRefreshingOrders = false;
 async function _refreshOrderCacheBackground() {
-  if (_isRefreshingOrders) return; // ไม่ยิงซ้อนกัน
+  if (_isRefreshingOrders) return;
   _isRefreshingOrders = true;
-  try {
-    const orderRes = await callGAS("getAllPendingOrders").catch(() => null);
-    if (orderRes && !orderRes.error) {
-      localStorage.setItem('localOrdersCache', JSON.stringify(orderRes));
-      // sync remark + orderInfo
-      const remarkFromOrders = {}, infoFromOrders = {};
-      for (const tracking in orderRes) {
-        const its = orderRes[tracking];
-        if (Array.isArray(its)) {
-          const remark = its.find(i => i.remark)?.remark || '';
-          if (remark) remarkFromOrders[tracking] = remark;
-          const first = its[0];
-          if (first?.marketplace) infoFromOrders[tracking] = { orderId: normOrderId(first.orderId || ''), marketplace: first.marketplace };
-        }
-      }
-      if (Object.keys(remarkFromOrders).length > 0) {
-        const ex = JSON.parse(localStorage.getItem('orderRemarkMap') || '{}');
-        localStorage.setItem('orderRemarkMap', JSON.stringify({ ...ex, ...remarkFromOrders }));
-      }
-      if (Object.keys(infoFromOrders).length > 0) {
-        const ex = JSON.parse(localStorage.getItem('orderInfoMap') || '{}');
-        localStorage.setItem('orderInfoMap', JSON.stringify({ ...ex, ...infoFromOrders }));
-      }
-      console.log('[Cache] refresh orders สำเร็จ:', Object.keys(orderRes).length, 'pending');
-    }
-  } catch(e) { console.warn('[Cache] _refreshOrderCacheBackground error:', e.message); }
+  await _fetchOrderCacheBackground();
   _isRefreshingOrders = false;
 }
 
@@ -3511,6 +3522,7 @@ function setupScanUI() {
     requestWakeLock();
     speak("ระบบพร้อมแล้วค่ะ เริ่มสแกนพัสดุได้เลย");
     startScan();
+    _startMarketplaceVersionPolling(); // ✅ เริ่ม poll version เพื่อรับออเดอร์ใหม่จากคอม
   } catch(err) {
     console.error('[setupScanUI error]', err);
     alert('เกิดข้อผิดพลาดในการเริ่มระบบ: ' + err.message);
@@ -3520,15 +3532,67 @@ function setupScanUI() {
   }
 }
 
+// ✅ Poll marketplace version ทุก 30 วินาที
+// ถ้า version เปลี่ยน (คอมอัปโหลดไฟล์ใหม่) → fetch order cache ใหม่อัตโนมัติ
+let _marketplaceVersionTimer = null;
+let _lastKnownMarketplaceVersion = localStorage.getItem('marketplaceVersion') || '0';
+
+// ✅ URL ของ marketplace_version.txt ใน Drive (public read)
+// GAS จะสร้างไฟล์นี้และ return URL ครั้งแรกที่ saveMarketplaceData ถูกเรียก
+// หลังจากนั้นมือถือ fetch ตรงเลยโดยไม่ผ่าน GAS — เร็ว ~100ms ไม่มี cold start
+let _marketplaceVersionFileUrl = localStorage.getItem('marketplaceVersionUrl') || '';
+
+function _startMarketplaceVersionPolling() {
+  if (!_marketplaceVersionFileUrl) {
+    // ยังไม่มี URL — ดึงจาก GAS ก่อนครั้งเดียว แล้วเก็บไว้ถาวร
+    callGAS("getMarketplaceVersionUrl").then(res => {
+      if (res && res.url) {
+        _marketplaceVersionFileUrl = res.url;
+        localStorage.setItem('marketplaceVersionUrl', res.url);
+        console.log('[Polling] ได้ version URL แล้ว — เริ่ม poll');
+        _scheduleVersionPoll();
+      }
+    }).catch(() => {});
+  } else {
+    _scheduleVersionPoll();
+  }
+}
+
+function _scheduleVersionPoll() {
+  if (_marketplaceVersionTimer) clearInterval(_marketplaceVersionTimer);
+  _marketplaceVersionTimer = setInterval(_pollMarketplaceVersion, 30000);
+  console.log('[Polling] เริ่ม poll marketplace version ทุก 30s (Drive direct fetch)');
+}
+
+async function _pollMarketplaceVersion() {
+  if (!_marketplaceVersionFileUrl) return;
+  try {
+    // ✅ fetch ตรงจาก Drive — ไม่ผ่าน GAS เลย ไม่มี cold start
+    const res = await fetch(_marketplaceVersionFileUrl + '&t=' + Date.now(), {
+      cache: 'no-store'
+    });
+    if (!res.ok) return;
+    const version = (await res.text()).trim();
+    if (version && version !== '0' && version !== _lastKnownMarketplaceVersion) {
+      console.log('[Polling] marketplace version เปลี่ยน →', version, '— fetch order cache ใหม่');
+      _lastKnownMarketplaceVersion = version;
+      localStorage.setItem('marketplaceVersion', version);
+      await _fetchOrderCacheBackground();
+      console.log('[Polling] order cache อัปเดตแล้ว');
+    }
+  } catch(e) {
+    // network error — ไม่ต้อง log เพราะอาจแค่ offline ชั่วคราว
+  }
+}
+
 async function refreshAllCache() {
   const btn = document.getElementById("refreshCacheBtn");
   btn.innerText = "⏳ กำลังดึงข้อมูล...";
   btn.disabled = true;
   try {
-    // ✅ ล้าง cache เก่าทั้งหมดก่อน fetch ใหม่
-    // เพื่อป้องกันข้อมูล SKU เก่า (ก่อนแก้ใน Sheet) ค้างปนกับข้อมูลใหม่
+    // ✅ ล้าง cache เก่าทั้งหมดก่อน fetch ใหม่ (รวม hash เพื่อบังคับ fetch product ใหม่)
     const CACHE_KEYS_TO_CLEAR = [
-      'productMap_cache', 'productMap_time',
+      'productMap_cache', 'productMap_time', 'productMap_hash',
       'localOrdersCache',
       'orderRemarkMap',
       'orderInfoMap'
@@ -4687,13 +4751,20 @@ function cellToStr(val) {
   return String(val).trim();
 }
 
-// ✅ normalize TikTok Order ID — เติม prefix "B" ถ้ายังไม่มี เพื่อให้ 1734417334917695307 == B1734417334917695307
-// ใช้กับทุกจุดที่ set/get orderId เพื่อให้ key ใน orderInfoMap สม่ำเสมอ
-function normOrderId(id) {
+// normalize Order ID — คืนค่าตรงๆ (ไม่แปลง)
+function normOrderId(id, marketplace) {
   if (!id) return '';
-  const s = String(id).trim();
-  // ถ้าเป็นตัวเลขล้วน (ยังไม่มี B) ให้เติม B นำหน้า
-  return /^\d+$/.test(s) ? 'B' + s : s;
+  return String(id).trim();
+}
+
+// ✅ normalize SKU — เติม prefix "B" เฉพาะ TikTok SKU ที่เป็นตัวเลขล้วน
+// TikTok SKU จริงขึ้นต้นด้วย B เสมอ เช่น B1234567890
+// marketplace อื่น (Shopee, Lazada, Page365) ไม่แตะ
+function normSku(sku, marketplace) {
+  if (!sku) return '';
+  const s = String(sku).trim().toUpperCase();
+  if ((marketplace || '').toLowerCase() === 'tiktok' && /^\d+$/.test(s)) return 'B' + s;
+  return s;
 }
 
 async function processFileUpload() {
@@ -4754,7 +4825,7 @@ async function processFileUpload() {
       for (let i = startRow; i < rows.length; i++) {
         const row = rows[i]; if (!row) { lazSkipped++; continue; }
         const tracking = cellToStr(row[useMap.tracking]).toUpperCase();
-        const sku      = cellToStr(row[useMap.sku]).toUpperCase();
+        const sku      = normSku(cellToStr(row[useMap.sku]), marketplace);
         if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') {
           lazSkipped++;
           console.log(`[Lazada] skip row ${i}: tracking='${tracking}', sku='${sku}', raw_tracking=${JSON.stringify(row[useMap.tracking])}, raw_sku=${JSON.stringify(row[useMap.sku])}`);
@@ -4765,7 +4836,7 @@ async function processFileUpload() {
         trackingMap[key] = (trackingMap[key] || 0) + 1;
         // ✅ ดึง orderId
         if (!orderInfoMap[tracking] && useMap.orderId !== undefined) {
-          const oid = normOrderId(cellToStr(row[useMap.orderId]));
+          const oid = normOrderId(cellToStr(row[useMap.orderId]), marketplace);
           if (oid) orderInfoMap[tracking] = { orderId: oid, marketplace };
         }
         // ดึง remark (Lazada: sellerNote)
@@ -4790,16 +4861,15 @@ async function processFileUpload() {
       for (let i = startRow; i < rows.length; i++) {
         const row = rows[i]; if (!row) continue;
         const tracking = cellToStr(row[useMap.tracking]).toUpperCase();
-        const sku      = cellToStr(row[useMap.sku]).toUpperCase();
+        const sku      = normSku(cellToStr(row[useMap.sku]), marketplace);
         const qty      = parseInt(row[useMap.qty]) || 1;
         if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
         if (tracking.length < 5 || tracking.includes(' ')) continue;
-        // ✅ สะสม qty (Shopee อาจแตก row เดิม SKU เดิมหลาย row ให้ qty รวมถูกต้อง)
         const key = tracking + '|' + sku;
         trackingSkuMap[key] = (trackingSkuMap[key] || 0) + qty;
         // ✅ ดึง orderId — รองรับ "การจัดส่งแบบรวม" (tracking เดียว หลาย orderId)
         if (useMap.orderId !== undefined) {
-          const oid = normOrderId(cellToStr(row[useMap.orderId]));
+          const oid = normOrderId(cellToStr(row[useMap.orderId]), marketplace);
           if (oid) {
             if (!orderInfoMap[tracking]) {
               orderInfoMap[tracking] = { orderId: oid, marketplace };
@@ -4886,6 +4956,9 @@ async function processFileUpload() {
       const bfMsg = response.backfilled > 0 ? `\n(เติม OrderId ย้อนหลัง ${response.backfilled} แถว)` : '';
       Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${response.count} รายการ${dupMsg}${bfMsg}`, 'success');
       document.getElementById('fileInput').value = "";
+      // ✅ อัปโหลดไฟล์ marketplace สำเร็จ → fetch order cache ใหม่ทันที
+      console.log('[Order Cache] อัปโหลด marketplace สำเร็จ — กำลัง refresh order cache...');
+      _fetchOrderCacheBackground();
     } else {
       Swal.fire('ข้อผิดพลาด', 'บันทึกไม่สำเร็จ: ' + escHtml(response?.error || ''), 'error');
     }
