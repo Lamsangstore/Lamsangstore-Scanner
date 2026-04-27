@@ -3496,7 +3496,6 @@ async function fetchBackgroundCache(cacheKey, cacheTimeKey) {
   await Promise.all([_fetchProductCacheNow(), _fetchOrderCacheBackground()]);
   return Object.keys(productMap).length > 0;
 }
-}
 
 // ✅ v2.8: refresh เฉพาะ orders จาก GAS (ไม่ดึง product ซ้ำ — ประหยัด quota)
 // เรียกหลัง save สำเร็จ เพื่อให้ localOrdersCache สะท้อนสถานะล่าสุดจาก Sheet
