@@ -1,0 +1,759 @@
+/**
+ * Google Apps Script: Backend สำหรับ Scanner PRO 3.1 (Hardened Edition)
+ *
+ * ✅ v3.1 changes:
+ *  - API key check (จาก PropertiesService — รัน setupApiKey() ครั้งเดียว)
+ *  - Rate limit ต่อ action (CacheService, per-minute bucket)
+ *  - จำกัดขนาด video upload (กัน Drive bombing)
+ *  - Input validation ทุก action
+ *  - Action allowlist
+ *
+ * 🚀 วิธี deploy (ครั้งแรก):
+ *  1. เปิด script.google.com → โปรเจคนี้
+ *  2. รัน setupApiKey() ใน editor — ใส่ key เดียวกับใน index.html (GAS_API_KEY)
+ *  3. Deploy → New deployment → Web app → Execute as me, Anyone access
+ *  4. ก็อป URL ใหม่ ใส่ใน index.html (GAS_URL)
+ *
+ * 🔁 หมุน key เมื่อโดน leak:
+ *  - เปลี่ยน GAS_API_KEY ใน index.html
+ *  - รัน setupApiKey() ใน editor ด้วย key ใหม่
+ *  - ไม่ต้อง re-deploy
+ */
+
+const SHEET_ORDERS      = "Orders";
+const SHEET_SEARCH      = "Search";
+const SHEET_PRODUCTS    = "Product name";
+const SHEET_MARKETPLACE = "MarketplaceData";
+const TARGET_FOLDER_ID  = "1uC2i5w5p9MhEYK2DhV6LGh1KfZF-GlVG";
+
+// กัน Drive bombing — base64 ~14MB ≈ raw video ~10MB
+const MAX_VIDEO_BASE64_LEN = 14 * 1024 * 1024;
+
+// Rate limit ต่อนาที (รวมทุกผู้ใช้)
+const RATE_LIMITS = {
+  saveData: 120,
+  saveMarketplaceData: 60,
+  getAllPendingOrders: 60,
+  getProductData: 60,
+  searchData: 120,
+  getReportData: 30,
+  getExpectedOrderDetails: 240,
+  getSpreadsheetUrl: 30,
+  getMarketplaceVersionUrl: 30,
+  _default: 120
+};
+
+const ALLOWED_ACTIONS = new Set([
+  "getProductData", "saveData", "searchData", "saveMarketplaceData",
+  "getExpectedOrderDetails", "getReportData", "getAllPendingOrders",
+  "getSpreadsheetUrl", "getMarketplaceVersionUrl"
+]);
+
+// ============================================================
+// ✅ setupApiKey — รันครั้งเดียวใน editor เพื่อ set key
+// เปิด Apps Script editor → เลือกฟังก์ชัน setupApiKey → Run
+// แล้วใส่ค่าใหม่ลงในตัวแปร NEW_KEY ก่อนรัน
+// ============================================================
+function setupApiKey() {
+  const NEW_KEY = "PASTE-NEW-API-KEY-HERE";
+  if (NEW_KEY === "PASTE-NEW-API-KEY-HERE") {
+    throw new Error("กรุณาเปลี่ยน NEW_KEY ในโค้ดก่อนรัน");
+  }
+  PropertiesService.getScriptProperties().setProperty('API_KEY', NEW_KEY);
+  Logger.log("✅ API key ถูกตั้งแล้ว (ความยาว " + NEW_KEY.length + ")");
+}
+
+// ============================================================
+// _checkApiKey — verify request มี apiKey ตรงกับที่เก็บไว้
+// ============================================================
+function _checkApiKey(body) {
+  const expected = PropertiesService.getScriptProperties().getProperty('API_KEY');
+  if (!expected) return false; // ยังไม่ได้ set → ปฏิเสธทุก request
+  const got = String(body.apiKey || "");
+  if (got.length !== expected.length) return false;
+  // constant-time compare
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) {
+    diff |= expected.charCodeAt(i) ^ got.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+// ============================================================
+// _checkRateLimit — global per-action throttle
+// ============================================================
+function _checkRateLimit(action) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const bucket = Math.floor(Date.now() / 60000); // per-minute
+    const key = 'rl_' + action + '_' + bucket;
+    const limit = RATE_LIMITS[action] || RATE_LIMITS._default;
+    const current = parseInt(cache.get(key) || '0', 10);
+    if (current >= limit) {
+      Logger.log("[rate-limit] action=" + action + " current=" + current + " limit=" + limit);
+      return false;
+    }
+    cache.put(key, String(current + 1), 70);
+    return true;
+  } catch (e) {
+    // ถ้า cache พัง → ปล่อยผ่าน (fail-open) ดีกว่าทำเว็บใช้ไม่ได้
+    Logger.log("[rate-limit] cache error: " + e.message);
+    return true;
+  }
+}
+
+// ============================================================
+// numToStr — แปลงค่าจาก Sheet เป็น string ที่ถูกต้อง
+// ============================================================
+function numToStr(val) {
+  if (val === null || val === undefined || val === "") return "";
+  if (typeof val === "number") {
+    return val.toLocaleString("fullwide", { useGrouping: false, maximumFractionDigits: 0 });
+  }
+  return String(val).trim();
+}
+
+// ============================================================
+// doPost — entry point
+// ============================================================
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return _json({ error: "Empty body" });
+    }
+    let body;
+    try {
+      body = JSON.parse(e.postData.contents);
+    } catch (parseErr) {
+      return _json({ error: "Bad JSON" });
+    }
+
+    if (!body || typeof body !== 'object') {
+      return _json({ error: "Bad body" });
+    }
+
+    if (!_checkApiKey(body)) {
+      Utilities.sleep(500); // slow down brute force a bit
+      return _json({ error: "Unauthorized" });
+    }
+
+    const action = String(body.action || "");
+    if (!ALLOWED_ACTIONS.has(action)) {
+      return _json({ error: "Unknown action" });
+    }
+
+    if (!_checkRateLimit(action)) {
+      return _json({ error: "Rate limit exceeded" });
+    }
+
+    let result;
+    if      (action === "getProductData")             result = getProductData();
+    else if (action === "saveData")                   result = saveData(body);
+    else if (action === "searchData")                 result = searchData(body.query);
+    else if (action === "saveMarketplaceData")        result = saveMarketplaceData(body);
+    else if (action === "getExpectedOrderDetails")    result = getExpectedOrderDetails(body.trackingNo);
+    else if (action === "getReportData")              result = getReportData(body.start, body.end);
+    else if (action === "getAllPendingOrders")        result = getAllPendingOrders();
+    else if (action === "getSpreadsheetUrl")          result = getSpreadsheetUrl();
+    else if (action === "getMarketplaceVersionUrl")   result = getMarketplaceVersionUrl();
+
+    return _json(result);
+
+  } catch (err) {
+    Logger.log("[doPost] error: " + err.toString());
+    return _json({ error: "Server error" }); // ไม่คืน stack ให้ client เห็น
+  }
+}
+
+function _json(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  return _json({ status: "Scanner PRO 3.1 API is running" });
+}
+
+// ============================================================
+// _bumpMarketplaceVersion
+// ============================================================
+function _bumpMarketplaceVersion() {
+  try {
+    const folder = DriveApp.getFolderById(TARGET_FOLDER_ID);
+    const version = Date.now().toString();
+    const files = folder.getFilesByName('marketplace_version.txt');
+    if (files.hasNext()) {
+      files.next().setContent(version);
+    } else {
+      const f = folder.createFile('marketplace_version.txt', version, MimeType.PLAIN_TEXT);
+      f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    }
+    Logger.log('[_bumpMarketplaceVersion] version = ' + version);
+  } catch(e) {
+    Logger.log('[_bumpMarketplaceVersion] error: ' + e.message);
+  }
+}
+
+function getMarketplaceVersionUrl() {
+  try {
+    const folder = DriveApp.getFolderById(TARGET_FOLDER_ID);
+    const files = folder.getFilesByName('marketplace_version.txt');
+    let fileId;
+    if (files.hasNext()) {
+      fileId = files.next().getId();
+    } else {
+      const f = folder.createFile('marketplace_version.txt', '0', MimeType.PLAIN_TEXT);
+      f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      fileId = f.getId();
+    }
+    return { url: 'https://drive.google.com/uc?export=download&id=' + fileId };
+  } catch(e) {
+    Logger.log('[getMarketplaceVersionUrl] error: ' + e.message);
+    return { url: '' };
+  }
+}
+
+// ============================================================
+// getProductData
+// ============================================================
+function getProductData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_PRODUCTS);
+    if (!sheet) return {};
+    const data = sheet.getDataRange().getValues();
+    const productMap = {};
+    for (let i = 1; i < data.length; i++) {
+      let sku  = String(data[i][0]).trim();
+      let name = String(data[i][3]).trim();
+      if (sku) productMap[sku] = name;
+    }
+    return productMap;
+  } catch (e) {
+    Logger.log("Error in getProductData: " + e.message);
+    return {};
+  }
+}
+
+// ============================================================
+// saveData — Dedup + LockService + size limit + input validation
+// ============================================================
+function saveData(body) {
+  // --- validate input ---
+  const parcelId = String(body.parcelId || "").trim();
+  if (!parcelId) return { success: false, error: "parcelId ว่าง" };
+  if (parcelId.length > 64) return { success: false, error: "parcelId ยาวเกินไป" };
+
+  const items = Array.isArray(body.items) ? body.items : [];
+  if (items.length > 500) return { success: false, error: "items มากเกินไป" };
+
+  const videoBase64 = String(body.videoEvidence || "");
+  if (videoBase64.length > MAX_VIDEO_BASE64_LEN) {
+    Logger.log("[saveData] video too large: " + videoBase64.length + " bytes");
+    return { success: false, error: "Video too large" };
+  }
+
+  const orderId     = String(body.orderId || "").slice(0, 128);
+  const marketplace = String(body.marketplace || "").slice(0, 32);
+  const remark      = String(body.remark || "").slice(0, 500);
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch(e) {
+    Logger.log("[saveData] ไม่ได้ lock ภายใน 10s: " + e.message);
+    return { success: false, error: "Server busy, please retry" };
+  }
+
+  try {
+    const ss    = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_ORDERS) || ss.insertSheet(SHEET_ORDERS);
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const trackingCol = sheet.getRange(2, 4, lastRow - 1, 1).getValues();
+      for (let i = 0; i < trackingCol.length; i++) {
+        const existing = numToStr(trackingCol[i][0]).toUpperCase();
+        if (existing === parcelId.toUpperCase()) {
+          Logger.log("[saveData] Duplicate skipped: " + parcelId);
+          if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
+            _tryUpdateVideoUrl(sheet, i + 2, parcelId, videoBase64);
+          }
+          return { success: true, note: "duplicate_skipped" };
+        }
+      }
+    }
+
+    let videoUrl = "no_video";
+    if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
+      try {
+        const decoded = Utilities.base64Decode(videoBase64);
+        const blob    = Utilities.newBlob(decoded, "video/webm", parcelId + ".webm");
+        const folder  = DriveApp.getFolderById(TARGET_FOLDER_ID);
+        const file    = folder.createFile(blob);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        videoUrl = file.getUrl();
+      } catch (videoErr) {
+        Logger.log("Video upload error: " + videoErr.message);
+        videoUrl = "upload_failed";
+      }
+    } else if (videoBase64 === "video_too_large") {
+      videoUrl = "video_too_large";
+    }
+
+    const timestamp = new Date();
+    const row = [timestamp, orderId, marketplace, parcelId, videoUrl, remark, items.length, ...items.slice(0, 500).map(String)];
+    sheet.appendRow(row);
+    Logger.log("[saveData] บันทึก: " + parcelId + " | video: " + videoUrl.substring(0, 40));
+
+    try {
+      const props = PropertiesService.getScriptProperties();
+      const packed = JSON.parse(props.getProperty('packedTrackings') || '[]');
+      if (!packed.includes(parcelId.toUpperCase())) {
+        packed.push(parcelId.toUpperCase());
+        const cutoff = Date.now() - (3 * 24 * 60 * 60 * 1000);
+        const ts = JSON.parse(props.getProperty('packedTs') || '{}');
+        ts[parcelId.toUpperCase()] = Date.now();
+        const fresh = packed.filter(id => (ts[id] || 0) > cutoff);
+        const freshTs = {};
+        fresh.forEach(id => { freshTs[id] = ts[id]; });
+        props.setProperty('packedTrackings', JSON.stringify(fresh));
+        props.setProperty('packedTs', JSON.stringify(freshTs));
+      }
+    } catch(propErr) {
+      Logger.log("[saveData] PropertiesService error: " + propErr.message);
+    }
+
+    return { success: true };
+  } catch (e) {
+    Logger.log("Error in saveData: " + e.message);
+    return { success: false, error: e.toString() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function _tryUpdateVideoUrl(sheet, rowIndex, parcelId, videoBase64) {
+  try {
+    const currentVideoUrl = String(sheet.getRange(rowIndex, 5).getValue()).trim();
+    if (currentVideoUrl !== "no_video") return;
+    if (videoBase64.length > MAX_VIDEO_BASE64_LEN) return;
+
+    const decoded = Utilities.base64Decode(videoBase64);
+    const blob    = Utilities.newBlob(decoded, "video/webm", parcelId + "_retry.webm");
+    const folder  = DriveApp.getFolderById(TARGET_FOLDER_ID);
+    const file    = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    sheet.getRange(rowIndex, 5).setValue(file.getUrl());
+    Logger.log("[saveData] อัปเดตวิดีโอให้แถว " + rowIndex + ": " + parcelId);
+  } catch(e) {
+    Logger.log("[_tryUpdateVideoUrl] error: " + e.message);
+  }
+}
+
+// ============================================================
+// searchData
+// ============================================================
+function searchData(query) {
+  try {
+    const keyword = String(query || "").trim().toUpperCase();
+    if (!keyword || keyword.length > 64) return [];
+
+    const ss    = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_SEARCH) || ss.getSheetByName(SHEET_ORDERS);
+    if (!sheet) return [];
+    const data    = sheet.getDataRange().getValues();
+    const results = [];
+
+    for (let i = 0; i < data.length; i++) {
+      const strB = numToStr(data[i][1]).toUpperCase();
+      const strD = numToStr(data[i][3]).toUpperCase();
+
+      if (strB.includes(keyword) || strD.includes(keyword)) {
+        const rowFormatted = data[i].map(c => {
+          if (c instanceof Date) return Utilities.formatDate(c, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
+          return numToStr(c);
+        });
+        results.push(rowFormatted);
+      }
+    }
+    return results.sort((a, b) => new Date(b[0]) - new Date(a[0]));
+  } catch (e) {
+    return [];
+  }
+}
+
+// ============================================================
+// setupMarketplaceSheet
+// ============================================================
+function setupMarketplaceSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_MARKETPLACE);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_MARKETPLACE);
+    sheet.appendRow(["Timestamp", "Marketplace", "TrackingNo", "SKU", "Qty", "Remark", "OrderId"]);
+    sheet.setFrozenRows(1);
+  } else {
+    const headerRow = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 7)).getValues()[0];
+    if (headerRow.length < 6 || String(headerRow[5]).trim() === "") {
+      sheet.getRange(1, 6).setValue("Remark");
+    }
+    if (headerRow.length < 7 || String(headerRow[6]).trim() === "") {
+      sheet.getRange(1, 7).setValue("OrderId");
+    }
+  }
+  return sheet;
+}
+
+// ============================================================
+// saveMarketplaceData
+// ============================================================
+function saveMarketplaceData(body) {
+  try {
+    const dataArray = Array.isArray(body.data) ? body.data : [];
+    if (dataArray.length > 10000) return { success: false, error: "data มากเกินไป" };
+
+    const fileName    = String(body.fileName    || "").slice(0, 200);
+    const marketplace = String(body.marketplace || "").slice(0, 32);
+    const sheet       = setupMarketplaceSheet();
+    const timestamp   = new Date();
+
+    const logSheet = getOrCreateSheet("UploadLog", ["Timestamp","FileName","Marketplace","Count"]);
+
+    const existingData = sheet.getDataRange().getValues();
+    const existingKeys = new Set();
+    for (let i = 1; i < existingData.length; i++) {
+      const t   = numToStr(existingData[i][2]).toUpperCase();
+      const sku = numToStr(existingData[i][3]).toUpperCase();
+      const oid = numToStr(existingData[i][6]);
+      existingKeys.add(t + '|' + sku + '|' + oid);
+    }
+
+    let newRows = [];
+    let duplicateSkipped = 0;
+    dataArray.forEach(item => {
+      if (!item || typeof item !== 'object') return;
+      const t   = String(item.tracking || "").trim().toUpperCase();
+      const sku = String(item.sku || "").trim().toUpperCase();
+      const oid = String(item.orderId || "").trim();
+      if (!t || !sku) return;
+      const key = t + '|' + sku + '|' + oid;
+      if (existingKeys.has(key)) { duplicateSkipped++; return; }
+      existingKeys.add(key);
+      newRows.push([
+        timestamp,
+        marketplace,
+        "'" + t,
+        "'" + sku,
+        Number(item.qty) || 1,
+        String(item.remark || "").trim().slice(0, 500),
+        "'" + oid
+      ]);
+    });
+
+    if (newRows.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, 7).setValues(newRows);
+    }
+
+    logSheet.appendRow([timestamp, fileName, marketplace, newRows.length]);
+
+    cleanUpOldMarketplaceData();
+
+    if (newRows.length > 0) _bumpMarketplaceVersion();
+
+    return { success: true, count: newRows.length, duplicateSkipped };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function getOrCreateSheet(name, headers) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) { sheet = ss.insertSheet(name); sheet.appendRow(headers); sheet.setFrozenRows(1); }
+  return sheet;
+}
+
+// ============================================================
+// getExpectedOrderDetails
+// ============================================================
+function getExpectedOrderDetails(trackingNo) {
+  try {
+    const targetTracking = numToStr(trackingNo).trim().toUpperCase();
+    if (!targetTracking || targetTracking.length > 64) return [];
+
+    const sheet          = setupMarketplaceSheet();
+    const data           = sheet.getDataRange().getValues();
+    let expectedItems    = {};
+    let trackingRemark   = "";
+
+    for (let i = 1; i < data.length; i++) {
+      let rowTracking = numToStr(data[i][2]).toUpperCase();
+      if (rowTracking === targetTracking) {
+        let sku    = numToStr(data[i][3]).toUpperCase();
+        let qty    = Number(data[i][4]) || 1;
+        let remark = String(data[i][5] || "").trim();
+        expectedItems[sku] = (expectedItems[sku] || 0) + qty;
+        if (!trackingRemark && remark) trackingRemark = remark;
+      }
+    }
+
+    return Object.entries(expectedItems).map(([sku, qty]) => ({
+      sku,
+      qty,
+      remark: trackingRemark
+    }));
+  } catch (e) {
+    return [];
+  }
+}
+
+// ============================================================
+// getReportData
+// ============================================================
+function getReportData(startStr, endStr) {
+  try {
+    const ss    = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_ORDERS);
+    if (!sheet) return { totalOrders: 0, totalItems: 0, allProducts: [], dailyBreakdown: {} };
+
+    const start = new Date(startStr); start.setHours(0,0,0,0);
+    const end   = new Date(endStr);   end.setHours(23,59,59,999);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return { totalOrders: 0, totalItems: 0, allProducts: [], dailyBreakdown: {} };
+    }
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { totalOrders: 0, totalItems: 0, allProducts: [], dailyBreakdown: {} };
+
+    const tsCol = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    let rowStart = -1, rowEnd = -1;
+    for (let i = 0; i < tsCol.length; i++) {
+      const d = new Date(tsCol[i][0]);
+      if (isNaN(d)) continue;
+      if (d >= start && rowStart === -1) rowStart = i;
+      if (d <= end) rowEnd = i;
+    }
+    if (rowStart === -1 || rowEnd < rowStart) {
+      return { totalOrders: 0, totalItems: 0, allProducts: [], dailyBreakdown: {} };
+    }
+
+    const numRows = rowEnd - rowStart + 1;
+    const lastCol = sheet.getLastColumn();
+    const data    = sheet.getRange(rowStart + 2, 1, numRows, lastCol).getValues();
+
+    let totalOrders = 0, totalItems = 0;
+    const skuCount = {};
+    const dailyBreakdown = {};
+    const tz = Session.getScriptTimeZone();
+    const seenTrackings = new Set();
+
+    for (let i = 0; i < data.length; i++) {
+      const row     = data[i];
+      const rowDate = new Date(row[0]);
+      if (isNaN(rowDate) || rowDate < start || rowDate > end) continue;
+
+      const tracking = numToStr(row[3]).toUpperCase();
+      if (tracking && seenTrackings.has(tracking)) continue;
+      if (tracking) seenTrackings.add(tracking);
+
+      totalOrders++;
+      const dayKey = Utilities.formatDate(rowDate, tz, "yyyy-MM-dd");
+      if (!dailyBreakdown[dayKey]) dailyBreakdown[dayKey] = { orders: 0, items: 0 };
+      dailyBreakdown[dayKey].orders++;
+
+      for (let c = 7; c < row.length; c++) {
+        const val = String(row[c]).trim();
+        if (!val) continue;
+        totalItems++;
+        dailyBreakdown[dayKey].items++;
+        skuCount[val] = (skuCount[val] || 0) + 1;
+      }
+    }
+
+    const productSheet = ss.getSheetByName("Product name");
+    const productMap   = {};
+    if (productSheet) {
+      const pData = productSheet.getDataRange().getValues();
+      for (let i = 1; i < pData.length; i++) {
+        const sku  = String(pData[i][0]).trim();
+        const name = String(pData[i][3]).trim();
+        if (sku) productMap[sku] = name || sku;
+      }
+    }
+
+    const allProducts = Object.entries(skuCount)
+      .map(([sku, count]) => ({ sku, name: productMap[sku] || sku, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return { totalOrders, totalItems, allProducts, dailyBreakdown };
+  } catch(e) {
+    return { totalOrders: 0, totalItems: 0, allProducts: [], dailyBreakdown: {}, error: e.toString() };
+  }
+}
+
+// ============================================================
+// cleanUpOldMarketplaceData
+// ============================================================
+function cleanUpOldMarketplaceData() {
+  try {
+    const sheet = setupMarketplaceSheet();
+    const data  = sheet.getDataRange().getValues();
+    if (data.length <= 1) return;
+
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+    const newData = [data[0]];
+    for (let i = 1; i < data.length; i++) {
+      if (new Date(data[i][0]) >= threeDaysAgo) {
+        const row = data[i];
+        while (row.length < 7) row.push("");
+        newData.push(row);
+      }
+    }
+
+    if (newData.length !== data.length) {
+      sheet.clearContents();
+      sheet.getRange(1, 1, newData.length, 7).setValues(newData);
+    }
+  } catch (e) {
+    Logger.log("Error cleaning up marketplace: " + e.message);
+  }
+}
+
+// ============================================================
+// cleanUpOldOrders
+// ============================================================
+function cleanUpOldOrders() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_ORDERS);
+    if (!sheet) {
+      Logger.log("Orders sheet not found: " + SHEET_ORDERS);
+      return;
+    }
+
+    const data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return;
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 90);
+    cutoff.setHours(0, 0, 0, 0);
+
+    const newData  = [data[0]];
+    const colCount = data[0].length;
+
+    for (let i = 1; i < data.length; i++) {
+      const rowDate = new Date(data[i][0]);
+      if (!isNaN(rowDate.getTime()) && rowDate >= cutoff) {
+        const row = data[i];
+        while (row.length < colCount) row.push("");
+        newData.push(row);
+      }
+    }
+
+    if (newData.length !== data.length) {
+      const deletedCount = data.length - newData.length;
+      sheet.clearContents();
+      sheet.getRange(1, 1, newData.length, colCount).setValues(newData);
+      Logger.log("ลบรายการเก่า (เกิน 90 วัน) ออกทั้งหมด " + deletedCount + " รายการ");
+    } else {
+      Logger.log("ไม่พบรายการที่เก่ากว่า 90 วัน");
+    }
+  } catch (e) {
+    Logger.log("Error in cleanUpOldOrders: " + e.message);
+  }
+}
+
+function setupDailyCleanupTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === "cleanUpOldOrders") {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+  ScriptApp.newTrigger("cleanUpOldOrders")
+    .timeBased()
+    .everyDays(1)
+    .atHour(2)
+    .create();
+  Logger.log("✅ Daily cleanup trigger set: cleanUpOldOrders จะรันทุกวันเวลา 02:00 น.");
+}
+
+// ============================================================
+// getAllPendingOrders
+// ============================================================
+function getAllPendingOrders() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    const orderSheet = ss.getSheetByName(SHEET_ORDERS);
+    const packedTrackings = new Set();
+    if (orderSheet) {
+      const lastRow = orderSheet.getLastRow();
+      if (lastRow > 1) {
+        const colD = orderSheet.getRange(2, 4, lastRow - 1, 1).getValues();
+        colD.forEach(r => {
+          const t = numToStr(r[0]).toUpperCase();
+          if (t) packedTrackings.add(t);
+        });
+      }
+    }
+
+    try {
+      const props = PropertiesService.getScriptProperties();
+      const propPacked = JSON.parse(props.getProperty('packedTrackings') || '[]');
+      propPacked.forEach(t => packedTrackings.add(String(t).toUpperCase()));
+    } catch(e) {
+      Logger.log("[getAllPendingOrders] PropertiesService error: " + e.message);
+    }
+
+    const sheet = ss.getSheetByName(SHEET_MARKETPLACE);
+    if (!sheet) return {};
+
+    const data = sheet.getDataRange().getValues();
+    const result = {};
+
+    for (let i = 1; i < data.length; i++) {
+      const marketplace = String(data[i][1] || "").trim().toLowerCase();
+      const tracking    = numToStr(data[i][2]).toUpperCase();
+      const sku         = numToStr(data[i][3]).toUpperCase();
+      const qty         = parseInt(data[i][4]) || 1;
+      const remark      = String(data[i][5] || "").trim();
+      const orderId     = numToStr(data[i][6]);
+
+      if (!tracking || !sku) continue;
+      if (packedTrackings.has(tracking)) continue;
+
+      if (!result[tracking]) result[tracking] = [];
+
+      const existing = result[tracking].find(function(item) { return item.sku === sku; });
+      if (existing) {
+        existing.qty += qty;
+        if (!existing.remark && remark) existing.remark = remark;
+        if (orderId && !existing.orderId.split(',').map(s=>s.trim()).includes(orderId)) {
+          existing.orderId = existing.orderId ? existing.orderId + ',' + orderId : orderId;
+        }
+      } else {
+        result[tracking].push({ sku, qty, remark, orderId, marketplace });
+      }
+    }
+
+    return result;
+  } catch (e) {
+    Logger.log("Error in getAllPendingOrders: " + e.message);
+    return {};
+  }
+}
+
+// ============================================================
+// getSpreadsheetUrl
+// ============================================================
+function getSpreadsheetUrl() {
+  try {
+    return { url: SpreadsheetApp.getActiveSpreadsheet().getUrl() };
+  } catch(e) {
+    return { url: '', error: e.toString() };
+  }
+}

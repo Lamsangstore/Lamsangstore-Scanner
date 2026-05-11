@@ -2570,6 +2570,7 @@
 // ⚙️ CONFIG
 // ============================================================
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz9V3qh2Ea8sapU7BLMZTlrC4HqWxL6ku5dwzIOpNBu2Gf-bIzl8Oe1G4FB9vcVDKp8yQ/exec";
+const GAS_API_KEY = "f0306260b4cf9101212d46ac8ddf2eacf7c41c8230dd69eae73a3e62c0036815";
 
 // --- Hash Routing ---
 function navigateByHash() {
@@ -2811,6 +2812,7 @@ function _flushPendingUploads() {
           headers: { "Content-Type": "text/plain" },
           body: JSON.stringify({
             action: "saveData",
+            apiKey: GAS_API_KEY,
             parcelId: job.pId,
             items: job.itemsArr,
             videoEvidence: job.videoBase64 || "no_video",
@@ -2838,6 +2840,7 @@ function _flushWithBeacon() {
       _flushedIds.add(job.pId);
       const payload = JSON.stringify({
         action: "saveData",
+        apiKey: GAS_API_KEY,
         parcelId: job.pId,
         items: job.itemsArr,
         videoEvidence: job.videoBase64 || "no_video",
@@ -3202,7 +3205,7 @@ async function callGAS(action, payload = {}, timeoutMs = 15000) {
     const res = await fetch(GAS_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ action, ...payload }),
+      body: JSON.stringify({ action, apiKey: GAS_API_KEY, ...payload }),
       signal: controller.signal
     });
     const text = await res.text();
