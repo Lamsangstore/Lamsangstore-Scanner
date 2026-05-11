@@ -3903,20 +3903,13 @@ async function processFinalScan(text) {
       finishWork(false); return;
     }
     if (currentP && upperText !== currentP && !isEditingId) {
-      if (isStrictValidationMode && !validateCurrentOrder()) {
-        let hasOver = false;
-        for (let sSku in scannedItemsMap) {
-          const req = expectedItemsArray.find(ex => ex.sku === sSku);
-          if (!req || scannedItemsMap[sSku] > req.qty) { hasOver = true; break; }
-        }
-        if (hasOver) {
-          beep('warn'); speak("มีสินค้าเกินจำนวนค่ะ กรุณาแก้ไขก่อน", false);
-          setStatus(_S.err + "สินค้าเกินจำนวน — แก้ไขก่อนเปิดงานใหม่", "danger"); return;
-        }
-        beep('warn'); speak("สินค้าไม่ครบค่ะ กรุณากดบันทึกบนหน้าจอก่อน", false);
-        setStatus(_S.warn + "สินค้าไม่ครบ — กดปุ่มบันทึกก่อนเปิดงานใหม่", "warning"); return;
+      if (items.length > 0) {
+        beep('warn'); vibrate([100, 50, 100]);
+        const lastFour = currentP.length >= 4 ? currentP.slice(-4).split('').join(' ') : currentP;
+        speak(`กรุณาสแกนพัสดุใบเดิม ลงท้าย ${lastFour} เพื่อปิดงานก่อนค่ะ`, false);
+        setStatus(_S.warn + "กรุณาสแกนพัสดุใบเดิม " + currentP + " เพื่อปิดงานก่อน", "warning");
+        return;
       }
-      if (items.length > 0) await finishWork(false);
     }
     processNewParcel(upperText, carrier);
   } else if (detection.type === "incomplete") {
