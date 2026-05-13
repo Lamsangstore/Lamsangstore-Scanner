@@ -2705,6 +2705,7 @@ let expectedItemsArray = [], scannedItemsMap = {}, isStrictValidationMode = fals
 let currentRemark = '';
 let orderRemarkMap = {}; // { trackingNo: remarkText } — หมายเหตุลูกค้าจากไฟล์ Marketplace 
 let mediaRecorder, recordedChunks = [], cameraStream = null, isRecording = false;
+let cameraStreamOwned = false; // true = เปิดเอง (ต้องปิดเอง), false = ยืม scanner stream
 let currentVideoMime = 'video/webm';
 let currentVideoExt  = 'webm';
 
@@ -3260,15 +3261,31 @@ async function startCameraRecording(resetChunks = true) {
   const videoEl = document.getElementById('video-preview');
   const canvas = document.getElementById('overlayCanvas');
   const ctx = canvas.getContext('2d');
-  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
-  
+  if (cameraStream && cameraStreamOwned) { cameraStream.getTracks().forEach(t => t.stop()); }
+  cameraStream = null;
+  cameraStreamOwned = false;
+
   try {
-    // ลองกล้องหลังก่อน ถ้าไม่ได้ fallback เป็น default
-    try {
-      cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-    } catch(e) {
-      console.warn('[Camera] environment facingMode ไม่รองรับ ใช้ default แทน:', e.message);
-      cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    // ✅ ยืม stream จาก Html5Qrcode scanner ถ้ามี — กันกล้องหน้าโผล่บน iOS เมื่อเปิดกล้องซ้อน
+    const scannerVideo = document.querySelector('#reader video');
+    if (scannerVideo && scannerVideo.srcObject && scannerVideo.readyState >= 2) {
+      cameraStream = scannerVideo.srcObject;
+      cameraStreamOwned = false;
+      console.log('[Camera] reuse scanner stream (back camera)');
+    } else {
+      // fallback: เปิด stream ของตัวเอง — ลองกล้องหลังก่อน ถ้าไม่ได้ใช้ default
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false });
+      } catch(e1) {
+        console.warn('[Camera] exact environment ไม่ได้ ลอง ideal:', e1.message);
+        try {
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+        } catch(e2) {
+          console.warn('[Camera] ideal environment ไม่ได้ ใช้ default:', e2.message);
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+      }
+      cameraStreamOwned = true;
     }
     videoEl.srcObject = cameraStream;
     await videoEl.play();
@@ -3370,7 +3387,8 @@ function stopCameraRecording() {
   return new Promise((resolve) => {
     if (!mediaRecorder || mediaRecorder.state === "inactive") {
       isRecording = false;
-      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+      if (cameraStream && cameraStreamOwned) { cameraStream.getTracks().forEach(t => t.stop()); }
+      cameraStream = null; cameraStreamOwned = false;
       const snapshot = [...recordedChunks];
       document.getElementById('rec-label').innerText = "";
       resolve(snapshot); return;
@@ -3383,7 +3401,8 @@ function stopCameraRecording() {
       if (resolved) return;
       resolved = true;
       isRecording = false;
-      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+      if (cameraStream && cameraStreamOwned) { cameraStream.getTracks().forEach(t => t.stop()); }
+      cameraStream = null; cameraStreamOwned = false;
       document.getElementById('rec-label').innerText = "";
       resolve(chunks);
     };
