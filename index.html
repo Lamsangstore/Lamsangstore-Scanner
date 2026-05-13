@@ -2705,6 +2705,25 @@ let expectedItemsArray = [], scannedItemsMap = {}, isStrictValidationMode = fals
 let currentRemark = '';
 let orderRemarkMap = {}; // { trackingNo: remarkText } — หมายเหตุลูกค้าจากไฟล์ Marketplace 
 let mediaRecorder, recordedChunks = [], cameraStream = null, isRecording = false;
+let currentVideoMime = 'video/webm';
+let currentVideoExt  = 'webm';
+
+function pickBestVideoMime() {
+  const cands = [
+    'video/mp4;codecs=avc1.42E01E',
+    'video/mp4;codecs=avc1',
+    'video/mp4;codecs=h264',
+    'video/mp4',
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm'
+  ];
+  if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return 'video/webm';
+  for (const m of cands) {
+    try { if (MediaRecorder.isTypeSupported(m)) return m; } catch(e) {}
+  }
+  return 'video/webm';
+}
 
 // --- Inactivity Alert ---
 let inactivityTimer = null;       // Timer 5 วิ แจ้งครั้งแรก
@@ -2816,6 +2835,7 @@ function _flushPendingUploads() {
             parcelId: job.pId,
             items: job.itemsArr,
             videoEvidence: job.videoBase64 || "no_video",
+            videoMimeType: job.videoMime || "video/webm",
             remark: job.remarkNote || "",
             orderId: job.orderId || "",
             marketplace: job.marketplace || ""
@@ -2844,6 +2864,7 @@ function _flushWithBeacon() {
         parcelId: job.pId,
         items: job.itemsArr,
         videoEvidence: job.videoBase64 || "no_video",
+        videoMimeType: job.videoMime || "video/webm",
         remark: job.remarkNote || "",
         orderId: job.orderId || "",
         marketplace: job.marketplace || ""
@@ -2956,7 +2977,7 @@ function _isSent(pId) {
   } catch(e) { return false; }
 }
 
-function saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64) {
+function saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64, videoMime) {
   try {
     if (_isSent(pId)) {
       console.log(`[FailQueue] ข้าม ${pId} — ส่ง GAS สำเร็จแล้ว`);
@@ -2968,7 +2989,7 @@ function saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoB
       console.log(`[FailQueue] ${pId} มีใน queue อยู่แล้ว ไม่เพิ่มซ้ำ`);
       return;
     }
-    q.push({ pId, itemsArr, remarkNote, orderId: orderId || '', marketplace: marketplace || '', videoBase64: videoBase64 || '', ts: Date.now() });
+    q.push({ pId, itemsArr, remarkNote, orderId: orderId || '', marketplace: marketplace || '', videoBase64: videoBase64 || '', videoMime: videoMime || currentVideoMime || 'video/webm', ts: Date.now() });
     localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(q));
     console.warn(`[FailQueue] บันทึก ${pId} ไว้รอ retry`);
   } catch(e) { console.error('saveToFailQueue:', e); }
@@ -2998,6 +3019,7 @@ async function retryFailedUploads() {
         const res = await callGAS("saveData", {
           parcelId: job.pId, items: job.itemsArr,
           videoEvidence: job.videoBase64 || "no_video",
+          videoMimeType: job.videoMime || "video/webm",
           remark: job.remarkNote || "",
           orderId: job.orderId || "",
           marketplace: job.marketplace || ""
@@ -3322,7 +3344,17 @@ async function startCameraRecording(resetChunks = true) {
     drawOverlay();
     
     const canvasStream = canvas.captureStream(30);
-    mediaRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 2500000 });
+    currentVideoMime = pickBestVideoMime();
+    currentVideoExt  = currentVideoMime.indexOf('mp4') >= 0 ? 'mp4' : 'webm';
+    try {
+      mediaRecorder = new MediaRecorder(canvasStream, { mimeType: currentVideoMime, videoBitsPerSecond: 2500000 });
+    } catch(e) {
+      console.warn('[Recorder] mime', currentVideoMime, 'failed, fallback:', e.message);
+      currentVideoMime = 'video/webm';
+      currentVideoExt  = 'webm';
+      mediaRecorder = new MediaRecorder(canvasStream, { videoBitsPerSecond: 2500000 });
+    }
+    console.log('[Recorder] using mime:', currentVideoMime, 'ext:', currentVideoExt);
     mediaRecorder._stopDraw = () => { drawActive = false; }; // เก็บ ref เพื่อหยุด loop
     mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
     mediaRecorder.start(1000); // ✅ timeslice 1000ms — flush chunk ทุก 1 วิ ไม่รอ stop
@@ -3379,7 +3411,7 @@ function stopCameraRecording() {
 
 async function convertChunksToBase64(chunks) {
   if (!chunks || chunks.length === 0) return "";
-  const blob = new Blob(chunks, { type: 'video/webm' });
+  const blob = new Blob(chunks, { type: currentVideoMime || 'video/webm' });
   // GAS มี payload limit ~50MB — ถ้าวิดีโอใหญ่เกินให้ข้ามแนบวิดีโอ
   const MB = blob.size / (1024 * 1024);
   if (MB > 45) {
@@ -4256,12 +4288,12 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     const videoData = await convertChunksToBase64(chunks);
 
     if (!navigator.onLine) {
-      saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoData);
+      saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoData, currentVideoMime);
       updateFailQueueBadge();
       return;
     }
 
-    const res = await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", remark: remarkNote || "", orderId, marketplace });
+    const res = await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", videoMimeType: currentVideoMime || "video/webm", remark: remarkNote || "", orderId, marketplace });
     if (!isGasSuccess(res)) throw new Error(res?.error || 'GAS response ไม่สำเร็จ');
     _markSent(pId);
     console.log(`[Background] บันทึก ${pId} สำเร็จ`);
@@ -4273,7 +4305,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     // แปลง chunks → base64 ก่อนเก็บ ถ้ายังไม่ได้ทำ
     let videoBase64 = '';
     try { videoBase64 = await convertChunksToBase64(chunks); } catch(e) {}
-    saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64);
+    saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64, currentVideoMime);
     updateFailQueueBadge();
   }
 }
