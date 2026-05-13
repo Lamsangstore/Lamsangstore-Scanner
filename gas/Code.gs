@@ -254,6 +254,12 @@ function saveData(body) {
     return { success: false, error: "Video too large" };
   }
 
+  // --- รับ MIME ที่อนุญาตจาก client (mp4 / webm) ---
+  const ALLOWED_VIDEO_MIMES = { 'video/mp4': 'mp4', 'video/webm': 'webm' };
+  let videoMime = String(body.videoMimeType || '').toLowerCase().split(';')[0].trim();
+  if (!ALLOWED_VIDEO_MIMES[videoMime]) videoMime = 'video/webm';
+  const videoExt = ALLOWED_VIDEO_MIMES[videoMime];
+
   const orderId     = String(body.orderId || "").slice(0, 128);
   const marketplace = String(body.marketplace || "").slice(0, 32);
   const remark      = String(body.remark || "").slice(0, 500);
@@ -278,7 +284,7 @@ function saveData(body) {
         if (existing === parcelId.toUpperCase()) {
           Logger.log("[saveData] Duplicate skipped: " + parcelId);
           if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
-            _tryUpdateVideoUrl(sheet, i + 2, parcelId, videoBase64);
+            _tryUpdateVideoUrl(sheet, i + 2, parcelId, videoBase64, videoMime, videoExt);
           }
           return { success: true, note: "duplicate_skipped" };
         }
@@ -289,7 +295,7 @@ function saveData(body) {
     if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
       try {
         const decoded = Utilities.base64Decode(videoBase64);
-        const blob    = Utilities.newBlob(decoded, "video/webm", parcelId + ".webm");
+        const blob    = Utilities.newBlob(decoded, videoMime, parcelId + "." + videoExt);
         const folder  = DriveApp.getFolderById(TARGET_FOLDER_ID);
         const file    = folder.createFile(blob);
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
@@ -334,14 +340,16 @@ function saveData(body) {
   }
 }
 
-function _tryUpdateVideoUrl(sheet, rowIndex, parcelId, videoBase64) {
+function _tryUpdateVideoUrl(sheet, rowIndex, parcelId, videoBase64, videoMime, videoExt) {
   try {
     const currentVideoUrl = String(sheet.getRange(rowIndex, 5).getValue()).trim();
     if (currentVideoUrl !== "no_video") return;
     if (videoBase64.length > MAX_VIDEO_BASE64_LEN) return;
 
+    const mime = videoMime || "video/webm";
+    const ext  = videoExt  || "webm";
     const decoded = Utilities.base64Decode(videoBase64);
-    const blob    = Utilities.newBlob(decoded, "video/webm", parcelId + "_retry.webm");
+    const blob    = Utilities.newBlob(decoded, mime, parcelId + "_retry." + ext);
     const folder  = DriveApp.getFolderById(TARGET_FOLDER_ID);
     const file    = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
