@@ -994,6 +994,45 @@
     /* scan actions row (undo + manual) */
     #scanActions { display: none; }
     #scanActions.active { display: flex !important; gap: 6px; }
+    /* Search tab filter chips */
+    .filter-chip {
+      background: var(--bg);
+      border: 1.5px solid transparent;
+      border-radius: 14px;
+      padding: 3px 11px;
+      font-size: 0.74rem;
+      font-family: 'Mitr', sans-serif;
+      color: var(--text2);
+      cursor: pointer;
+      box-shadow: 2px 2px 5px var(--sd), -2px -2px 5px var(--sl);
+      transition: all 0.18s ease;
+      font-weight: 500;
+      line-height: 1.6;
+    }
+    .filter-chip:hover { transform: translateY(-1px); }
+    .filter-chip:active { box-shadow: inset 1px 1px 3px var(--sd), inset -1px -1px 3px var(--sl); }
+    .filter-chip.active {
+      background: var(--chip-color, var(--pink));
+      color: white;
+      border-color: var(--chip-color, var(--pink));
+      box-shadow: inset 2px 2px 5px rgba(0,0,0,0.18);
+    }
+    html.dark-mode .filter-chip { background: #2c2a25; color: #e8e4dc; }
+    /* Recent searches dropdown items */
+    .recent-search-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px; border-radius: 10px;
+      cursor: pointer; font-size: 0.85rem;
+      color: var(--text2); font-family: 'Mitr', sans-serif;
+      transition: background 0.15s;
+    }
+    .recent-search-item:hover { background: rgba(155,114,207,0.1); }
+    .recent-search-item .rs-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .recent-search-item .rs-remove {
+      background: none; border: none; color: var(--text3); cursor: pointer;
+      font-size: 0.9rem; padding: 2px 6px; line-height: 1; border-radius: 6px;
+    }
+    .recent-search-item .rs-remove:hover { background: rgba(0,0,0,0.05); color: var(--pink); }
     /* scan history chips */
     .scan-history-chip {
       background: var(--bg);
@@ -2477,15 +2516,35 @@
       <div class="mb-3">
         <div id="search-reader" style="display:none; margin-bottom: 15px;"></div>
         <!-- search bar — neumorphic -->
-        <div class="search-bar-row">
+        <div class="search-bar-row" style="position:relative;">
           <div class="input-neu-wrap">
-            <input id="searchInput" placeholder="พิมพ์หรือสแกนรหัสพัสดุ..." onkeypress="handleEnter(event)" oninput="debouncedSearch(); toggleClearBtn()">
+            <input id="searchInput" placeholder="พิมพ์หรือสแกนรหัสพัสดุ..." onkeypress="handleEnter(event)" oninput="debouncedSearch(); toggleClearBtn()" onfocus="showRecentSearches()" autocomplete="off">
             <button id="clearSearchBtn" onclick="clearSearch()" style="display:none; position:absolute; right:8px; background:none; border:none; color:var(--text3); font-size:1rem; cursor:pointer; padding:4px; line-height:1; z-index:2;">✕</button>
           </div>
           <button class="btn-neu-icon" onclick="startSearchScan()" title="สแกนด้วยกล้อง"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:block;margin:0 auto"><rect x="1" y="5" width="18" height="13" rx="3.5" fill="#a8dadc"/><circle cx="10" cy="11.5" r="3.5" fill="#457b9d"/><circle cx="10" cy="11.5" r="2" fill="#e8f8f8"/><rect x="6" y="3" width="4" height="3" rx="1.5" fill="#cdb4db"/><circle cx="16" cy="7" r="1.5" fill="#e9c46a"/></svg></button>
           <button class="btn-neu-gold" onclick="runSearch()" style="padding:9px 18px; font-size:0.9rem;">ค้นหา</button>
+          <!-- Recent searches dropdown -->
+          <div id="recentSearchesDropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--bg); border-radius:14px; box-shadow:4px 6px 18px var(--sd), -4px -4px 12px var(--sl); margin-top:6px; padding:6px; z-index:50; max-height:240px; overflow-y:auto;"></div>
         </div>
         <div class="form-text text-muted ms-2 small"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><circle cx="10" cy="10" r="8.5" fill="#ffd166"/><circle cx="10" cy="7" r="1.3" fill="#9b72cf"/><rect x="9.1" y="10" width="1.8" height="5" rx="0.9" fill="#9b72cf"/></svg></span> ค้นหาได้ทั้งตัวพิมพ์เล็กและใหญ่</div>
+        <!-- Filter chips — แสดงหลังมีผลค้นหา -->
+        <div id="searchFilters" style="display:none; margin-top:10px; padding-top:8px; border-top:1px dashed var(--border, rgba(0,0,0,0.08));">
+          <div style="font-size:0.72rem; color:var(--text3); margin-bottom:4px;">กรอง:</div>
+          <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
+            <button class="filter-chip active" data-filter="mp" data-value="">ทั้งหมด</button>
+            <button class="filter-chip" data-filter="mp" data-value="shopee" style="--chip-color:#ee4d2d;">Shopee</button>
+            <button class="filter-chip" data-filter="mp" data-value="tiktok" style="--chip-color:#010101;">TikTok</button>
+            <button class="filter-chip" data-filter="mp" data-value="lazada" style="--chip-color:#0f146d;">Lazada</button>
+            <button class="filter-chip" data-filter="mp" data-value="page365" style="--chip-color:#1877f2;">Page365</button>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; align-items:center;">
+            <button class="filter-chip active" data-filter="date" data-value="">ทุกช่วง</button>
+            <button class="filter-chip" data-filter="date" data-value="today">วันนี้</button>
+            <button class="filter-chip" data-filter="date" data-value="7d">7 วัน</button>
+            <button class="filter-chip" data-filter="date" data-value="30d">30 วัน</button>
+            <span id="searchFilterCount" style="margin-left:auto; font-size:0.72rem; color:var(--text3);"></span>
+          </div>
+        </div>
       </div>
       <!-- ข้อ 1: Skeleton loader -->
       <div id="loadingSearch" style="display:none">
@@ -2555,6 +2614,16 @@
           </div>
         </div>
       </div>
+      <!-- Marketplace Breakdown -->
+      <div id="mpBreakdownWrap" class="dash-table-card mb-3" style="display:none;">
+        <h6 class="fw-bold mb-2" style="color:var(--pink);">
+          <svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em;margin-right:4px"><rect x="1" y="6" width="18" height="12" rx="4" fill="#a8dadc"/><rect x="1" y="6" width="18" height="5" rx="4" fill="#457b9d"/><rect x="5" y="2" width="3" height="5" rx="1.5" fill="#cdb4db"/><rect x="12" y="2" width="3" height="5" rx="1.5" fill="#cdb4db"/></svg>
+          แยกตาม Marketplace
+        </h6>
+        <div id="mpBreakdownBar" style="display:flex; height:14px; border-radius:7px; overflow:hidden; background:#eee; margin-bottom:8px;"></div>
+        <div id="mpBreakdownList" style="display:flex; flex-direction:column; gap:6px;"></div>
+      </div>
+
       <!-- Daily Target -->
       <div id="dailyTargetWrap" class="dash-table-card mb-3">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
@@ -6108,6 +6177,12 @@ function renderReport(data, start, end) {
   // ✅ แสดงกราฟ + ปฏิทิน (เฉพาะเมื่อมีข้อมูลหลายวัน)
   renderDailyChart(data.dailyBreakdown || {}, start, end);
 
+  // ✅ Marketplace breakdown
+  renderMarketplaceBreakdown(data.byMarketplace || {}, data.totalOrders || 0);
+
+  // ✅ เปรียบเทียบกับช่วงก่อนหน้า (fetch async, ไม่บล็อก render หลัก)
+  _renderComparePrevPeriod(start, end, data.totalOrders || 0, data.totalItems || 0);
+
   const container = document.getElementById('dashProductTable');
   const products  = data.allProducts || [];
   if (products.length === 0) {
@@ -6126,6 +6201,170 @@ function renderReport(data, start, end) {
       <div class="dash-count">${escHtml(item.count)}<span style="font-size:0.7rem; font-weight:400; color:#9a9085;"> ชิ้น</span></div>
     </div>
   `).join('');
+}
+
+// ===== Marketplace breakdown — stacked bar + list =====
+function renderMarketplaceBreakdown(byMp, totalOrders) {
+  const wrap = document.getElementById('mpBreakdownWrap');
+  const barEl = document.getElementById('mpBreakdownBar');
+  const listEl = document.getElementById('mpBreakdownList');
+  if (!wrap || !barEl || !listEl) return;
+  const entries = Object.entries(byMp || {});
+  if (entries.length === 0 || totalOrders === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  const mpStyle = {
+    shopee:  { name: 'Shopee',  color: '#ee4d2d' },
+    tiktok:  { name: 'TikTok',  color: '#010101' },
+    lazada:  { name: 'Lazada',  color: '#0f146d' },
+    page365: { name: 'Page365', color: '#1877f2' },
+    other:   { name: 'อื่นๆ',   color: '#a08a5a' },
+  };
+  const sorted = entries
+    .map(([mp, v]) => ({ mp, name: (mpStyle[mp] || {}).name || mp, color: (mpStyle[mp] || {}).color || '#888', orders: v.orders || 0, items: v.items || 0 }))
+    .sort((a, b) => b.orders - a.orders);
+  barEl.innerHTML = sorted.map(s => {
+    const pct = (s.orders / totalOrders) * 100;
+    return `<div title="${escHtml(s.name)} ${s.orders} ออเดอร์" style="background:${s.color}; width:${pct}%; transition:width 0.5s ease;"></div>`;
+  }).join('');
+  listEl.innerHTML = sorted.map(s => {
+    const pct = ((s.orders / totalOrders) * 100).toFixed(1);
+    return `<div style="display:flex; align-items:center; gap:8px; font-size:0.82rem;">
+      <span style="display:inline-block; width:11px; height:11px; border-radius:3px; background:${s.color}; flex-shrink:0;"></span>
+      <span style="flex:1; color:var(--text);">${escHtml(s.name)}</span>
+      <span style="color:var(--text2); font-weight:600;">${s.orders} ออเดอร์</span>
+      <span style="color:var(--text3); font-size:0.75rem; min-width:46px; text-align:right;">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+// ===== Compare with previous period — เรียก getReportData ของช่วงเดียวกันก่อนหน้า =====
+let _prevPeriodToken = 0;
+async function _renderComparePrevPeriod(start, end, curOrders, curItems) {
+  const token = ++_prevPeriodToken;
+  // ล้างของเก่าก่อน
+  _setCompareDelta('d-box', null);
+  _setCompareDelta('d-item', null);
+  try {
+    const s = new Date(start); s.setHours(0,0,0,0);
+    const e = new Date(end);   e.setHours(0,0,0,0);
+    const days = Math.round((e - s) / 86400000) + 1;
+    // previous period = [s - days, s - 1]
+    const prevEnd   = new Date(s); prevEnd.setDate(s.getDate() - 1);
+    const prevStart = new Date(prevEnd); prevStart.setDate(prevEnd.getDate() - (days - 1));
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const prev = await callGAS("getReportData", { start: fmt(prevStart), end: fmt(prevEnd) }, 45000);
+    if (token !== _prevPeriodToken) return; // มี fetch ใหม่แทรกแล้ว
+    if (!prev || prev.error) return;
+    _setCompareDelta('d-box', _calcDelta(curOrders, prev.totalOrders || 0));
+    _setCompareDelta('d-item', _calcDelta(curItems, prev.totalItems || 0));
+  } catch(e) {
+    console.warn('[Compare] ดึงข้อมูลช่วงก่อนหน้าไม่ได้:', e.message);
+  }
+}
+
+function _calcDelta(cur, prev) {
+  if (prev === 0 && cur === 0) return { pct: 0, sign: '=', prev };
+  if (prev === 0) return { pct: null, sign: '🆕', prev };
+  const pct = ((cur - prev) / prev) * 100;
+  return { pct, sign: pct > 0 ? '🔺' : (pct < 0 ? '🔻' : '='), prev };
+}
+
+function _setCompareDelta(targetId, delta) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  // ลบ delta เก่า (sibling ถัดไป)
+  const next = el.nextElementSibling;
+  if (next && next.classList.contains('compare-delta')) next.remove();
+  if (!delta) return;
+  const span = document.createElement('div');
+  span.className = 'compare-delta';
+  let txt, color;
+  if (delta.pct === null) {
+    txt = `🆕 ใหม่ (ก่อนหน้า 0)`; color = 'var(--text3)';
+  } else if (delta.pct === 0) {
+    txt = `= เท่าช่วงก่อน`; color = 'var(--text3)';
+  } else {
+    const arrow = delta.pct > 0 ? '🔺' : '🔻';
+    const sign  = delta.pct > 0 ? '+' : '';
+    color = delta.pct > 0 ? '#52b788' : '#e07a3a';
+    txt = `${arrow} ${sign}${delta.pct.toFixed(1)}% (จาก ${delta.prev})`;
+  }
+  span.style.cssText = `font-size:0.7rem; color:${color}; margin-top:2px; font-weight:500;`;
+  span.textContent = txt;
+  el.parentNode.insertBefore(span, el.nextSibling);
+}
+
+// ===== Day detail modal — เมื่อคลิกแท่งใน daily chart =====
+async function showDayDetail(dateStr) {
+  Swal.fire({
+    title: '',
+    html: `<div style="padding:20px; color:#7a6440;">⏳ กำลังโหลดรายละเอียดของวันที่ ${escHtml(dateStr)}...</div>`,
+    showConfirmButton: false,
+    allowOutsideClick: false,
+    background: '#fff0f3',
+    customClass: { popup: 'swal-popup' },
+  });
+  try {
+    const data = await callGAS("getReportData", { start: dateStr, end: dateStr }, 45000);
+    if (!data || data.error) throw new Error(data?.error || 'ไม่พบข้อมูล');
+
+    const mpStyle = {
+      shopee: { name: 'Shopee', color: '#ee4d2d' },
+      tiktok: { name: 'TikTok', color: '#010101' },
+      lazada: { name: 'Lazada', color: '#0f146d' },
+      page365:{ name: 'Page365', color: '#1877f2' },
+      other:  { name: 'อื่นๆ',  color: '#a08a5a' },
+    };
+    const mpEntries = Object.entries(data.byMarketplace || {})
+      .map(([m, v]) => ({ m, ...v }))
+      .sort((a, b) => b.orders - a.orders);
+    const mpHtml = mpEntries.length === 0
+      ? '<div style="color:var(--text3); font-size:0.82rem;">ไม่มีข้อมูล marketplace</div>'
+      : mpEntries.map(e => {
+          const s = mpStyle[e.m] || { name: e.m, color: '#888' };
+          return `<div style="display:flex; align-items:center; gap:8px; font-size:0.85rem; padding:3px 0;">
+            <span style="display:inline-block; width:11px; height:11px; border-radius:3px; background:${s.color};"></span>
+            <span style="flex:1;">${escHtml(s.name)}</span>
+            <strong>${e.orders}</strong> <span style="color:var(--text3); font-size:0.75rem;">ออเดอร์</span>
+          </div>`;
+        }).join('');
+
+    const products = (data.allProducts || []).slice(0, 10);
+    const prodHtml = products.length === 0
+      ? '<div style="color:var(--text3); font-size:0.82rem;">ไม่มีสินค้า</div>'
+      : products.map((p, i) => `<div style="display:flex; align-items:baseline; gap:6px; font-size:0.82rem; padding:2px 0;">
+          <span style="color:var(--gold); font-weight:600; flex-shrink:0; min-width:18px;">${i + 1}.</span>
+          <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(p.name)}</span>
+          <strong>${p.count}</strong>
+        </div>`).join('');
+
+    const fmtDate = new Date(dateStr).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    await Swal.fire({
+      title: fmtDate,
+      html: `<div style="text-align:left; color:#7a6440;">
+        <div style="display:flex; gap:8px; margin-bottom:10px;">
+          <div style="flex:1; background:var(--bg); border-radius:10px; padding:8px; text-align:center;">
+            <div style="font-size:0.7rem; color:var(--text3);">ออเดอร์</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--pink);">${data.totalOrders || 0}</div>
+          </div>
+          <div style="flex:1; background:var(--bg); border-radius:10px; padding:8px; text-align:center;">
+            <div style="font-size:0.7rem; color:var(--text3);">สินค้า</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--pink);">${data.totalItems || 0}</div>
+          </div>
+        </div>
+        <div style="margin-top:8px; font-size:0.78rem; color:var(--text3); font-weight:600;">แยกตามช่องทาง</div>
+        <div style="margin-top:4px;">${mpHtml}</div>
+        <div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--border, #e0d8c0); font-size:0.78rem; color:var(--text3); font-weight:600;">สินค้าขายดี (Top 10)</div>
+        <div style="margin-top:4px;">${prodHtml}</div>
+      </div>`,
+      background: '#fff0f3',
+      confirmButtonText: 'ปิด',
+      confirmButtonColor: 'transparent',
+      customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn' },
+    });
+  } catch (err) {
+    Swal.fire('โหลดไม่สำเร็จ', err.message, 'error');
+  }
 }
 
 async function resetSession() {
@@ -6191,102 +6430,170 @@ function startSearchScan() {
 
 function handleEnter(e) { if (e.key === "Enter") runSearch(); }
 
+// ===== Search state — เก็บผลค้น + filter ปัจจุบัน เพื่อ re-render โดยไม่ยิง GAS ใหม่ =====
+let _searchRawResults = [];
+let _searchFilter = { mp: '', date: '' };
+
+// ===== Recent searches — เก็บ 10 คำค้นล่าสุดใน localStorage =====
+const RECENT_SEARCHES_MAX = 10;
+function _getRecentSearches() {
+  try { return JSON.parse(localStorage.getItem('recentSearches') || '[]'); }
+  catch(e) { return []; }
+}
+function _saveRecentSearch(q) {
+  if (!q || !q.trim()) return;
+  const arr = _getRecentSearches().filter(x => x !== q);
+  arr.unshift(q);
+  localStorage.setItem('recentSearches', JSON.stringify(arr.slice(0, RECENT_SEARCHES_MAX)));
+}
+function _removeRecentSearch(q) {
+  const arr = _getRecentSearches().filter(x => x !== q);
+  localStorage.setItem('recentSearches', JSON.stringify(arr));
+  showRecentSearches(); // refresh dropdown
+}
+function showRecentSearches() {
+  const dd = document.getElementById('recentSearchesDropdown');
+  const input = document.getElementById('searchInput');
+  if (!dd || !input) return;
+  const arr = _getRecentSearches();
+  if (arr.length === 0 || input.value.trim()) { dd.style.display = 'none'; return; }
+  dd.innerHTML = `<div style="font-size:0.7rem; color:var(--text3); padding:4px 10px 2px;">ค้นล่าสุด</div>` +
+    arr.map(q => `<div class="recent-search-item" data-q="${escHtml(q)}">
+      <span style="color:var(--text3); font-size:0.85rem;">🕐</span>
+      <span class="rs-text">${escHtml(q)}</span>
+      <button class="rs-remove" data-q="${escHtml(q)}" title="ลบ">✕</button>
+    </div>`).join('');
+  dd.style.display = 'block';
+  dd.querySelectorAll('.recent-search-item').forEach(el => {
+    el.onclick = (e) => {
+      if (e.target.classList.contains('rs-remove')) {
+        e.stopPropagation();
+        _removeRecentSearch(e.target.dataset.q);
+        return;
+      }
+      input.value = el.dataset.q;
+      dd.style.display = 'none';
+      runSearch();
+    };
+  });
+}
+// ปิด dropdown เมื่อคลิกที่อื่น
+document.addEventListener('click', (e) => {
+  const dd = document.getElementById('recentSearchesDropdown');
+  const input = document.getElementById('searchInput');
+  if (!dd || !input) return;
+  if (e.target === input || dd.contains(e.target)) return;
+  dd.style.display = 'none';
+});
+
+// ===== Filter logic — กรอง _searchRawResults แล้ว re-render =====
+function _matchesFilter(row) {
+  const mp = String(row[2] || '').trim().toLowerCase();
+  const dateStr = String(row[0] || '');
+  if (_searchFilter.mp && mp !== _searchFilter.mp) return false;
+  if (_searchFilter.date) {
+    // dateStr format: "dd/MM/yyyy HH:mm:ss" (from numToStr in GAS searchData)
+    const m = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (!m) return false;
+    const rowDate = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+    rowDate.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diffDays = (today - rowDate) / 86400000;
+    if (_searchFilter.date === 'today' && diffDays !== 0) return false;
+    if (_searchFilter.date === '7d'    && diffDays > 7)   return false;
+    if (_searchFilter.date === '30d'   && diffDays > 30)  return false;
+  }
+  return true;
+}
+
+function _applySearchFilters() {
+  const filtered = _searchRawResults.filter(_matchesFilter);
+  _renderSearchCards(filtered);
+  const cnt = document.getElementById('searchFilterCount');
+  if (cnt) cnt.textContent = `${filtered.length}/${_searchRawResults.length} รายการ`;
+}
+
+function _bindFilterChips() {
+  document.querySelectorAll('#searchFilters .filter-chip').forEach(chip => {
+    chip.onclick = () => {
+      const group = chip.dataset.filter; // 'mp' or 'date'
+      const value = chip.dataset.value;
+      _searchFilter[group] = value;
+      // toggle active class within the same group
+      document.querySelectorAll(`#searchFilters .filter-chip[data-filter="${group}"]`).forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      _applySearchFilters();
+    };
+  });
+}
+
+// ===== Copy / Share helpers =====
+async function copyTracking(tracking, btnEl) {
+  try {
+    await navigator.clipboard.writeText(tracking);
+    if (btnEl) {
+      const orig = btnEl.innerHTML;
+      btnEl.innerHTML = '✓';
+      btnEl.style.background = '#7ab87a';
+      btnEl.style.color = '#fff';
+      setTimeout(() => {
+        btnEl.innerHTML = orig;
+        btnEl.style.background = '';
+        btnEl.style.color = '';
+      }, 1200);
+    }
+  } catch(e) {
+    Swal.fire('คัดลอกไม่ได้', e.message, 'error');
+  }
+}
+
+async function shareTracking(tracking, link) {
+  const text = link
+    ? `รหัสพัสดุ: ${tracking}\nตรวจสอบสถานะ: ${link}`
+    : `รหัสพัสดุ: ${tracking}`;
+  if (navigator.share) {
+    try { await navigator.share({ title: 'รหัสพัสดุ', text }); } catch(e) {}
+  } else {
+    // fallback — เปิด link ในแท็บใหม่ หรือก๊อปข้อความ
+    try {
+      await navigator.clipboard.writeText(text);
+      Swal.fire('คัดลอกแล้ว', 'ก๊อปข้อความไป clipboard แล้ว (อุปกรณ์นี้ไม่รองรับ share menu)', 'success');
+    } catch(e) {
+      Swal.fire('แชร์ไม่ได้', e.message, 'error');
+    }
+  }
+}
+
 async function runSearch() {
   const q = document.getElementById("searchInput").value.trim();
   if (!q) return;
+  // ซ่อน recent dropdown
+  const dd = document.getElementById('recentSearchesDropdown');
+  if (dd) dd.style.display = 'none';
+  _saveRecentSearch(q);
   document.getElementById("loadingSearch").style.display = "block";
   document.getElementById("emptySearch").style.display = "none";
+  document.getElementById("searchFilters").style.display = "none";
   document.getElementById("resultBody").innerHTML = "";
   document.getElementById("tableHead").innerHTML = "";
   try {
     const res = await callGAS("searchData", { query: q });
     document.getElementById("loadingSearch").style.display = "none";
-    const tb = document.getElementById("resultBody"), th = document.getElementById("tableHead");
     if (!res || res.length === 0) {
       document.getElementById("emptySearch").style.display = "block";
+      _searchRawResults = [];
       speak("ไม่พบข้อมูลค่ะ"); return;
     }
     document.getElementById("emptySearch").style.display = "none";
-
-    // ===== Card-style results =====
-    // ✅ [A:Timestamp, B:OrderId, C:Marketplace, D:Tracking, E:VideoUrl, F:Remark, G:จำนวน/สินค้า, H+:สินค้า...]
-    // Search sheet มี col G = จำนวน (ตัวเลข) → items เริ่ม index 7
-    // Orders sheet ไม่มี → items เริ่ม index 6
-    const cards = res.map(row => {
-      const date = String(row[0] || '');
-      const orderId_raw = String(row[1] || '').trim();
-      const marketplace_raw = String(row[2] || '').trim().toLowerCase();
-      const tracking = String(row[3] || '');
-      const videoUrl = String(row[4] || '');
-      const remark = String(row[5] || '');
-
-      // ✅ ถ้า col G เป็นตัวเลขล้วน → เป็น "จำนวน" (Search sheet) → items เริ่ม index 7
-      const colG = String(row[6] || '').trim();
-      const hasCountCol = /^\d+$/.test(colG);
-      const rawItems = row.slice(hasCountCol ? 7 : 6).filter(c => c && String(c).trim() !== '');
-      const hasVideo = videoUrl && videoUrl.startsWith('http');
-
-      // ✅ สร้าง link ตรวจสอบสถานะพัสดุ
-      const trackingLink = _buildTrackingLink(tracking);
-      const trackingHtml = trackingLink
-        ? `<a href="${escHtml(trackingLink)}" target="_blank" rel="noopener" style="color:var(--gold); font-weight:600; text-decoration:none; word-break:break-all;">${escHtml(tracking)} ↗</a>`
-        : `<span style="font-weight:600; word-break:break-all;">${escHtml(tracking)}</span>`;
-
-      // ✅ ดึง orderInfo จาก row โดยตรง
-      let orderBadge = '';
-      const pColors = { shopee: '#ee4d2d', tiktok: '#333', lazada: '#0f146d', page365: '#25d366' };
-      const pName = { shopee: 'Shopee', tiktok: 'TikTok', lazada: 'Lazada', page365: 'Page365' };
-      if (marketplace_raw) {
-        const color = pColors[marketplace_raw] || '#c8a84b';
-        const name = pName[marketplace_raw] || marketplace_raw;
-        orderBadge += `<span style="display:inline-block; background:${color}; color:#fff; font-size:0.68rem; padding:1px 8px; border-radius:10px; margin-left:6px; vertical-align:middle;">${name}</span>`;
-      }
-      if (orderId_raw) {
-        orderBadge += `<div style="font-size:0.75rem; color:var(--text3); margin-top:2px;">คำสั่งซื้อ #${escHtml(orderId_raw)}</div>`;
-      }
-
-      // ✅ Remark badge
-      const remarkHtml = remark
-        ? `<div style="font-size:0.73rem; color:#c06030; margin-top:4px;"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/></svg> ${escHtml(remark)}</div>`
-        : '';
-
-      // ✅ Video button
-      const videoBtn = hasVideo
-        ? `<a href="${escHtml(videoUrl)}" target="_blank" class="btn-neu-gold" style="font-size:0.75rem; padding:4px 12px; text-decoration:none; display:inline-block; margin-top:6px;">▶ ดูคลิป</a>`
-        : '';
-
-      // ✅ Item list
-      const itemsHtml = rawItems.length > 0
-        ? rawItems.map((item, i) => {
-            const name = productMap[String(item).toUpperCase()] || item;
-            return `<div style="display:flex; align-items:baseline; gap:6px; padding:3px 0;">
-              <span style="color:var(--gold); font-weight:600; font-size:0.75rem; flex-shrink:0;">${i + 1}.</span>
-              <span style="font-size:0.82rem; color:var(--text);">${escHtml(name)}</span>
-            </div>`;
-          }).join('')
-        : '<div style="color:var(--text3); font-size:0.8rem;">ไม่มีรายการสินค้า</div>';
-
-      return `<div style="background:var(--bg); border-radius:var(--radius); box-shadow:4px 4px 12px var(--sd),-4px -4px 12px var(--sl); padding:14px 16px; margin-bottom:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:4px;">
-          <div>
-            <div style="font-size:0.73rem; color:var(--text3);"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="2" y="4" width="16" height="14" rx="3.5" fill="#a8dadc"/><rect x="2" y="4" width="16" height="5.5" rx="3.5" fill="#457b9d"/><rect x="2" y="7" width="16" height="2.5" fill="#457b9d"/><rect x="5.5" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="13" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="8.75" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="12.5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/></svg> ${escHtml(date)}</div>
-            <div style="margin-top:4px;">${trackingHtml}${orderBadge}</div>
-            ${remarkHtml}
-          </div>
-          <div style="text-align:right;">
-            <div style="font-size:0.8rem; font-weight:600; color:var(--text2);"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg> ${rawItems.length} ชิ้น</div>
-            ${videoBtn}
-          </div>
-        </div>
-        <div style="margin-top:10px; padding-top:8px; border-top:1px solid rgba(0,0,0,0.06);">
-          ${itemsHtml}
-        </div>
-      </div>`;
-    }).join('');
-
-    // ✅ ใส่ใน resultBody แทนตาราง (ซ่อน thead)
-    th.innerHTML = '';
-    tb.innerHTML = `<tr><td colspan="99" style="padding:0; border:none;">${cards}</td></tr>`;
+    _searchRawResults = res;
+    _searchFilter = { mp: '', date: '' };
+    // reset chip states to "ทั้งหมด"/"ทุกช่วง"
+    document.querySelectorAll('#searchFilters .filter-chip').forEach(c => c.classList.toggle('active', c.dataset.value === ''));
+    document.getElementById("searchFilters").style.display = "block";
+    _bindFilterChips();
+    _renderSearchCards(res);
+    const cnt = document.getElementById('searchFilterCount');
+    if (cnt) cnt.textContent = `${res.length} รายการ`;
 
     const firstColG = String(res[0][6] || '').trim();
     const firstHasCount = /^\d+$/.test(firstColG);
@@ -6297,6 +6604,93 @@ async function runSearch() {
     document.getElementById("loadingSearch").style.display = "none";
     Swal.fire('ค้นหาไม่สำเร็จ', err.message, 'error');
   }
+}
+
+function _renderSearchCards(rows) {
+  const tb = document.getElementById("resultBody"), th = document.getElementById("tableHead");
+  if (!rows || rows.length === 0) {
+    th.innerHTML = '';
+    tb.innerHTML = `<tr><td colspan="99" style="padding:24px; text-align:center; color:var(--text3); font-size:0.85rem;">ไม่มีผลตรงกับตัวกรอง</td></tr>`;
+    return;
+  }
+  // ===== Card-style results =====
+  // ✅ [A:Timestamp, B:OrderId, C:Marketplace, D:Tracking, E:VideoUrl, F:Remark, G:จำนวน/สินค้า, H+:สินค้า...]
+  const cards = rows.map(row => {
+    const date = String(row[0] || '');
+    const orderId_raw = String(row[1] || '').trim();
+    const marketplace_raw = String(row[2] || '').trim().toLowerCase();
+    const tracking = String(row[3] || '');
+    const videoUrl = String(row[4] || '');
+    const remark = String(row[5] || '');
+
+    const colG = String(row[6] || '').trim();
+    const hasCountCol = /^\d+$/.test(colG);
+    const rawItems = row.slice(hasCountCol ? 7 : 6).filter(c => c && String(c).trim() !== '');
+    const hasVideo = videoUrl && videoUrl.startsWith('http');
+
+    const trackingLink = _buildTrackingLink(tracking);
+    const trackingHtml = trackingLink
+      ? `<a href="${escHtml(trackingLink)}" target="_blank" rel="noopener" style="color:var(--gold); font-weight:600; text-decoration:none; word-break:break-all;">${escHtml(tracking)} ↗</a>`
+      : `<span style="font-weight:600; word-break:break-all;">${escHtml(tracking)}</span>`;
+
+    let orderBadge = '';
+    const pColors = { shopee: '#ee4d2d', tiktok: '#333', lazada: '#0f146d', page365: '#25d366' };
+    const pName = { shopee: 'Shopee', tiktok: 'TikTok', lazada: 'Lazada', page365: 'Page365' };
+    if (marketplace_raw) {
+      const color = pColors[marketplace_raw] || '#c8a84b';
+      const name = pName[marketplace_raw] || marketplace_raw;
+      orderBadge += `<span style="display:inline-block; background:${color}; color:#fff; font-size:0.68rem; padding:1px 8px; border-radius:10px; margin-left:6px; vertical-align:middle;">${name}</span>`;
+    }
+    if (orderId_raw) {
+      orderBadge += `<div style="font-size:0.75rem; color:var(--text3); margin-top:2px;">คำสั่งซื้อ #${escHtml(orderId_raw)}</div>`;
+    }
+
+    const remarkHtml = remark
+      ? `<div style="font-size:0.73rem; color:#c06030; margin-top:4px;"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/></svg> ${escHtml(remark)}</div>`
+      : '';
+
+    const videoBtn = hasVideo
+      ? `<a href="${escHtml(videoUrl)}" target="_blank" class="btn-neu-gold" style="font-size:0.72rem; padding:4px 10px; text-decoration:none; display:inline-block;">▶ ดูคลิป</a>`
+      : '';
+
+    // ✅ Copy + Share buttons
+    const trackingEsc = tracking.replace(/'/g, "\\'");
+    const linkEsc = (trackingLink || '').replace(/'/g, "\\'");
+    const actionBtns = `
+      <button onclick="copyTracking('${trackingEsc}', this)" class="btn-neu-sm" style="font-size:0.7rem; padding:4px 9px; min-width:34px;" title="ก๊อปรหัสพัสดุ">📋</button>
+      <button onclick="shareTracking('${trackingEsc}', '${linkEsc}')" class="btn-neu-sm" style="font-size:0.7rem; padding:4px 9px; min-width:34px;" title="แชร์">📤</button>
+    `;
+
+    const itemsHtml = rawItems.length > 0
+      ? rawItems.map((item, i) => {
+          const name = productMap[String(item).toUpperCase()] || item;
+          return `<div style="display:flex; align-items:baseline; gap:6px; padding:3px 0;">
+            <span style="color:var(--gold); font-weight:600; font-size:0.75rem; flex-shrink:0;">${i + 1}.</span>
+            <span style="font-size:0.82rem; color:var(--text);">${escHtml(name)}</span>
+          </div>`;
+        }).join('')
+      : '<div style="color:var(--text3); font-size:0.8rem;">ไม่มีรายการสินค้า</div>';
+
+    return `<div style="background:var(--bg); border-radius:var(--radius); box-shadow:4px 4px 12px var(--sd),-4px -4px 12px var(--sl); padding:14px 16px; margin-bottom:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:4px;">
+        <div>
+          <div style="font-size:0.73rem; color:var(--text3);"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="2" y="4" width="16" height="14" rx="3.5" fill="#a8dadc"/><rect x="2" y="4" width="16" height="5.5" rx="3.5" fill="#457b9d"/><rect x="2" y="7" width="16" height="2.5" fill="#457b9d"/><rect x="5.5" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="13" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="8.75" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="12.5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/></svg> ${escHtml(date)}</div>
+          <div style="margin-top:4px;">${trackingHtml}${orderBadge}</div>
+          ${remarkHtml}
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:0.8rem; font-weight:600; color:var(--text2);"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg> ${rawItems.length} ชิ้น</div>
+          <div style="display:flex; gap:5px; justify-content:flex-end; margin-top:6px; flex-wrap:wrap;">${actionBtns}${videoBtn}</div>
+        </div>
+      </div>
+      <div style="margin-top:10px; padding-top:8px; border-top:1px solid rgba(0,0,0,0.06);">
+        ${itemsHtml}
+      </div>
+    </div>`;
+  }).join('');
+
+  th.innerHTML = '';
+  tb.innerHTML = `<tr><td colspan="99" style="padding:0; border:none;">${cards}</td></tr>`;
 }
 
 // ✅ สร้าง URL ตรวจสอบสถานะพัสดุตามขนส่ง
@@ -6659,11 +7053,15 @@ function renderDailyChart(dailyBreakdown, startStr, endStr) {
         ? 'linear-gradient(180deg, #7ab87a 0%, #90d890 100%)'
         : 'linear-gradient(180deg, #c8a84b 0%, #e0c060 100%)';
 
-      return `<div style="flex:1; min-width:${barMinW}px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end;">
+      const hasData = info.items > 0 || info.orders > 0;
+      return `<div style="flex:1; min-width:${barMinW}px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; ${hasData ? 'cursor:pointer;' : ''}"
+        ${hasData ? `onclick="showDayDetail('${dayKey}')" title="กดเพื่อดูรายละเอียดวันนี้"` : ''}>
         <div style="width:70%; height:${itemH}px; border-radius:5px 5px 0 0; position:relative;
           background:${barBg}; opacity:0;
           animation:chartBarGrow 0.5s ${delay}ms cubic-bezier(0.34,1.56,0.64,1) forwards;
-          display:flex; align-items:flex-end; justify-content:center; padding-bottom:4px;">
+          display:flex; align-items:flex-end; justify-content:center; padding-bottom:4px;
+          transition:transform 0.15s ease, filter 0.15s ease;"
+          ${hasData ? `onmouseover="this.style.transform='translateY(-2px)'; this.style.filter='brightness(1.08)';" onmouseout="this.style.transform=''; this.style.filter='';"` : ''}>
           ${info.items ? `<span style="font-size:${info.items >= 100 ? '0.55rem' : '0.65rem'}; font-weight:700; color:#fff;
             text-shadow:0 1px 2px rgba(0,0,0,0.3); line-height:1;">${info.items}</span>` : ''}
         </div>

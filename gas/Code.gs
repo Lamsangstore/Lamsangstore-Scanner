@@ -554,6 +554,7 @@ function getReportData(startStr, endStr) {
     let totalOrders = 0, totalItems = 0;
     const skuCount = {};
     const dailyBreakdown = {};
+    const byMarketplace = {}; // { shopee: { orders, items }, ... }
     const tz = Session.getScriptTimeZone();
     const seenTrackings = new Set();
 
@@ -571,13 +572,21 @@ function getReportData(startStr, endStr) {
       if (!dailyBreakdown[dayKey]) dailyBreakdown[dayKey] = { orders: 0, items: 0 };
       dailyBreakdown[dayKey].orders++;
 
+      // marketplace from col C (index 2) — empty/unknown bucketed as "other"
+      const mp = String(row[2] || "").trim().toLowerCase() || "other";
+      if (!byMarketplace[mp]) byMarketplace[mp] = { orders: 0, items: 0 };
+      byMarketplace[mp].orders++;
+
+      let rowItemCount = 0;
       for (let c = 7; c < row.length; c++) {
         const val = String(row[c]).trim();
         if (!val) continue;
         totalItems++;
+        rowItemCount++;
         dailyBreakdown[dayKey].items++;
         skuCount[val] = (skuCount[val] || 0) + 1;
       }
+      byMarketplace[mp].items += rowItemCount;
     }
 
     const productSheet = ss.getSheetByName("Product name");
@@ -595,9 +604,9 @@ function getReportData(startStr, endStr) {
       .map(([sku, count]) => ({ sku, name: productMap[sku] || sku, count }))
       .sort((a, b) => b.count - a.count);
 
-    return { totalOrders, totalItems, allProducts, dailyBreakdown };
+    return { totalOrders, totalItems, allProducts, dailyBreakdown, byMarketplace };
   } catch(e) {
-    return { totalOrders: 0, totalItems: 0, allProducts: [], dailyBreakdown: {}, error: e.toString() };
+    return { totalOrders: 0, totalItems: 0, allProducts: [], dailyBreakdown: {}, byMarketplace: {}, error: e.toString() };
   }
 }
 
