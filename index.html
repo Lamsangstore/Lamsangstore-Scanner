@@ -991,6 +991,32 @@
       cursor: pointer; transition: all 0.15s;
     }
     .btn-neu-sm:hover { box-shadow: inset 2px 2px 5px var(--sd), inset -2px -2px 5px var(--sl); }
+    /* scan actions row (undo + manual) */
+    #scanActions { display: none; }
+    #scanActions.active { display: flex !important; gap: 6px; }
+    /* scan history chips */
+    .scan-history-chip {
+      background: var(--bg);
+      border: none;
+      border-radius: 12px;
+      padding: 6px 12px;
+      box-shadow: 2px 2px 6px var(--sd), -2px -2px 6px var(--sl);
+      cursor: pointer;
+      flex-shrink: 0;
+      text-align: center;
+      min-width: 72px;
+      transition: all 0.18s ease;
+      font-family: 'Mitr', sans-serif;
+      color: var(--text);
+      line-height: 1.2;
+    }
+    .scan-history-chip:hover { transform: translateY(-2px); box-shadow: 3px 4px 9px var(--sd), -3px -3px 8px var(--sl); }
+    .scan-history-chip:active { box-shadow: inset 2px 2px 5px var(--sd), inset -2px -2px 5px var(--sl); transform: translateY(0); }
+    .scan-history-chip .shc-tail { font-weight: 700; color: var(--pink); font-size: 0.78rem; letter-spacing: 0.3px; }
+    .scan-history-chip .shc-meta { font-size: 0.65rem; color: var(--text3); margin-top: 1px; }
+    html.dark-mode .scan-history-chip { background: #2c2a25; color: #e8e4dc; }
+    #scanHistoryList::-webkit-scrollbar { height: 4px; }
+    #scanHistoryList::-webkit-scrollbar-thumb { background: rgba(155,114,207,0.3); border-radius: 4px; }
     /* neumorphic gold action button */
     .btn-neu-gold {
       background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
@@ -1019,6 +1045,115 @@
       color: var(--text2) !important; padding: 10px 14px !important;
       font-family: 'Mitr', sans-serif !important;
     }
+    /* Drag-and-drop zone */
+    .drop-zone {
+      position: relative;
+      background: var(--bg);
+      border: 2px dashed #d4a843;
+      border-radius: 16px;
+      padding: 22px 16px;
+      text-align: center;
+      cursor: pointer;
+      color: var(--text2);
+      font-family: 'Mitr', sans-serif;
+      box-shadow: inset 3px 3px 8px var(--sd), inset -3px -3px 8px var(--sl);
+      transition: all 0.2s ease;
+    }
+    .drop-zone:hover {
+      border-color: var(--gold);
+      background: #fff8e8;
+    }
+    .drop-zone.dragover {
+      border-color: var(--gold);
+      background: #fff0c2;
+      box-shadow: 0 0 0 4px rgba(212,168,67,0.18), inset 3px 3px 8px var(--sd), inset -3px -3px 8px var(--sl);
+      transform: scale(1.01);
+    }
+    .drop-zone .dz-icon {
+      font-size: 2rem; display: block; margin-bottom: 6px;
+    }
+    .drop-zone .dz-text {
+      font-size: 0.95rem; line-height: 1.5;
+    }
+    .drop-zone .dz-hint {
+      font-size: 0.78rem; color: #a08a5a; margin-top: 4px;
+    }
+    .drop-zone input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer;
+    }
+    .dz-filelist {
+      margin-top: 10px;
+      display: flex; flex-direction: column; gap: 4px;
+      font-size: 0.85rem;
+    }
+    .dz-filelist .dz-file {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px;
+      background: var(--bg);
+      border-radius: 10px;
+      box-shadow: 2px 2px 5px var(--sd), -2px -2px 5px var(--sl);
+      color: var(--text2);
+    }
+    .dz-filelist .dz-file .dz-name {
+      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+    }
+    .dz-filelist .dz-file .dz-remove {
+      background: none; border: none; color: var(--pink); font-size: 1.1rem;
+      cursor: pointer; padding: 0 4px; line-height: 1;
+    }
+    html.dark-mode .drop-zone { background: #1e1c19; color: #b0a890; border-color: #6b5a30; }
+    html.dark-mode .drop-zone:hover { background: #2a2620; border-color: var(--gold); }
+    html.dark-mode .drop-zone.dragover { background: #3a3220; }
+    html.dark-mode .dz-filelist .dz-file { background: #2c2a25; color: #e8e4dc; }
+    /* Global drop overlay — ลากไฟล์มาวางที่ไหนก็ได้ในแอป */
+    .global-drop-overlay {
+      position: fixed; inset: 0;
+      background: rgba(212,168,67,0.18);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 99999;
+      pointer-events: none;
+    }
+    .global-drop-overlay.active { display: flex; }
+    .global-drop-overlay .gdo-inner {
+      background: white;
+      padding: 36px 52px;
+      border-radius: 22px;
+      border: 3px dashed #d4a843;
+      text-align: center;
+      box-shadow: 0 12px 50px rgba(0,0,0,0.25);
+      animation: gdoPop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes gdoPop { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .global-drop-overlay .gdo-icon { font-size: 4rem; line-height: 1; }
+    .global-drop-overlay .gdo-text { font-size: 1.3rem; font-weight: 600; color: #7a6440; margin-top: 10px; font-family: 'Mitr', sans-serif; }
+    .global-drop-overlay .gdo-hint { font-size: 0.88rem; color: #a08a5a; margin-top: 4px; font-family: 'Mitr', sans-serif; }
+    html.dark-mode .global-drop-overlay .gdo-inner { background: #2c2a25; }
+    html.dark-mode .global-drop-overlay .gdo-text { color: #e8d8a8; }
+    /* Progress bar inside Swal */
+    .upload-progress-bar {
+      background: #f0e0c0;
+      border-radius: 8px;
+      height: 14px;
+      overflow: hidden;
+      box-shadow: inset 1px 1px 3px rgba(0,0,0,0.12);
+      margin: 8px 0;
+    }
+    .upload-progress-bar > div {
+      background: linear-gradient(90deg, #d4a843, #e9c46a, #f5d97e);
+      background-size: 200% 100%;
+      animation: progressShimmer 2s linear infinite;
+      height: 100%;
+      border-radius: 8px;
+      transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @keyframes progressShimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    html.dark-mode .upload-progress-bar { background: #3a3220; }
     /* network badge — neumorphic */
     #networkBadge {
       background: var(--bg); border-radius: 20px;
@@ -2298,11 +2433,30 @@
 
       <!-- Status bar — full width ใต้ parcel box -->
       <div id="statusLabel" class="status-bar-full">รอเริ่มระบบ...</div>
-      
+
+      <!-- Undo last scan + Manual entry — แสดงเมื่อเริ่มสแกนแล้ว -->
+      <div id="scanActions" style="display:none; gap:6px; margin-top:8px;">
+        <button id="undoLastScanBtn" onclick="undoLastScan()" class="btn-neu-sm" style="flex:1; font-size:0.78rem; padding:8px; display:none;">
+          ↶ ยกเลิกชิ้นล่าสุด
+        </button>
+        <button onclick="openManualEntry()" class="btn-neu-sm" style="flex:1; font-size:0.78rem; padding:8px;">
+          ⌨ กรอกเลขด้วยมือ
+        </button>
+      </div>
+
       <ul id="itemList" style="display:none;"></ul>
 
       <button id="refreshCacheBtn" onclick="refreshAllCache()" class="btn-neu-sm mb-2 w-100 mt-3" style="display:none; font-size:0.88rem; padding:9px;"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><path d="M16.5 10 A6.5 6.5 0 1 1 13 4.2" fill="none" stroke="#a8dadc" stroke-width="2" stroke-linecap="round"/><polyline points="13,1.5 13,4.8 16.3,4.8" fill="none" stroke="#457b9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span> ดึงข้อมูลล่าสุด (สินค้า & ออเดอร์)</button>
       
+      <!-- Mini scan history bar — แสดงพัสดุล่าสุดในเซสชั่น -->
+      <div id="scanHistoryBar" style="display:none; margin-top:14px;">
+        <div style="font-size:0.72rem; color:var(--text3); margin-bottom:5px; padding-left:4px; text-align:left;">
+          <svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/></svg>
+          พัสดุล่าสุดในเซสชั่นนี้ <span id="scanHistoryCount" style="color:var(--pink); font-weight:600;"></span>
+        </div>
+        <div id="scanHistoryList" style="display:flex; gap:6px; overflow-x:auto; padding:4px 2px 6px;"></div>
+      </div>
+
       <!-- Fix 6: sticky action bar ไม่ถูก nav บัง + Fix 1: col-7/col-5 -->
       <div id="action-buttons" class="action-bar-sticky" style="display:none">
         <div class="row g-2">
@@ -2477,52 +2631,21 @@
   <!-- TAB: UPLOAD -->
   <div id="upload" style="display:none" class="fade-in-up">
     <div class="card p-3">
-      <div class="section-title" style="margin-top:4px;"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em;margin-right:4px"><rect x="1" y="6" width="18" height="12" rx="4" fill="#a8dadc"/><rect x="1" y="6" width="18" height="5" rx="4" fill="#457b9d"/><rect x="1" y="9" width="18" height="2" fill="#457b9d"/><rect x="5" y="2" width="3" height="5" rx="1.5" fill="#cdb4db"/><rect x="12" y="2" width="3" height="5" rx="1.5" fill="#cdb4db"/></svg> เลือกช่องทาง (Marketplace)</div>
-      <div id="mpSelector" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
-        <label class="mp-option selected" data-value="tiktok" onclick="selectMarketplace('tiktok', this)">
-          <div class="mp-radio"></div>
-          <div class="mp-icon" style="background:#010101;">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.74a4.85 4.85 0 01-1.01-.05z"/></svg>
-          </div>
-          <div class="mp-label">
-            <span class="mp-name">TikTok Shop</span>
-            <span class="mp-desc">Tracking=AJ · SKU=G · Qty=J</span>
-          </div>
-          <a href="TTindex.html" target="_blank" onclick="event.stopPropagation()" class="mp-guide-btn">📖 คู่มือ</a>
-        </label>
-        <label class="mp-option" data-value="shopee" onclick="selectMarketplace('shopee', this)">
-          <div class="mp-radio"></div>
-          <div class="mp-icon" style="background:#ee4d2d;">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12 2C9.2 2 7 4.2 7 7H5c-.6 0-1 .4-1.1.9L2.5 19.9c-.1.6.4 1.1 1 1.1h17c.6 0 1.1-.5 1-1.1l-1.4-12C19.9 7.4 19.5 7 19 7h-2c0-2.8-2.2-5-5-5zm0 2c1.7 0 3 1.3 3 3H9c0-1.7 1.3-3 3-3zm0 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
-          </div>
-          <div class="mp-label">
-            <span class="mp-name">Shopee</span>
-            <span class="mp-desc">Tracking=N · SKU=S · Qty=W</span>
-          </div>
-          <a href="SPindex.html" target="_blank" onclick="event.stopPropagation()" class="mp-guide-btn">📖 คู่มือ</a>
-        </label>
-        <label class="mp-option" data-value="lazada" onclick="selectMarketplace('lazada', this)">
-          <div class="mp-radio"></div>
-          <div class="mp-icon" style="background:#0f146d;">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M4 4h16v2H4zm0 5h10v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>
-          </div>
-          <div class="mp-label">
-            <span class="mp-name">Lazada</span>
-            <span class="mp-desc">Tracking=BG · SKU=F · (1 row = 1 ชิ้น)</span>
-          </div>
-          <a href="LZindex.html" target="_blank" onclick="event.stopPropagation()" class="mp-guide-btn">📖 คู่มือ</a>
-        </label>
-        <label class="mp-option" data-value="page365" onclick="selectMarketplace('page365', this)">
-          <div class="mp-radio"></div>
-          <div class="mp-icon" style="background:#1877f2;">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.99 3.66 9.12 8.44 9.88v-6.99H7.9V12h2.54V9.8c0-2.51 1.49-3.89 3.78-3.89 1.09 0 2.24.19 2.24.19v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.77l-.44 2.89h-2.33v6.99C18.34 21.12 22 17 22 12c0-5.52-4.48-10-10-10z"/></svg>
-          </div>
-          <div class="mp-label">
-            <span class="mp-name">Page365</span>
-            <span class="mp-desc">Tracking=L · SKU=Y · Qty=AC</span>
-          </div>
-          <a href="365index.html" target="_blank" onclick="event.stopPropagation()" class="mp-guide-btn">📖 คู่มือ</a>
-        </label>
+      <div class="section-title" style="margin-top:4px;"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em;margin-right:4px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#bfdbfe"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/></svg> เลือกไฟล์ (.xlsx, .csv) — เลือกหลายไฟล์ได้</div>
+      <div style="font-size:0.8rem; color:#a08a5a; margin-top:4px; margin-bottom:8px;">ระบบจะตรวจจับ Marketplace ให้อัตโนมัติจากหัวคอลัมน์</div>
+      <div id="dropZone" class="drop-zone">
+        <span class="dz-icon">📂</span>
+        <div class="dz-text">ลากไฟล์มาวางที่นี่ หรือ <strong>คลิกเพื่อเลือกไฟล์</strong></div>
+        <div class="dz-hint">รองรับ .xlsx, .csv (เลือกได้หลายไฟล์)</div>
+        <input type="file" id="fileInput" accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple>
+      </div>
+      <div id="dzFileList" class="dz-filelist"></div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; font-size:0.78rem;">
+        <span style="color:#a08a5a;">📖 คู่มือ:</span>
+        <a href="TTindex.html" target="_blank" class="mp-guide-btn" style="position:static;">TikTok</a>
+        <a href="SPindex.html" target="_blank" class="mp-guide-btn" style="position:static;">Shopee</a>
+        <a href="LZindex.html" target="_blank" class="mp-guide-btn" style="position:static;">Lazada</a>
+        <a href="365index.html" target="_blank" class="mp-guide-btn" style="position:static;">Page365</a>
       </div>
       <select id="marketplaceSelect" style="display:none;">
         <option value="tiktok" selected>tiktok</option>
@@ -2531,9 +2654,6 @@
         <option value="page365">page365</option>
       </select>
 
-      <div class="section-title" style="margin-top:16px;"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em;margin-right:4px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#bfdbfe"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/></svg> เลือกไฟล์ (.xlsx, .csv)</div>
-      <input type="file" id="fileInput" class="form-control file-input-neu mt-2" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-
       <button onclick="processFileUpload()" class="btn-neu-gold w-100 mt-3" style="padding:12px; font-size:1rem;">
         <span class="upload-arrow"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><circle cx="6.5" cy="12" r="4" fill="#bfdbfe"/><circle cx="11" cy="10.5" r="5" fill="#bfdbfe"/><circle cx="15" cy="12.5" r="3.2" fill="#bfdbfe"/><rect x="2.5" y="12.5" width="15" height="4" rx="0" fill="#bfdbfe"/><path d="M2.5 14 Q2.5 16.5 4.5 16.5 L15.5 16.5 Q17.5 16.5 17.5 14" fill="none" stroke="#60a5fa" stroke-width="1.3" stroke-linecap="round"/><line x1="10" y1="18" x2="10" y2="10" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/><polyline points="6.5,14 10,9.5 13.5,14" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></span> อัปโหลดข้อมูล
       </button>
@@ -2541,6 +2661,15 @@
   </div>
 
 </div><!-- /page-content -->
+
+<!-- Global drag-and-drop overlay -->
+<div id="globalDropOverlay" class="global-drop-overlay">
+  <div class="gdo-inner">
+    <div class="gdo-icon">📥</div>
+    <div class="gdo-text">วางไฟล์ที่นี่เพื่ออัปโหลด</div>
+    <div class="gdo-hint">รองรับ .xlsx, .csv · เลือกได้หลายไฟล์</div>
+  </div>
+</div>
 
 <!-- Undo Toast -->
 <div id="undoToast" style="
@@ -2639,10 +2768,45 @@ const headerKeywords = {
   }
 };
 
+// ===== AUTO-DETECT MARKETPLACE จาก header row =====
+// ให้คะแนนแต่ละ marketplace ตามจำนวน keyword ที่ match แล้วเลือกอันที่ได้คะแนนสูงสุด
+// เงื่อนไข: ต้อง match อย่างน้อย tracking + sku ถึงจะนับว่าใช้ได้
+// normalize ชื่อ header: lowercase + trim + strip "*" "#" นำหน้า (Shopee ใช้ * mark บังคับ)
+function _normHeader(h) {
+  return String(h || '').trim().toLowerCase().replace(/^[\*\#\s]+/, '').replace(/\s+$/, '');
+}
+
+function detectMarketplaceFromHeader(headerRow) {
+  if (!headerRow || !headerRow.length) return null;
+  const headers = headerRow.map(_normHeader);
+  const matchKw = (keywords) => {
+    if (!keywords) return false;
+    for (const k of keywords) {
+      if (headers.some(h => h === k)) return true;
+      if (k.includes(' ') && headers.some(h => h.includes(k))) return true;
+    }
+    return false;
+  };
+  let best = null, bestScore = 0;
+  for (const mp of Object.keys(headerKeywords)) {
+    const kw = headerKeywords[mp];
+    const hasTracking = matchKw(kw.tracking);
+    const hasSku      = matchKw(kw.sku);
+    if (!hasTracking || !hasSku) continue;
+    let score = 2;
+    if (matchKw(kw.qty))          score++;
+    if (matchKw(kw.orderId))      score++;
+    if (matchKw(kw.remarkBuyer))  score++;
+    if (matchKw(kw.remarkSeller)) score++;
+    if (score > bestScore) { bestScore = score; best = mp; }
+  }
+  return best;
+}
+
 function autoDetectColumns(marketplace, headerRow) {
   const kw = headerKeywords[marketplace];
   if (!kw || !headerRow) return null;
-  const headers = headerRow.map(h => String(h || '').trim().toLowerCase());
+  const headers = headerRow.map(_normHeader);
 
   // ค้นหา column: exact match เท่านั้น (ไม่ใช้ includes เพื่อป้องกัน cdTrackingCode match กับ trackingcode)
   const findCol = (keywords) => {
@@ -3155,6 +3319,153 @@ function hideUndoToast() {
   // ✅ ไม่ล้าง undoStack ตรงนี้ — ยังสามารถ undo ได้จนกว่าจะเริ่มพัสดุใหม่
 }
 
+// ===== Undo last scan — ลบสินค้าชิ้นล่าสุดที่เพิ่งสแกน =====
+function undoLastScan() {
+  if (items.length === 0) {
+    speak("ยังไม่มีรายการให้ยกเลิกค่ะ", false);
+    return;
+  }
+  const lastIdx = items.length - 1;
+  const sku = items[lastIdx];
+  undoStack.push({ idx: lastIdx, sku });
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  items.splice(lastIdx, 1);
+  if (isStrictValidationMode && scannedItemsMap[sku] > 0) {
+    scannedItemsMap[sku]--;
+    if (scannedItemsMap[sku] === 0) delete scannedItemsMap[sku];
+  }
+  document.getElementById("count").innerText = items.length;
+  renderList();
+  if (isStrictValidationMode) updateChecklistUI();
+  try { beep('warn'); } catch(e) {}
+  vibrate(50);
+  const name = productMap[sku] || sku;
+  const shortName = name.length > 18 ? name.slice(0, 18) + '…' : name;
+  showUndoToast(`↶ ยกเลิก "${shortName}"`);
+  speak("ยกเลิกชิ้นล่าสุดแล้วค่ะ", false);
+  updateScanActionsBar();
+}
+
+// แสดง/ซ่อน undo button + manual entry — ขึ้นกับสถานะการสแกน
+function updateScanActionsBar() {
+  const bar = document.getElementById('scanActions');
+  const undoBtn = document.getElementById('undoLastScanBtn');
+  if (!bar || !undoBtn) return;
+  // แสดง bar ตลอดเมื่อ scanner ทำงาน — manual entry ใช้ได้แม้ยังไม่มี items
+  const scannerActive = scanner && document.getElementById('reader')?.style.display !== 'none';
+  bar.classList.toggle('active', !!scannerActive);
+  undoBtn.style.display = items.length > 0 ? 'inline-block' : 'none';
+}
+
+// ===== Manual entry — กรอกรหัสด้วยมือเมื่อสแกนไม่ติด =====
+async function openManualEntry() {
+  const needParcel = !currentP;
+  const label = needParcel ? 'กรอกรหัสพัสดุ (เช่น TH..., 6...)' : 'กรอกรหัสสินค้า (เริ่มด้วย B) หรือรหัสพัสดุปิดงาน';
+  const placeholder = needParcel ? 'เช่น TH02125ABCD12' : 'เช่น B1234567890';
+  const { value: text } = await Swal.fire({
+    title: '⌨ กรอกรหัสด้วยมือ',
+    input: 'text',
+    inputLabel: label,
+    inputPlaceholder: placeholder,
+    showCancelButton: true,
+    confirmButtonText: 'ยืนยัน',
+    cancelButtonText: 'ยกเลิก',
+    background: '#fff0f3',
+    customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn', cancelButton: 'swal-btn' },
+    confirmButtonColor: 'transparent',
+    cancelButtonColor: 'transparent',
+    reverseButtons: true,
+    inputAttributes: { autocapitalize: 'characters', autocorrect: 'off', autocomplete: 'off' },
+    inputValidator: (v) => (!v || !v.trim()) ? 'กรุณากรอกรหัส' : undefined,
+  });
+  if (!text) return;
+  // เข้า flow เดียวกับการสแกน — bypass cooldown
+  lastScanTime = 0;
+  scanBuffer = [];
+  if (bufferTimeout) { clearTimeout(bufferTimeout); bufferTimeout = null; }
+  processFinalScan(text.trim());
+}
+
+// ===== Scan history bar — แสดงพัสดุล่าสุดที่แพ็คในเซสชั่น =====
+function updateScanHistoryBar() {
+  const bar = document.getElementById('scanHistoryBar');
+  const list = document.getElementById('scanHistoryList');
+  const cntEl = document.getElementById('scanHistoryCount');
+  if (!bar || !list) return;
+  const entries = Object.entries(sessionParcels || {});
+  if (entries.length === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+  if (cntEl) cntEl.textContent = `(${entries.length})`;
+  const sorted = entries
+    .map(([pid, v]) => ({
+      pid,
+      count: (typeof v === 'object' ? v.count : v) || 0,
+      time:  (typeof v === 'object' ? v.time : 0) || 0
+    }))
+    .sort((a, b) => b.time - a.time)
+    .slice(0, 5);
+  list.innerHTML = sorted.map(e => {
+    const tail = e.pid.length >= 4 ? e.pid.slice(-4) : e.pid;
+    const ago = e.time ? _timeAgoShort(e.time) : '—';
+    return `<button class="scan-history-chip" data-pid="${escHtml(e.pid)}">
+      <div class="shc-tail">…${escHtml(tail)}</div>
+      <div class="shc-meta">${e.count} ชิ้น · ${ago}</div>
+    </button>`;
+  }).join('');
+  list.querySelectorAll('.scan-history-chip').forEach(b => {
+    b.onclick = () => showHistoryDetail(b.dataset.pid);
+  });
+}
+
+function _timeAgoShort(t) {
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (s < 60) return `${s}วิ`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}น.`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}ชม.`;
+  return `${Math.floor(h/24)}ว.`;
+}
+
+async function showHistoryDetail(pid) {
+  const data = sessionParcels[pid];
+  if (!data) return;
+  const count = typeof data === 'object' ? data.count : data;
+  const time  = typeof data === 'object' && data.time
+    ? new Date(data.time).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+    : '';
+  // ดึง orderInfo ถ้ามี
+  let orderTag = '';
+  try {
+    const infoMap = JSON.parse(localStorage.getItem('orderInfoMap') || '{}');
+    const info = infoMap[pid];
+    if (info) {
+      const pName = { shopee: 'Shopee', tiktok: 'TikTok', lazada: 'Lazada', page365: 'Page365' }[info.marketplace] || info.marketplace;
+      orderTag = `<div>🛒 ${pName} #${escHtml(info.orderId)}</div>`;
+    }
+  } catch(e) {}
+  await Swal.fire({
+    title: 'พัสดุที่แพ็คแล้ว',
+    html: `<div style="text-align:left; line-height:1.7; color:#7a6440;">
+      <div>📦 รหัส: <strong style="word-break:break-all;">${escHtml(pid)}</strong></div>
+      <div>📋 สินค้า: <strong>${count} ชิ้น</strong></div>
+      ${time ? `<div>🕐 เวลา: ${escHtml(time)}</div>` : ''}
+      ${orderTag}
+    </div>`,
+    icon: 'info',
+    background: '#fff0f3',
+    confirmButtonText: 'ปิด',
+    confirmButtonColor: 'transparent',
+    customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn' },
+  });
+}
+
+// อัปเดตทุก 30 วินาที เพื่อให้ "เวลาที่ผ่านมา" ใหม่
+setInterval(() => {
+  const bar = document.getElementById('scanHistoryBar');
+  if (bar && bar.style.display !== 'none') updateScanHistoryBar();
+}, 30000);
+
 function undoRemove() {
   if (!undoStack.length) return;
   if (undoHideTimer) clearTimeout(undoHideTimer);
@@ -3525,33 +3836,53 @@ function _simpleHash(str) {
 }
 
 // ✅ fetch order cache จาก GAS แล้วบันทึก (ใช้ได้ทั้ง background และ await)
-async function _fetchOrderCacheBackground() {
-  try {
-    const orderRes = await callGAS("getAllPendingOrders").catch(() => null);
-    if (!orderRes || orderRes.error) return;
-    const normalizedOrderRes = {};
-    for (const tracking in orderRes) {
-      const items = orderRes[tracking];
-      normalizedOrderRes[tracking] = Array.isArray(items)
-        ? items.map(item => ({ ...item, sku: normSku(item.sku || '', item.marketplace || '') }))
-        : items;
-    }
-    localStorage.setItem('localOrdersCache', JSON.stringify(normalizedOrderRes));
-    console.log("[Order Cache] ซิงค์สำเร็จ:", Object.keys(normalizedOrderRes).length, "ออเดอร์");
-    const remarkFromOrders = {}, infoFromOrders = {};
-    for (const tracking in normalizedOrderRes) {
-      const items = normalizedOrderRes[tracking];
-      if (!Array.isArray(items)) continue;
-      const remark = items.find(i => i.remark)?.remark || '';
-      if (remark) remarkFromOrders[tracking] = remark;
-      const first = items[0];
-      if (first?.marketplace) {
-        infoFromOrders[tracking] = { orderId: normOrderId(first.orderId || '', first.marketplace), marketplace: first.marketplace };
+// คืน true เมื่อ fetch สำเร็จและ cache ถูกเขียนแล้ว, false ถ้า fail/error
+// retry สูงสุด 3 ครั้ง พร้อม exponential backoff กัน network blip ชั่วคราว
+async function _fetchOrderCacheBackground(retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const orderRes = await callGAS("getAllPendingOrders").catch(err => ({ error: err.message || 'network error' }));
+      if (!orderRes || orderRes.error) {
+        console.warn(`[Order Cache] attempt ${attempt + 1}/${retries + 1} fail:`, orderRes?.error || 'no response');
+        if (attempt < retries) {
+          await new Promise(r => setTimeout(r, 800 * Math.pow(2, attempt))); // 800ms, 1600ms
+          continue;
+        }
+        return false;
       }
+      const normalizedOrderRes = {};
+      for (const tracking in orderRes) {
+        const items = orderRes[tracking];
+        normalizedOrderRes[tracking] = Array.isArray(items)
+          ? items.map(item => ({ ...item, sku: normSku(item.sku || '', item.marketplace || '') }))
+          : items;
+      }
+      localStorage.setItem('localOrdersCache', JSON.stringify(normalizedOrderRes));
+      console.log("[Order Cache] ซิงค์สำเร็จ:", Object.keys(normalizedOrderRes).length, "ออเดอร์");
+      const remarkFromOrders = {}, infoFromOrders = {};
+      for (const tracking in normalizedOrderRes) {
+        const items = normalizedOrderRes[tracking];
+        if (!Array.isArray(items)) continue;
+        const remark = items.find(i => i.remark)?.remark || '';
+        if (remark) remarkFromOrders[tracking] = remark;
+        const first = items[0];
+        if (first?.marketplace) {
+          infoFromOrders[tracking] = { orderId: normOrderId(first.orderId || '', first.marketplace), marketplace: first.marketplace };
+        }
+      }
+      if (Object.keys(remarkFromOrders).length > 0) localStorage.setItem('orderRemarkMap', JSON.stringify(remarkFromOrders));
+      if (Object.keys(infoFromOrders).length > 0) localStorage.setItem('orderInfoMap', JSON.stringify(infoFromOrders));
+      return true;
+    } catch(e) {
+      console.warn(`[Order Cache] attempt ${attempt + 1}/${retries + 1} exception:`, e.message);
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, 800 * Math.pow(2, attempt)));
+        continue;
+      }
+      return false;
     }
-    if (Object.keys(remarkFromOrders).length > 0) localStorage.setItem('orderRemarkMap', JSON.stringify(remarkFromOrders));
-    if (Object.keys(infoFromOrders).length > 0) localStorage.setItem('orderInfoMap', JSON.stringify(infoFromOrders));
-  } catch(e) { console.warn('[Order Cache] fetch ไม่ได้:', e.message); }
+  }
+  return false;
 }
 
 async function fetchBackgroundCache(cacheKey, cacheTimeKey) {
@@ -3626,7 +3957,26 @@ function _scheduleVersionPoll() {
   if (_marketplaceVersionTimer) clearInterval(_marketplaceVersionTimer);
   _marketplaceVersionTimer = setInterval(_pollMarketplaceVersion, 30000);
   console.log('[Polling] เริ่ม poll marketplace version ทุก 30s (Drive direct fetch)');
+  // ✅ Poll ทันทีเมื่อ user สลับกลับมาที่แอป — ไม่ต้องรอครบ 30 วิ
+  // และ poll ตอน window focus ด้วย (รองรับเดสก์ท็อปและกรณี iOS Safari ไม่ fire visibilitychange บางครั้ง)
+  if (!_visibilityPollBound) {
+    _visibilityPollBound = true;
+    let _lastVisibilityPollAt = 0;
+    const VISIBILITY_POLL_COOLDOWN = 5000; // กัน double-fire ใน 5 วิ
+    const _triggerOnVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - _lastVisibilityPollAt < VISIBILITY_POLL_COOLDOWN) return;
+      _lastVisibilityPollAt = now;
+      if (!_marketplaceVersionFileUrl) return;
+      console.log('[Polling] กลับมาที่แอป → poll ทันที');
+      _pollMarketplaceVersion();
+    };
+    document.addEventListener('visibilitychange', _triggerOnVisible);
+    window.addEventListener('focus', _triggerOnVisible);
+  }
 }
+let _visibilityPollBound = false;
 
 async function _pollMarketplaceVersion() {
   if (!_marketplaceVersionFileUrl) return;
@@ -3639,10 +3989,15 @@ async function _pollMarketplaceVersion() {
     const version = (await res.text()).trim();
     if (version && version !== '0' && version !== _lastKnownMarketplaceVersion) {
       console.log('[Polling] marketplace version เปลี่ยน →', version, '— fetch order cache ใหม่');
-      _lastKnownMarketplaceVersion = version;
-      localStorage.setItem('marketplaceVersion', version);
-      await _fetchOrderCacheBackground();
-      console.log('[Polling] order cache อัปเดตแล้ว');
+      // ✅ FIX: bump version หลัง fetch สำเร็จเท่านั้น — กัน cache ค้างเมื่อ fetch ล้ม
+      const ok = await _fetchOrderCacheBackground();
+      if (ok) {
+        _lastKnownMarketplaceVersion = version;
+        localStorage.setItem('marketplaceVersion', version);
+        console.log('[Polling] order cache อัปเดตแล้ว — bump version =', version);
+      } else {
+        console.warn('[Polling] fetch order cache ล้ม — ไม่ bump version จะลองใหม่ poll รอบถัดไป');
+      }
     }
   } catch(e) {
     // network error — ไม่ต้อง log เพราะอาจแค่ offline ชั่วคราว
@@ -3682,6 +4037,7 @@ let currentCameraId = null;
 async function startScan() {
   document.getElementById("reader").style.display = "block";
   document.getElementById("cameraSelectorWrap").style.display = "block";
+  try { updateScanActionsBar(); updateScanHistoryBar(); } catch(e) {}
 
   // โหลดรายการกล้อง
   let cameras = [];
@@ -4256,6 +4612,7 @@ async function _doFinishWork(isManual = false) {
   try {
     const videoChunks = await stopCameraRecording();
     sessionParcels[snapshotParcelId] = { count, time: Date.now() };
+    try { updateScanHistoryBar(); } catch(e) {}
 
     // ✅ ดึง orderId + marketplace สำหรับส่งไป GAS
     let snapshotOrderId = '', snapshotMarketplace = '';
@@ -4346,6 +4703,7 @@ async function resetAppForNext() {
   document.getElementById("rec-label").innerText = "";
   const sb = document.getElementById('saveBtn');
   if (sb) sb.classList.remove('ready');
+  try { updateScanActionsBar(); updateScanHistoryBar(); } catch(e) {}
 }
 
 async function closeAppCompletely() {
@@ -4384,6 +4742,7 @@ async function closeAppCompletely() {
   startBtn.style.display = "block"; startBtn.disabled = false;
   startBtn.innerText = "🚀 เริ่มระบบ / โหลดข้อมูลสินค้า";
   document.getElementById("action-buttons").style.display = "none";
+  try { updateScanActionsBar(); updateScanHistoryBar(); } catch(e) {}
 }
 
 function renderList() {
@@ -4468,36 +4827,94 @@ function removeItem(idx) {
 }
 
 // --- Checklist ---
+// คืน null = error (ดึงไม่ได้), [] = ไม่มีข้อมูล (พัสดุนี้ไม่อยู่ใน MarketplaceData), [...] = มีข้อมูล
+async function _fetchExpectedItems(tracking) {
+  // 1. ลอง localStorage ก่อน (เร็วสุด)
+  try {
+    const localOrders = JSON.parse(localStorage.getItem('localOrdersCache') || '{}');
+    if (localOrders[tracking] && localOrders[tracking].length > 0) {
+      console.log("[Cache] ดึงข้อมูลออเดอร์จากในเครื่องทันที:", tracking);
+      return localOrders[tracking];
+    }
+  } catch(e) {}
+
+  // 2. fallback ไป GAS — แยก error จาก "ไม่มีข้อมูล" ให้ชัด
+  try {
+    const res = await callGAS("getExpectedOrderDetails", { trackingNo: tracking });
+    if (res && typeof res === 'object' && res.error) {
+      console.warn("[GAS] getExpectedOrderDetails error:", res.error);
+      return null; // error — ต้อง retry
+    }
+    if (!Array.isArray(res)) {
+      console.warn("[GAS] getExpectedOrderDetails ตอบกลับรูปแบบไม่คาด:", res);
+      return null;
+    }
+    console.log("[GAS] ดึงข้อมูลออเดอร์จาก Sheet:", tracking, "ได้", res.length, "รายการ");
+    return res;
+  } catch (e) {
+    console.warn("[GAS] getExpectedOrderDetails throw:", e.message);
+    return null;
+  }
+}
+
 async function checkExpectedItems(tracking) {
   document.getElementById("orderChecklistPanel").style.display = "none";
-  try {
-    let expectedData = null;
 
-    // 1. ลองดึงจาก Local Storage
-    let localOrders = JSON.parse(localStorage.getItem('localOrdersCache') || '{}');
-    if (localOrders[tracking] && localOrders[tracking].length > 0) {
-      expectedData = localOrders[tracking];
-      console.log("[Cache] ดึงข้อมูลออเดอร์จากในเครื่องทันที:", tracking);
-    } else {
-      // 2. ถ้าไม่มีในเครื่อง ค่อยไปดึงจาก Google Sheet
-      expectedData = await callGAS("getExpectedOrderDetails", { trackingNo: tracking });
-      console.log("[GAS] ดึงข้อมูลออเดอร์จาก Sheet:", tracking);
-    }
+  let expectedData = await _fetchExpectedItems(tracking);
 
-    if (expectedData && expectedData.length > 0) {
-      isStrictValidationMode = true;
-      expectedItemsArray = expectedData;
-      scannedItemsMap = {};
-      items.forEach(sku => { scannedItemsMap[sku] = (scannedItemsMap[sku] || 0) + 1; });
-      document.getElementById("orderChecklistPanel").style.display = "block";
-      updateChecklistUI();
-      // ✅ ไม่พูดที่นี่ — _speakRemarkIfExists จะพูด remark ก่อน แล้ว chain มาพูด "กรุณาสแกน..." เอง
-    } else {
-      isStrictValidationMode = false; expectedItemsArray = []; scannedItemsMap = {};
-    }
-  } catch (e) {
-    isStrictValidationMode = false;
+  // ===== Error path — แสดง toast + ปุ่มลองใหม่ ไม่ใช่เงียบๆ ตกไป non-strict =====
+  if (expectedData === null) {
+    isStrictValidationMode = false; expectedItemsArray = []; scannedItemsMap = {};
+    beep('warn');
+    setStatus(_S.warn + "ดึงข้อมูลออเดอร์ไม่ได้ — กดเพื่อลองใหม่", "warning");
+    showOrderFetchErrorBanner(tracking);
+    return;
   }
+
+  hideOrderFetchErrorBanner();
+
+  if (expectedData.length > 0) {
+    isStrictValidationMode = true;
+    expectedItemsArray = expectedData;
+    scannedItemsMap = {};
+    items.forEach(sku => { scannedItemsMap[sku] = (scannedItemsMap[sku] || 0) + 1; });
+    document.getElementById("orderChecklistPanel").style.display = "block";
+    updateChecklistUI();
+  } else {
+    isStrictValidationMode = false; expectedItemsArray = []; scannedItemsMap = {};
+  }
+}
+
+// Banner แจ้งเตือนเมื่อดึงข้อมูลออเดอร์ไม่ได้ + ปุ่ม retry
+function showOrderFetchErrorBanner(tracking) {
+  let banner = document.getElementById('orderFetchErrorBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'orderFetchErrorBanner';
+    banner.style.cssText = 'margin-top:8px; padding:10px 12px; background:#fff4d6; border-left:4px solid #e9a23b; border-radius:8px; font-size:0.82rem; color:#7a4a10; text-align:left; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
+    const statusEl = document.getElementById('statusLabel');
+    if (statusEl && statusEl.parentNode) statusEl.parentNode.insertBefore(banner, statusEl.nextSibling);
+  }
+  banner.innerHTML = `
+    <span style="flex:1; min-width:140px;">⚠ ดึงรายการสินค้าไม่ได้ — เน็ตอาจสะดุดหรือ server ล่าช้า</span>
+    <button onclick="retryFetchExpected('${escHtml(tracking)}')" style="background:#e9a23b; color:white; border:none; padding:5px 12px; border-radius:8px; font-family:'Mitr',sans-serif; font-size:0.78rem; cursor:pointer; font-weight:600;">🔁 ลองใหม่</button>
+  `;
+  banner.style.display = 'flex';
+}
+
+function hideOrderFetchErrorBanner() {
+  const banner = document.getElementById('orderFetchErrorBanner');
+  if (banner) banner.style.display = 'none';
+}
+
+async function retryFetchExpected(tracking) {
+  const banner = document.getElementById('orderFetchErrorBanner');
+  if (banner) {
+    banner.innerHTML = '<span>⏳ กำลังลองใหม่...</span>';
+  }
+  // บังคับ refetch cache ก่อน เผื่อ marketplace data เพิ่งอัปเดต
+  await _fetchOrderCacheBackground();
+  await checkExpectedItems(tracking);
 }
 
 // --- Remark Functions ---
@@ -4824,59 +5241,189 @@ function normSku(sku, marketplace) {
   return s;
 }
 
-async function processFileUpload() {
-  const fileInput = document.getElementById('fileInput');
-  const marketplace = document.getElementById('marketplaceSelect').value;
-  if (!fileInput.files.length) { Swal.fire('ข้อผิดพลาด', 'กรุณาเลือกไฟล์ก่อน', 'warning'); return; }
-  const file = fileInput.files[0];
+// ===== DRAG & DROP + selected files list =====
+// เก็บ File[] ที่ผู้ใช้เลือก (รวมจาก click และ drop) — input.files แก้ตรงๆ ไม่ได้
+// เราจึงใช้ตัวแปรนี้เป็น source of truth แล้ว sync ไป input.files ด้วย DataTransfer
+let _selectedFiles = [];
+
+function _isAcceptedFile(f) {
+  const n = (f.name || '').toLowerCase();
+  return n.endsWith('.xlsx') || n.endsWith('.csv') || n.endsWith('.tsv');
+}
+
+function _syncFileInput() {
+  const input = document.getElementById('fileInput');
+  if (!input) return;
+  try {
+    const dt = new DataTransfer();
+    _selectedFiles.forEach(f => dt.items.add(f));
+    input.files = dt.files;
+  } catch(e) { /* บาง browser อาจไม่รองรับ — ไม่เป็นไร เพราะเราอ่านจาก _selectedFiles เป็นหลัก */ }
+}
+
+function _renderDzList() {
+  const list = document.getElementById('dzFileList');
+  if (!list) return;
+  if (_selectedFiles.length === 0) { list.innerHTML = ''; return; }
+  list.innerHTML = _selectedFiles.map((f, i) => {
+    const kb = (f.size / 1024).toFixed(1);
+    return `<div class="dz-file">
+      <span>📄</span>
+      <span class="dz-name" title="${escHtml(f.name)}">${escHtml(f.name)}</span>
+      <span style="font-size:0.75rem; color:#a08a5a;">${kb} KB</span>
+      <button class="dz-remove" type="button" onclick="removeDzFile(${i})" title="ลบ">×</button>
+    </div>`;
+  }).join('');
+}
+
+function removeDzFile(idx) {
+  _selectedFiles.splice(idx, 1);
+  _syncFileInput();
+  _renderDzList();
+}
+
+function _addFiles(fileList) {
+  const incoming = Array.from(fileList || []);
+  const rejected = [];
+  for (const f of incoming) {
+    if (!_isAcceptedFile(f)) { rejected.push(f.name); continue; }
+    // dedup โดย name + size
+    if (_selectedFiles.some(s => s.name === f.name && s.size === f.size)) continue;
+    _selectedFiles.push(f);
+  }
+  _syncFileInput();
+  _renderDzList();
+  if (rejected.length) {
+    Swal.fire('ไฟล์ไม่รองรับ', 'รองรับเฉพาะ .xlsx / .csv:<br>' + rejected.map(escHtml).join('<br>'), 'warning');
+  }
+}
+
+function _initDropZone() {
+  const dz = document.getElementById('dropZone');
+  const input = document.getElementById('fileInput');
+  if (!dz || !input || dz.dataset.bound) return;
+  dz.dataset.bound = '1';
+
+  input.addEventListener('change', () => {
+    _addFiles(input.files);
+  });
+
+  ['dragenter','dragover'].forEach(ev => {
+    dz.addEventListener(ev, e => {
+      e.preventDefault(); e.stopPropagation();
+      dz.classList.add('dragover');
+    });
+  });
+  ['dragleave','dragend','drop'].forEach(ev => {
+    dz.addEventListener(ev, e => {
+      e.preventDefault(); e.stopPropagation();
+      if (ev === 'dragleave' && dz.contains(e.relatedTarget)) return;
+      dz.classList.remove('dragover');
+    });
+  });
+  dz.addEventListener('drop', e => {
+    const files = e.dataTransfer?.files;
+    if (files && files.length) _addFiles(files);
+  });
+}
+document.addEventListener('DOMContentLoaded', _initDropZone);
+
+// Global drag-and-drop overlay — ลากไฟล์มาวางที่ไหนในแอปก็ได้
+function _initGlobalDropOverlay() {
+  const overlay = document.getElementById('globalDropOverlay');
+  if (!overlay || overlay.dataset.bound) return;
+  overlay.dataset.bound = '1';
+  let dragCounter = 0;
+  const isFileDrag = (e) => {
+    const types = e.dataTransfer?.types;
+    if (!types) return false;
+    return Array.from(types).includes('Files');
+  };
+  window.addEventListener('dragenter', (e) => {
+    if (!isFileDrag(e)) return;
+    dragCounter++;
+    overlay.classList.add('active');
+  });
+  window.addEventListener('dragleave', (e) => {
+    if (!isFileDrag(e)) return;
+    dragCounter--;
+    if (dragCounter <= 0) { dragCounter = 0; overlay.classList.remove('active'); }
+  });
+  window.addEventListener('dragover', (e) => {
+    if (isFileDrag(e)) e.preventDefault();
+  });
+  window.addEventListener('drop', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    dragCounter = 0;
+    overlay.classList.remove('active');
+    // ถ้า drop ในกล่อง dropZone — ปล่อยให้ dropZone handler จัดการ (จะ duplicate ถ้าเรารับด้วย)
+    const dz = document.getElementById('dropZone');
+    if (dz && dz.contains(e.target)) return;
+    const files = e.dataTransfer?.files;
+    if (files && files.length) {
+      // สลับไปแท็บ upload ก่อน
+      const uploadTab = document.getElementById('upload');
+      if (uploadTab && uploadTab.style.display === 'none') {
+        const btn = document.querySelector('.tab-btn-upload');
+        if (btn) openTab('upload', btn);
+      }
+      _addFiles(files);
+    }
+  });
+}
+document.addEventListener('DOMContentLoaded', _initGlobalDropOverlay);
+
+// อ่านไฟล์เดียว → auto-detect marketplace → extract ข้อมูล
+// คืนค่า { file, marketplace, extractData, remarkMap, orderInfoMap } หรือ throw error
+async function readAndExtractFile(file) {
+  // ตัดสินใจจากนามสกุลก่อน — .csv/.tsv → text, อื่นๆ → xlsx
+  const lowerName = (file.name || '').toLowerCase();
+  const isTextFile = lowerName.endsWith('.csv') || lowerName.endsWith('.tsv') || lowerName.endsWith('.txt');
+  let rows = [];
+  if (isTextFile) {
+    const text = await file.text();
+    // ตรวจ delimiter: ถ้ามี tab ใช้ tab, ไม่งั้นใช้ comma
+    const firstLine = text.split('\n')[0] || '';
+    const delim = firstLine.includes('\t') ? '\t' : ',';
+    const parsed = Papa.parse(text, { delimiter: delim, skipEmptyLines: true });
+    rows = parsed.data;
+  } else {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+    rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, raw: false });
+  }
+  if (!rows.length || !rows[0]) throw new Error('ไฟล์ว่าง');
+
+  // auto-detect marketplace จาก header
+  const marketplace = detectMarketplaceFromHeader(rows[0]);
+  if (!marketplace) throw new Error('ตรวจไม่พบ Marketplace (header ไม่ตรงกับฟอร์แมตที่รู้จัก)');
   const map = colMappings[marketplace];
 
-  // --- อ่านไฟล์และ preview ก่อนส่ง ---
-  Swal.fire({ title: 'กำลังอ่านไฟล์...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-  let extractData = [];
-  const remarkMap = {}; // { trackingNo: remarkText }
-  const orderInfoMap = {}; // ✅ { trackingNo: { orderId, marketplace } }
-  try {
-    let rows = [];
-    if (map.isCsv) {
-      const text = await file.text();
-      const parsed = Papa.parse(text, { delimiter: '\t', skipEmptyLines: true });
-      rows = parsed.data;
-    } else {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
-      rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, raw: false });
-    }
+  // override ตำแหน่ง column ตาม header จริง
+  let useMap = { ...map };
+  const detected = autoDetectColumns(marketplace, rows[0]);
+  if (detected) {
+    if (detected.tracking !== undefined) useMap.tracking = detected.tracking;
+    if (detected.sku !== undefined) useMap.sku = detected.sku;
+    if (detected.qty !== undefined && map.qty !== -1) useMap.qty = detected.qty;
+    if (detected.remark !== undefined) useMap.remark = detected.remark;
+    if (detected.orderId !== undefined) useMap.orderId = detected.orderId;
+  }
+  let detectedStart = 1;
+  for (let r = 1; r < Math.min(5, rows.length); r++) {
+    const firstCell = String(rows[r]?.[0] || '').trim().toLowerCase();
+    if (firstCell.includes('platform') || firstCell.includes('the ') || (firstCell.includes('order') && firstCell.length > 30)) {
+      detectedStart = r + 1;
+    } else break;
+  }
+  useMap.headerRows = detectedStart;
 
-    // ===== Auto-Detect: อ่าน header จริง แล้ว override ตำแหน่ง column =====
-    let useMap = { ...map };
-    console.log(`[Upload] marketplace=${marketplace}, fallback map=`, JSON.stringify(map));
-    console.log(`[Upload] rows.length=${rows.length}, row[0] cols=${rows[0]?.length}`);
-    if (rows.length > 0 && rows[0]) {
-      const detected = autoDetectColumns(marketplace, rows[0]);
-      if (detected) {
-        if (detected.tracking !== undefined) useMap.tracking = detected.tracking;
-        if (detected.sku !== undefined) useMap.sku = detected.sku;
-        if (detected.qty !== undefined && map.qty !== -1) useMap.qty = detected.qty;
-        if (detected.remark !== undefined) useMap.remark = detected.remark;
-        if (detected.orderId !== undefined) useMap.orderId = detected.orderId;
-      }
-      // ตรวจจับ description rows (TikTok XLSX มี row อธิบายใต้ header, CSV ไม่มี)
-      // เริ่มจาก 1 เสมอ แล้วเพิ่มเฉพาะเมื่อเจอ description row จริง
-      let detectedStart = 1;
-      for (let r = 1; r < Math.min(5, rows.length); r++) {
-        const firstCell = String(rows[r]?.[0] || '').trim().toLowerCase();
-        if (firstCell.includes('platform') || firstCell.includes('the ') || (firstCell.includes('order') && firstCell.length > 30)) {
-          detectedStart = r + 1;
-        } else break;
-      }
-      useMap.headerRows = detectedStart;
-    }
-    console.log(`[Upload] final useMap=`, JSON.stringify(useMap));
-
-    const startRow = useMap.headerRows || 1;
-    console.log(`[Upload] startRow=${startRow}, will read rows[${startRow}] to rows[${rows.length - 1}]`);
-    if (marketplace === 'lazada') {
+  const extractData = [];
+  const remarkMap = {};
+  const orderInfoMap = {};
+  const startRow = useMap.headerRows || 1;
+  if (marketplace === 'lazada') {
       const trackingMap = {};
       let lazSkipped = 0, lazProcessed = 0;
       for (let i = startRow; i < rows.length; i++) {
@@ -4953,48 +5500,184 @@ async function processFileUpload() {
       }
     }
 
-    // บันทึก remarkMap ลง localStorage (merge กับข้อมูลเดิม)
-    try {
-      const existing = JSON.parse(localStorage.getItem('orderRemarkMap') || '{}');
-      const merged = { ...existing, ...remarkMap };
-      localStorage.setItem('orderRemarkMap', JSON.stringify(merged));
-      console.log(`[Remark] บันทึก ${Object.keys(remarkMap).length} หมายเหตุลูกค้า`);
-    } catch(e) { console.warn('[Remark] บันทึก localStorage ไม่ได้:', e.message); }
+  return { file, marketplace, extractData, remarkMap, orderInfoMap };
+}
 
-    // ✅ บันทึก orderInfoMap ลง localStorage (tracking → orderId + marketplace)
-    try {
-      const existingInfo = JSON.parse(localStorage.getItem('orderInfoMap') || '{}');
-      const mergedInfo = { ...existingInfo, ...orderInfoMap };
-      localStorage.setItem('orderInfoMap', JSON.stringify(mergedInfo));
-      console.log(`[OrderInfo] บันทึก ${Object.keys(orderInfoMap).length} รายการ (orderId + platform)`);
-    } catch(e) { console.warn('[OrderInfo] บันทึก localStorage ไม่ได้:', e.message); }
+// ===== Concurrency helper — รัน task พร้อมกันได้สูงสุด `limit` ตัว =====
+async function _runWithLimit(items, limit, worker, onComplete) {
+  let nextIdx = 0;
+  let done = 0;
+  const total = items.length;
+  const results = new Array(total);
+  const runOne = async () => {
+    while (true) {
+      const idx = nextIdx++;
+      if (idx >= total) return;
+      try {
+        results[idx] = await worker(items[idx], idx);
+      } catch (err) {
+        results[idx] = { __error: err };
+      }
+      done++;
+      if (onComplete) onComplete(done, total, items[idx], results[idx]);
+    }
+  };
+  const workers = Array(Math.min(Math.max(1, limit), total)).fill(0).map(runOne);
+  await Promise.all(workers);
+  return results;
+}
 
-    Swal.close();
-  } catch (err) {
-    Swal.fire('ข้อผิดพลาด', 'อ่านไฟล์ไม่ได้: ' + err.message, 'error');
+// progress bar HTML
+function _progressBarHtml(label, done, total, currentName) {
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  return `
+    <div style="font-size:1rem; font-weight:600; color:#7a6440; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
+      <span>${label}</span>
+      <span style="font-size:0.85rem; color:#a08a5a;">${done}/${total} (${pct}%)</span>
+    </div>
+    <div class="upload-progress-bar"><div style="width:${pct}%"></div></div>
+    <div style="font-size:0.78rem; color:#a08a5a; word-break:break-all; line-height:1.4; min-height:1.2em;">${escHtml(currentName || '')}</div>
+  `;
+}
+
+function _showProgressDialog(label, total) {
+  Swal.fire({
+    title: '',
+    html: _progressBarHtml(label, 0, total, ''),
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    background: '#fff0f3',
+    customClass: { popup: 'swal-popup' },
+  });
+}
+function _updateProgressDialog(label, done, total, currentName) {
+  Swal.update({ title: '', html: _progressBarHtml(label, done, total, currentName), showConfirmButton: false });
+}
+
+// อัปโหลด results เข้า GAS แบบขนาน — return aggregates + failures (พร้อม result object เพื่อ retry)
+async function _uploadResultsParallel(items, concurrency = 3) {
+  const agg = { totalCount: 0, totalDup: 0, totalBf: 0, failures: [] };
+  let done = 0;
+  _showProgressDialog('กำลังอัปโหลด', items.length);
+  await _runWithLimit(items, concurrency, async (r) => {
+    try {
+      const resp = await callGAS("saveMarketplaceData", { data: r.extractData, fileName: r.file.name, marketplace: r.marketplace });
+      if (resp && resp.success) {
+        agg.totalCount += resp.count || 0;
+        agg.totalDup   += resp.duplicateSkipped || 0;
+        agg.totalBf    += resp.backfilled || 0;
+        return { ok: true };
+      } else {
+        agg.failures.push({ result: r, reason: resp?.error || 'unknown' });
+        return { ok: false };
+      }
+    } catch (err) {
+      agg.failures.push({ result: r, reason: err.message });
+      return { ok: false };
+    }
+  }, (d, total, item) => {
+    done = d;
+    _updateProgressDialog('กำลังอัปโหลด', done, total, item.file.name);
+  });
+  return agg;
+}
+
+async function processFileUpload() {
+  const fileInput = document.getElementById('fileInput');
+  // อ่านจาก _selectedFiles (จาก drag-drop หรือ click) — fallback ไป input.files
+  const files = _selectedFiles.length ? _selectedFiles.slice() : Array.from(fileInput.files || []);
+  if (!files.length) { Swal.fire('ข้อผิดพลาด', 'กรุณาเลือกไฟล์ก่อน', 'warning'); return; }
+
+  // ===== Phase 1: อ่าน + extract แบบขนาน (concurrency 4) =====
+  _showProgressDialog('กำลังอ่านไฟล์', files.length);
+  const results = [];
+  const readFailures = [];
+  await _runWithLimit(files, 4, async (f) => {
+    try {
+      const r = await readAndExtractFile(f);
+      if (r.extractData.length === 0) {
+        readFailures.push({ name: f.name, reason: 'ไม่พบข้อมูลในไฟล์' });
+      } else {
+        results.push(r);
+      }
+    } catch (err) {
+      readFailures.push({ name: f.name, reason: err.message });
+    }
+  }, (done, total, item) => {
+    _updateProgressDialog('กำลังอ่านไฟล์', done, total, item.name);
+  });
+  Swal.close();
+
+  if (results.length === 0) {
+    const failList = readFailures.map(f => `• ${f.name} — ${f.reason}`).join('\n');
+    Swal.fire('ไม่สามารถอ่านไฟล์ได้', failList || 'ไม่มีไฟล์ที่อ่านได้', 'warning');
     return;
   }
 
-  if (extractData.length === 0) {
-    Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูล\nกรุณาตรวจสอบว่าเลือก Marketplace ให้ตรงกับไฟล์', 'warning');
-    return;
+  // รวมยอดทั้งหมด
+  const allTracking = new Set();
+  let totalItems = 0;
+  let totalRemark = 0;
+  for (const r of results) {
+    r.extractData.forEach(d => allTracking.add(d.tracking));
+    totalItems += r.extractData.length;
+    totalRemark += Object.keys(r.remarkMap).length;
   }
 
-  // --- Preview ก่อนยืนยัน ---
-  const uniqueTracking = new Set(extractData.map(d => d.tracking)).size;
+  // รายการต่อไฟล์ — badge สีตาม brand ของแต่ละ marketplace
+  const mpStyle = {
+    tiktok:  { name: 'TikTok',  bg: '#010101', fg: '#ffffff' },
+    shopee:  { name: 'Shopee',  bg: '#ee4d2d', fg: '#ffffff' },
+    lazada:  { name: 'Lazada',  bg: '#0f146d', fg: '#ffffff' },
+    page365: { name: 'Page365', bg: '#1877f2', fg: '#ffffff' },
+  };
+  const mpBadge = (mp) => {
+    const s = mpStyle[mp] || { name: mp, bg: '#888', fg: '#fff' };
+    return `<span style="display:inline-block; background:${s.bg}; color:${s.fg}; padding:2px 10px; border-radius:10px; font-size:0.78rem; font-weight:600; letter-spacing:0.3px;">${escHtml(s.name)}</span>`;
+  };
+  const mpFileBg = {
+    tiktok:  'rgba(1,1,1,0.05)',
+    shopee:  'rgba(238,77,45,0.08)',
+    lazada:  'rgba(15,20,109,0.08)',
+    page365: 'rgba(24,119,242,0.08)',
+  };
+  const perFile = results.map(r => {
+    const tCount = new Set(r.extractData.map(d => d.tracking)).size;
+    const s = mpStyle[r.marketplace] || { bg: '#888' };
+    const bg = mpFileBg[r.marketplace] || '#f5f0e0';
+    return `<div style="padding:8px 10px; margin:6px 0; background:${bg}; border-left:4px solid ${s.bg}; border-radius:8px;">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        ${mpBadge(r.marketplace)}
+        <strong style="font-size:0.88rem; word-break:break-all;">📄 ${escHtml(r.file.name)}</strong>
+      </div>
+      <div style="font-size:0.82rem; color:#7a6440; margin-top:4px;">
+        ${tCount} ใบ · ${r.extractData.length} รายการ
+      </div>
+    </div>`;
+  }).join('');
+  const failHtml = readFailures.length
+    ? `<div style="margin-top:8px; padding-top:8px; border-top:1px solid #e0c0c0;">
+         <div style="color:#c44; font-weight:600;">ข้ามไฟล์ที่อ่านไม่ได้ (${readFailures.length}):</div>
+         ${readFailures.map(f => `<div style="font-size:0.8rem; color:#a55;">• ${escHtml(f.name)} — ${escHtml(f.reason)}</div>`).join('')}
+       </div>`
+    : '';
+
   const confirm = await Swal.fire({
-    title: `<svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><rect x="2" y="2" width="16" height="16" rx="4" fill="#bfdbfe"/><circle cx="5.5" cy="7" r="1.3" fill="#3b82f6"/><rect x="8" y="6.2" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><circle cx="5.5" cy="11" r="1.3" fill="#60a5fa"/><rect x="8" y="10.2" width="6" height="1.5" rx="0.75" fill="#60a5fa" opacity="0.7"/><circle cx="5.5" cy="15" r="1.3" fill="#93c5fd"/><rect x="8" y="14.2" width="7" height="1.5" rx="0.75" fill="#93c5fd" opacity="0.7"/></svg> ตรวจสอบข้อมูลก่อนอัปโหลด`,
+    title: `ตรวจสอบข้อมูลก่อนอัปโหลด`,
     html: `
-      <div style="text-align:left; font-size:0.9rem; color:#7a6440; line-height:1.8;">
-        <div><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="9" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg> พัสดุ: <strong>${uniqueTracking} ใบ</strong></div>
-        <div><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg> รายการสินค้า: <strong>${extractData.length} รายการ</strong></div>
-        <div><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/></svg> หมายเหตุลูกค้า: <strong>${Object.keys(remarkMap).length} ใบ</strong></div>
-        <div><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><rect x="1" y="6" width="18" height="12" rx="4" fill="#a8dadc"/><rect x="1" y="6" width="18" height="5" rx="4" fill="#457b9d"/><rect x="1" y="9" width="18" height="2" fill="#457b9d"/><rect x="5" y="2" width="3" height="5" rx="1.5" fill="#cdb4db"/><rect x="12" y="2" width="3" height="5" rx="1.5" fill="#cdb4db"/></svg> Marketplace: <strong>${escHtml(marketplace)}</strong></div>
-        <div><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em;margin-right:4px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#bfdbfe"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/></svg> ไฟล์: <strong>${escHtml(file.name)}</strong></div>
+      <div style="text-align:left; font-size:0.9rem; color:#7a6440; line-height:1.7;">
+        <div>📦 พัสดุรวม: <strong>${allTracking.size} ใบ</strong></div>
+        <div>📋 รายการสินค้ารวม: <strong>${totalItems} รายการ</strong></div>
+        <div>📝 หมายเหตุลูกค้า: <strong>${totalRemark} ใบ</strong></div>
+        <div>📁 ไฟล์: <strong>${results.length} ไฟล์</strong></div>
+        <div style="margin-top:8px; padding-top:8px; border-top:1px solid #e0d8c0;">
+          ${perFile}
+        </div>
+        ${failHtml}
       </div>`,
     icon: 'info',
     showCancelButton: true,
-    confirmButtonText: `<svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:4px"><circle cx="6.5" cy="12" r="4" fill="#bfdbfe"/><circle cx="11" cy="10.5" r="5" fill="#bfdbfe"/><circle cx="15" cy="12.5" r="3.2" fill="#bfdbfe"/><rect x="2.5" y="12.5" width="15" height="4" fill="#bfdbfe"/><path d="M2.5 14 Q2.5 16.5 4.5 16.5 L15.5 16.5 Q17.5 16.5 17.5 14" fill="none" stroke="#60a5fa" stroke-width="1.3" stroke-linecap="round"/><line x1="10" y1="18" x2="10" y2="10" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/><polyline points="6.5,14 10,9.5 13.5,14" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg> อัปโหลดเลย`,
+    confirmButtonText: 'อัปโหลดเลย',
     cancelButtonText: 'ยกเลิก',
     confirmButtonColor: 'transparent',
     cancelButtonColor: 'transparent',
@@ -5004,23 +5687,75 @@ async function processFileUpload() {
   });
   if (!confirm.isConfirmed) return;
 
-  // --- ส่งขึ้น GAS ---
-  Swal.fire({ title: 'กำลังอัปโหลด...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+  // บันทึก remarkMap + orderInfoMap รวมจากทุกไฟล์ → localStorage
   try {
-    const response = await callGAS("saveMarketplaceData", { data: extractData, fileName: file.name, marketplace });
-    if (response && response.success) {
-      const dupMsg = response.duplicateSkipped > 0 ? `\n(ข้ามซ้ำ ${response.duplicateSkipped} รายการ)` : '';
-      const bfMsg = response.backfilled > 0 ? `\n(เติม OrderId ย้อนหลัง ${response.backfilled} แถว)` : '';
-      Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${response.count} รายการ${dupMsg}${bfMsg}`, 'success');
-      document.getElementById('fileInput').value = "";
-      // ✅ อัปโหลดไฟล์ marketplace สำเร็จ → fetch order cache ใหม่ทันที
-      console.log('[Order Cache] อัปโหลด marketplace สำเร็จ — กำลัง refresh order cache...');
-      _fetchOrderCacheBackground();
-    } else {
-      Swal.fire('ข้อผิดพลาด', 'บันทึกไม่สำเร็จ: ' + escHtml(response?.error || ''), 'error');
+    const existing = JSON.parse(localStorage.getItem('orderRemarkMap') || '{}');
+    const merged = { ...existing };
+    for (const r of results) Object.assign(merged, r.remarkMap);
+    localStorage.setItem('orderRemarkMap', JSON.stringify(merged));
+  } catch(e) { console.warn('[Remark] บันทึก localStorage ไม่ได้:', e.message); }
+  try {
+    const existingInfo = JSON.parse(localStorage.getItem('orderInfoMap') || '{}');
+    const mergedInfo = { ...existingInfo };
+    for (const r of results) Object.assign(mergedInfo, r.orderInfoMap);
+    localStorage.setItem('orderInfoMap', JSON.stringify(mergedInfo));
+  } catch(e) { console.warn('[OrderInfo] บันทึก localStorage ไม่ได้:', e.message); }
+
+  // ===== Phase 2: อัปโหลดแบบขนาน (concurrency 3) + retry loop =====
+  let pending = results;
+  let totalCount = 0, totalDup = 0, totalBf = 0;
+  let lastFailures = [];
+
+  while (pending.length > 0) {
+    const agg = await _uploadResultsParallel(pending, 3);
+    totalCount += agg.totalCount;
+    totalDup   += agg.totalDup;
+    totalBf    += agg.totalBf;
+
+    if (agg.failures.length === 0) { lastFailures = []; break; }
+
+    const failHtml = agg.failures.map(f => `<div style="padding:6px 0; border-bottom:1px dashed #e0c0c0;">
+        <div>${mpBadge(f.result.marketplace)} <strong style="font-size:0.85rem; word-break:break-all;">${escHtml(f.result.file.name)}</strong></div>
+        <div style="font-size:0.78rem; color:#c44; margin-top:2px;">⚠ ${escHtml(f.reason)}</div>
+      </div>`).join('');
+    const dupMsg2 = totalDup > 0 ? ` (ข้ามซ้ำ ${totalDup})` : '';
+    const bfMsg2  = totalBf > 0 ? ` (เติม OrderId ${totalBf})` : '';
+    const choice = await Swal.fire({
+      title: 'อัปโหลดบางไฟล์ไม่สำเร็จ',
+      html: `<div style="text-align:left; font-size:0.88rem; color:#7a6440;">
+        ✅ สำเร็จสะสม: <strong>${totalCount}</strong> รายการ${dupMsg2}${bfMsg2}<br>
+        ❌ ล้มเหลว: <strong>${agg.failures.length}</strong> ไฟล์
+        <div style="margin-top:8px; padding-top:8px; border-top:1px solid #e0d8c0;">${failHtml}</div>
+      </div>`,
+      icon: 'warning',
+      showDenyButton: true,
+      showCancelButton: true,
+      showConfirmButton: false,
+      denyButtonText: '🔁 ลองใหม่อีกครั้ง',
+      cancelButtonText: 'ปิด',
+      reverseButtons: true,
+      background: '#fff0f3',
+      denyButtonColor: 'transparent',
+      cancelButtonColor: 'transparent',
+      customClass: { popup: 'swal-popup', title: 'swal-ttl', denyButton: 'swal-btn', cancelButton: 'swal-btn' },
+    });
+    if (choice.isDenied) {
+      pending = agg.failures.map(f => f.result);
+      continue;
     }
-  } catch (err) {
-    Swal.fire('ข้อผิดพลาด', err.message, 'error');
+    lastFailures = agg.failures;
+    break;
+  }
+
+  document.getElementById('fileInput').value = "";
+  _selectedFiles = [];
+  _renderDzList();
+  _fetchOrderCacheBackground();
+
+  const dupMsg = totalDup > 0 ? `\n(ข้ามซ้ำ ${totalDup} รายการ)` : '';
+  const bfMsg = totalBf > 0 ? `\n(เติม OrderId ย้อนหลัง ${totalBf} แถว)` : '';
+  if (lastFailures.length === 0) {
+    Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${totalCount} รายการ จาก ${results.length} ไฟล์${dupMsg}${bfMsg}`, 'success');
   }
 }
 
@@ -5733,6 +6468,7 @@ function bumpCount() {
   el.classList.remove('bump');
   void el.offsetWidth;
   el.classList.add('bump');
+  try { updateScanActionsBar(); } catch(e) {}
 }
 
 // ===== PWA — SERVICE WORKER REGISTRATION =====
