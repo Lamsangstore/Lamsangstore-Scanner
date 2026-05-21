@@ -359,6 +359,13 @@
       background: var(--bg);
       color: var(--text2);
     }
+    .btn-restart {
+      background: linear-gradient(135deg, #e9a23b, #f4c46a);
+      color: #fff;
+      box-shadow: 5px 5px 12px rgba(212,140,40,0.35), -3px -3px 8px var(--sl);
+    }
+    .btn-restart:hover { box-shadow: 7px 7px 16px rgba(212,140,40,0.5), -3px -3px 8px var(--sl); }
+    html.dark-mode .btn-restart { color: #fffaeb; box-shadow: 5px 5px 14px rgba(212,140,40,0.5), -3px -3px 8px var(--sl); }
 
     /* ===== STATUS BAR FULL WIDTH ===== */
     .status-bar-full {
@@ -2496,14 +2503,17 @@
         <div id="scanHistoryList" style="display:flex; gap:6px; overflow-x:auto; padding:4px 2px 6px;"></div>
       </div>
 
-      <!-- Fix 6: sticky action bar ไม่ถูก nav บัง + Fix 1: col-7/col-5 -->
+      <!-- Sticky action bar: บันทึก / เริ่มใหม่ / ยกเลิก -->
       <div id="action-buttons" class="action-bar-sticky" style="display:none">
         <div class="row g-2">
-          <div class="col-7">
-            <button id="saveBtn" onclick="finishWork(true)" class="btn-custom btn-save w-100"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="2" width="16" height="16" rx="4" fill="#b5ead7"/><rect x="5" y="2" width="7" height="6" rx="1" fill="#52b788"/><rect x="7" y="3" width="2" height="3" rx="1" fill="white" opacity="0.7"/><rect x="4" y="10" width="12" height="7" rx="2" fill="#52b788"/><rect x="6" y="12" width="8" height="3" rx="1" fill="#b5ead7" opacity="0.8"/></svg></span> บันทึกและจบงาน</button>
+          <div class="col-6">
+            <button id="saveBtn" onclick="finishWork(true)" class="btn-custom btn-save w-100" style="padding-left:6px; padding-right:6px;"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="2" y="2" width="16" height="16" rx="4" fill="#b5ead7"/><rect x="5" y="2" width="7" height="6" rx="1" fill="#52b788"/><rect x="7" y="3" width="2" height="3" rx="1" fill="white" opacity="0.7"/><rect x="4" y="10" width="12" height="7" rx="2" fill="#52b788"/><rect x="6" y="12" width="8" height="3" rx="1" fill="#b5ead7" opacity="0.8"/></svg></span> บันทึก/จบ</button>
           </div>
-          <div class="col-5">
-            <button id="cancelBtn" onclick="cancelWork()" class="btn-custom btn-cancel w-100">✖ ยกเลิก</button>
+          <div class="col-3">
+            <button id="restartBtn" onclick="restartCurrentParcel()" class="btn-custom btn-restart w-100" style="padding-left:4px; padding-right:4px;" title="ล้างพัสดุปัจจุบัน + เริ่มบันทึกวิดีโอใหม่">🔄 เริ่มใหม่</button>
+          </div>
+          <div class="col-3">
+            <button id="cancelBtn" onclick="cancelWork()" class="btn-custom btn-cancel w-100" style="padding-left:4px; padding-right:4px;">✖ ยกเลิก</button>
           </div>
         </div>
       </div>
@@ -4389,8 +4399,18 @@ async function processFinalScan(text) {
         beep('warn'); speak("สินค้าไม่ครบค่ะ กรุณากดบันทึกบนหน้าจอเพื่อจบงาน", false);
         setStatus(_S.warn + "สินค้าไม่ครบ — กดปุ่มบันทึกเพื่อจบงาน", "warning"); return;
       }
-      speak("สแกนปิดงานเรียบร้อยค่ะ กำลังบันทึก");
-      finishWork(false); return;
+      // ✅ FLOW: สแกนปิดงาน → "เงียบ" 1.5 วินาที (กล้องบันทึกใบแปะหน้าให้ชัด)
+      // → จากนั้นค่อย beep + status + พูด "ปิดงานแล้ว" + หยุดบันทึก
+      // กันสแกนซ้ำระหว่างรอ
+      lastScanTime = Date.now() + 5000;
+      setTimeout(() => {
+        beep('ok');
+        vibrate(50);
+        setStatus(_S.ok + "ปิดงาน — กำลังบันทึก...", "success");
+        speak("ปิดงานแล้ว");
+        finishWork(false); // ภายในจะหยุดวิดีโอ + บันทึก
+      }, 1500);
+      return;
     }
     if (currentP && upperText !== currentP && !isEditingId) {
       if (items.length > 0) {
@@ -4463,10 +4483,9 @@ function processNewParcel(text, carrier) {
   showCustomerRemark(text);
   const lastFour = text.length >= 4 ? text.slice(-4) : text;
 
-  // ✅ ล็อคสแกนสินค้าตั้งแต่เริ่มพูดเลขพัสดุ
-  isSpeakingRemark = true;
-
   if (wasEditing) {
+    // ล็อคสแกนสินค้าตั้งแต่เริ่มพูด (กรณีแก้รหัส)
+    isSpeakingRemark = true;
     const parcelMsg = `แก้ไขเป็นรหัส ${lastFour.split('').join(' ')} เรียบร้อยค่ะ`;
     _speakParcelThenRemark(parcelMsg, text, 1000);
     expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
@@ -4474,9 +4493,16 @@ function processNewParcel(text, carrier) {
     document.getElementById("orderChecklistPanel").style.display = "none";
     checkExpectedItems(text);
   } else {
-    const parcelMsg = `พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`;
-    _speakParcelThenRemark(parcelMsg, text, 1200);
-    stopCameraRecording().then(() => startCameraRecording(true)); // ✅ พัสดุใหม่ → reset chunks
+    // ✅ FLOW ใหม่ ตามคำขอ:
+    // 1) เริ่มบันทึกวิดีโอทันที (ไม่รอ stop เก่าจบ — fire-and-forget)
+    stopCameraRecording().then(() => startCameraRecording(true));
+    // 2) รอ 1.5 วินาที แล้วพูดเฉพาะ 4 ตัวท้ายของรหัสพัสดุ (ไม่มี "พัสดุ..." นำ)
+    setTimeout(() => {
+      // ล็อคสแกนสินค้าเฉพาะช่วงพูดเลขพัสดุ + remark (ถ้ามี)
+      isSpeakingRemark = true;
+      const parcelMsg = lastFour.split('').join(' ');
+      _speakParcelThenRemark(parcelMsg, text, 1200);
+    }, 1500);
     checkExpectedItems(text);
   }
 }
@@ -4490,6 +4516,52 @@ async function cancelWork() {
   await closeAppCompletely();
   isFinishing = false;
   setStatus("✖ ยกเลิกงานเรียบร้อย", "secondary");
+}
+
+// ===== Restart current parcel — ล้างข้อมูลพัสดุปัจจุบัน + วิดีโอ แล้วรอสแกนใบใหม่ =====
+// ไม่ปิดกล้อง/ไม่ออกจากระบบสแกน — เหมาะกรณีสแกนผิดใบหรืออยากเริ่มใหม่
+async function restartCurrentParcel() {
+  if (isFinishing) return;
+  if (!currentP && items.length === 0) {
+    speak("ยังไม่มีพัสดุให้เริ่มใหม่ค่ะ", false);
+    return;
+  }
+  const r = await Swal.fire({
+    title: '🔄 เริ่มใหม่?',
+    html: `<div style="font-size:0.88rem; color:#7a6440; text-align:left;">
+      ล้างพัสดุปัจจุบัน <strong>${escHtml(currentP || '-')}</strong>
+      ${items.length > 0 ? ` (${items.length} ชิ้น)` : ''}
+      และยกเลิกวิดีโอที่บันทึก
+      <br><span style="color:#c44; font-size:0.78rem;">⚠ ข้อมูลที่ยังไม่ได้บันทึกจะหายไป</span>
+    </div>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: '🔄 เริ่มใหม่',
+    cancelButtonText: 'ไม่เริ่ม',
+    confirmButtonColor: 'transparent',
+    cancelButtonColor: 'transparent',
+    background: '#fff0f3',
+    customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn', cancelButton: 'swal-btn' },
+    reverseButtons: true,
+  });
+  if (!r.isConfirmed) return;
+
+  isFinishing = true;
+  try {
+    clearInactivityWatch();
+    // หยุดบันทึก + ทิ้ง chunks ทั้งหมด (ไม่ upload)
+    try { await stopCameraRecording(); } catch(e) { console.warn('[restart] stop error:', e); }
+    recordedChunks = [];
+    // ล้าง state (เหมือน resetAppForNext แต่ไม่พูด summary)
+    await resetAppForNext();
+    setStatus("🔄 เริ่มใหม่แล้ว — สแกนพัสดุใบใหม่ได้เลย", "info");
+    speak("เริ่มใหม่ค่ะ กรุณาสแกนพัสดุใบใหม่", false);
+  } catch(e) {
+    console.error('[restartCurrentParcel] error:', e);
+  } finally {
+    isFinishing = false;
+    lastScanTime = Date.now();
+  }
 }
 
 async function finishWork(isManual = false) {
