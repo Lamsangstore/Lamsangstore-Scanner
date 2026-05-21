@@ -4399,7 +4399,7 @@ async function processFinalScan(text) {
         beep('warn'); speak("สินค้าไม่ครบค่ะ กรุณากดบันทึกบนหน้าจอเพื่อจบงาน", false);
         setStatus(_S.warn + "สินค้าไม่ครบ — กดปุ่มบันทึกเพื่อจบงาน", "warning"); return;
       }
-      // ✅ FLOW: สแกนปิดงาน → "เงียบ" 1.5 วินาที (กล้องบันทึกใบแปะหน้าให้ชัด)
+      // ✅ FLOW: สแกนปิดงาน → "เงียบ" 1 วินาที (กล้องบันทึกใบแปะหน้าให้ชัด)
       // → จากนั้นค่อย beep + status + พูด "ปิดงานแล้ว" + หยุดบันทึก
       // กันสแกนซ้ำระหว่างรอ
       lastScanTime = Date.now() + 5000;
@@ -4409,7 +4409,7 @@ async function processFinalScan(text) {
         setStatus(_S.ok + "ปิดงาน — กำลังบันทึก...", "success");
         speak("ปิดงานแล้ว");
         finishWork(false); // ภายในจะหยุดวิดีโอ + บันทึก
-      }, 1500);
+      }, 1000);
       return;
     }
     if (currentP && upperText !== currentP && !isEditingId) {
@@ -4493,16 +4493,13 @@ function processNewParcel(text, carrier) {
     document.getElementById("orderChecklistPanel").style.display = "none";
     checkExpectedItems(text);
   } else {
-    // ✅ FLOW ใหม่ ตามคำขอ:
-    // 1) เริ่มบันทึกวิดีโอทันที (ไม่รอ stop เก่าจบ — fire-and-forget)
+    // ล็อคสแกนสินค้าตั้งแต่เริ่มพูดเลขพัสดุ
+    isSpeakingRemark = true;
+    // เริ่มบันทึกวิดีโอทันที (ไม่รอ stop เก่าจบ — fire-and-forget)
     stopCameraRecording().then(() => startCameraRecording(true));
-    // 2) รอ 1.5 วินาที แล้วพูดเฉพาะ 4 ตัวท้ายของรหัสพัสดุ (ไม่มี "พัสดุ..." นำ)
-    setTimeout(() => {
-      // ล็อคสแกนสินค้าเฉพาะช่วงพูดเลขพัสดุ + remark (ถ้ามี)
-      isSpeakingRemark = true;
-      const parcelMsg = lastFour.split('').join(' ');
-      _speakParcelThenRemark(parcelMsg, text, 1200);
-    }, 1500);
+    // พูดทันที — "พัสดุ {carrier} ใหม่ ลงท้ายด้วย X X X X"
+    const parcelMsg = `พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`;
+    _speakParcelThenRemark(parcelMsg, text, 1200);
     checkExpectedItems(text);
   }
 }
