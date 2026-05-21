@@ -5839,13 +5839,16 @@ async function processFileUpload() {
     localStorage.setItem('orderInfoMap', JSON.stringify(mergedInfo));
   } catch(e) { console.warn('[OrderInfo] บันทึก localStorage ไม่ได้:', e.message); }
 
-  // ===== Phase 2: อัปโหลดแบบขนาน (concurrency 3) + retry loop =====
+  // ===== Phase 2: อัปโหลด — concurrency 1 (sequential)
+  // ⚠️ GAS saveMarketplaceData อ่าน sheet.getLastRow() แล้วเขียนต่อ — ถ้าขนานกัน 2+ request
+  //    จะอ่าน lastRow ค่าเดียวกัน → เขียนทับกัน → ข้อมูลหาย
+  //    GAS ฝั่งใหม่มี LockService แล้ว (ทำงานเสมือนได้) แต่ client ยังคุม sequential เพื่อความปลอดภัย
   let pending = results;
   let totalCount = 0, totalDup = 0, totalBf = 0;
   let lastFailures = [];
 
   while (pending.length > 0) {
-    const agg = await _uploadResultsParallel(pending, 3);
+    const agg = await _uploadResultsParallel(pending, 1);
     totalCount += agg.totalCount;
     totalDup   += agg.totalDup;
     totalBf    += agg.totalBf;

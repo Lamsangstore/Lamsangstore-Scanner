@@ -418,6 +418,16 @@ function setupMarketplaceSheet() {
 // saveMarketplaceData
 // ============================================================
 function saveMarketplaceData(body) {
+  // ✅ LockService — กัน race condition เมื่ออัปโหลดหลายไฟล์พร้อมกัน
+  // ไม่มี lock = 2 requests อ่าน lastRow ค่าเดียวกัน → เขียนทับกัน → ข้อมูลหาย
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000); // รอ lock สูงสุด 20 วินาที
+  } catch(e) {
+    Logger.log("[saveMarketplaceData] ไม่ได้ lock ภายใน 20s: " + e.message);
+    return { success: false, error: "Server busy, please retry" };
+  }
+
   try {
     const dataArray = Array.isArray(body.data) ? body.data : [];
     if (dataArray.length > 10000) return { success: false, error: "data มากเกินไป" };
@@ -466,13 +476,16 @@ function saveMarketplaceData(body) {
 
     logSheet.appendRow([timestamp, fileName, marketplace, newRows.length]);
 
-    cleanUpOldMarketplaceData();
+    // ✅ cleanup เฉพาะถ้าผ่านมาเกิน 1 ชม. แล้ว — กัน lock ค้างนานเมื่ออัปโหลดถี่ๆ
+    _maybeCleanUpOldMarketplaceData();
 
     if (newRows.length > 0) _bumpMarketplaceVersion();
 
     return { success: true, count: newRows.length, duplicateSkipped };
   } catch (e) {
     return { success: false, error: e.toString() };
+  } finally {
+    try { lock.releaseLock(); } catch(_) {}
   }
 }
 
@@ -613,6 +626,20 @@ function getReportData(startStr, endStr) {
 // ============================================================
 // cleanUpOldMarketplaceData
 // ============================================================
+// ✅ wrapper — รัน cleanup เฉพาะถ้าผ่านไปนานเกิน 1 ชม. (กันรัน clearContents+rewrite ทุก upload)
+function _maybeCleanUpOldMarketplaceData() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const last = parseInt(props.getProperty('mpCleanupLastRun') || '0', 10);
+    const now = Date.now();
+    if (now - last < 60 * 60 * 1000) return; // 1 ชม.
+    cleanUpOldMarketplaceData();
+    props.setProperty('mpCleanupLastRun', String(now));
+  } catch(e) {
+    Logger.log('[_maybeCleanUpOldMarketplaceData] error: ' + e.message);
+  }
+}
+
 function cleanUpOldMarketplaceData() {
   try {
     const sheet = setupMarketplaceSheet();
