@@ -4389,8 +4389,17 @@ async function processFinalScan(text) {
         beep('warn'); speak("สินค้าไม่ครบค่ะ กรุณากดบันทึกบนหน้าจอเพื่อจบงาน", false);
         setStatus(_S.warn + "สินค้าไม่ครบ — กดปุ่มบันทึกเพื่อจบงาน", "warning"); return;
       }
-      speak("สแกนปิดงานเรียบร้อยค่ะ กำลังบันทึก");
-      finishWork(false); return;
+      // ✅ FLOW ใหม่ ตามคำขอ: สแกนปิดงาน → beep ทันที, รอ 1.5 วินาที, พูด "ปิดงานแล้ว" แล้วจึงหยุดบันทึก
+      beep('ok');
+      vibrate(50);
+      setStatus(_S.ok + "ปิดงาน — กำลังบันทึก...", "success");
+      // กันสแกนซ้ำระหว่างรอ
+      lastScanTime = Date.now() + 5000;
+      setTimeout(() => {
+        speak("ปิดงานแล้ว");
+        finishWork(false); // ภายในจะหยุดวิดีโอ + บันทึก (เกิดพร้อมกับการพูด)
+      }, 1500);
+      return;
     }
     if (currentP && upperText !== currentP && !isEditingId) {
       if (items.length > 0) {
@@ -4463,10 +4472,9 @@ function processNewParcel(text, carrier) {
   showCustomerRemark(text);
   const lastFour = text.length >= 4 ? text.slice(-4) : text;
 
-  // ✅ ล็อคสแกนสินค้าตั้งแต่เริ่มพูดเลขพัสดุ
-  isSpeakingRemark = true;
-
   if (wasEditing) {
+    // ล็อคสแกนสินค้าตั้งแต่เริ่มพูด (กรณีแก้รหัส)
+    isSpeakingRemark = true;
     const parcelMsg = `แก้ไขเป็นรหัส ${lastFour.split('').join(' ')} เรียบร้อยค่ะ`;
     _speakParcelThenRemark(parcelMsg, text, 1000);
     expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
@@ -4474,9 +4482,16 @@ function processNewParcel(text, carrier) {
     document.getElementById("orderChecklistPanel").style.display = "none";
     checkExpectedItems(text);
   } else {
-    const parcelMsg = `พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`;
-    _speakParcelThenRemark(parcelMsg, text, 1200);
-    stopCameraRecording().then(() => startCameraRecording(true)); // ✅ พัสดุใหม่ → reset chunks
+    // ✅ FLOW ใหม่ ตามคำขอ:
+    // 1) เริ่มบันทึกวิดีโอทันที (ไม่รอ stop เก่าจบ — fire-and-forget)
+    stopCameraRecording().then(() => startCameraRecording(true));
+    // 2) รอ 1.5 วินาที แล้วพูดเฉพาะ 4 ตัวท้ายของรหัสพัสดุ (ไม่มี "พัสดุ..." นำ)
+    setTimeout(() => {
+      // ล็อคสแกนสินค้าเฉพาะช่วงพูดเลขพัสดุ + remark (ถ้ามี)
+      isSpeakingRemark = true;
+      const parcelMsg = lastFour.split('').join(' ');
+      _speakParcelThenRemark(parcelMsg, text, 1200);
+    }, 1500);
     checkExpectedItems(text);
   }
 }
