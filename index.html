@@ -4389,15 +4389,16 @@ async function processFinalScan(text) {
         beep('warn'); speak("สินค้าไม่ครบค่ะ กรุณากดบันทึกบนหน้าจอเพื่อจบงาน", false);
         setStatus(_S.warn + "สินค้าไม่ครบ — กดปุ่มบันทึกเพื่อจบงาน", "warning"); return;
       }
-      // ✅ FLOW ใหม่ ตามคำขอ: สแกนปิดงาน → beep ทันที, รอ 1.5 วินาที, พูด "ปิดงานแล้ว" แล้วจึงหยุดบันทึก
-      beep('ok');
-      vibrate(50);
-      setStatus(_S.ok + "ปิดงาน — กำลังบันทึก...", "success");
+      // ✅ FLOW: สแกนปิดงาน → "เงียบ" 1.5 วินาที (กล้องบันทึกใบแปะหน้าให้ชัด)
+      // → จากนั้นค่อย beep + status + พูด "ปิดงานแล้ว" + หยุดบันทึก
       // กันสแกนซ้ำระหว่างรอ
       lastScanTime = Date.now() + 5000;
       setTimeout(() => {
+        beep('ok');
+        vibrate(50);
+        setStatus(_S.ok + "ปิดงาน — กำลังบันทึก...", "success");
         speak("ปิดงานแล้ว");
-        finishWork(false); // ภายในจะหยุดวิดีโอ + บันทึก (เกิดพร้อมกับการพูด)
+        finishWork(false); // ภายในจะหยุดวิดีโอ + บันทึก
       }, 1500);
       return;
     }
