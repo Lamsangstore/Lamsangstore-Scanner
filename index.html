@@ -5514,16 +5514,48 @@ document.addEventListener('DOMContentLoaded', _initGlobalDropOverlay);
 
 // อ่านไฟล์เดียว → auto-detect marketplace → extract ข้อมูล
 // คืนค่า { file, marketplace, extractData, remarkMap, orderInfoMap } หรือ throw error
+// ✅ Merge continuation lines — รองรับ CSV/TSV ที่มี newline ในเซลล์ที่ไม่ได้ครอบ quote
+// (Page365 export ที่อยู่ลูกค้ามี newline แต่ไม่ quote → PapaParse แตก row → tracking หาย)
+// Heuristic: บรรทัดที่มี delimiter น้อยกว่าครึ่งหนึ่งของ header → ถือเป็น continuation ของบรรทัดก่อนหน้า
+function _preprocessMultilineDelimited(text, delim) {
+  const lines = text.split(/\r?\n/);
+  if (lines.length < 2) return text;
+  const headerCount = (lines[0].match(new RegExp(delim === '\t' ? '\\t' : ',', 'g')) || []).length;
+  if (headerCount < 5) return text; // ไฟล์น้อยคอลัมน์เกินไป — ไม่เสี่ยง preprocess
+  const minDelimsForRealRow = Math.floor(headerCount * 0.5);
+  const out = [lines[0]];
+  let buffer = '';
+  let mergedCount = 0;
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
+    const delims = (line.match(new RegExp(delim === '\t' ? '\\t' : ',', 'g')) || []).length;
+    if (delims >= minDelimsForRealRow) {
+      if (buffer) out.push(buffer);
+      buffer = line;
+    } else {
+      // บรรทัดสั้นกว่าปกติ → continuation
+      buffer = buffer ? buffer + ' ' + line.replace(/^\s+/, '') : line;
+      mergedCount++;
+    }
+  }
+  if (buffer) out.push(buffer);
+  if (mergedCount > 0) console.log(`[Preprocess] merged ${mergedCount} continuation lines (header has ${headerCount} ${delim === '\t' ? 'tabs' : 'commas'})`);
+  return out.join('\n');
+}
+
 async function readAndExtractFile(file) {
   // ตัดสินใจจากนามสกุลก่อน — .csv/.tsv → text, อื่นๆ → xlsx
   const lowerName = (file.name || '').toLowerCase();
   const isTextFile = lowerName.endsWith('.csv') || lowerName.endsWith('.tsv') || lowerName.endsWith('.txt');
   let rows = [];
   if (isTextFile) {
-    const text = await file.text();
+    let text = await file.text();
     // ตรวจ delimiter: ถ้ามี tab ใช้ tab, ไม่งั้นใช้ comma
     const firstLine = text.split('\n')[0] || '';
     const delim = firstLine.includes('\t') ? '\t' : ',';
+    // ✅ merge continuation lines (สำหรับ Page365 ที่ address มี newline)
+    text = _preprocessMultilineDelimited(text, delim);
     const parsed = Papa.parse(text, { delimiter: delim, skipEmptyLines: true });
     rows = parsed.data;
   } else {
@@ -5560,20 +5592,26 @@ async function readAndExtractFile(file) {
   const extractData = [];
   const remarkMap = {};
   const orderInfoMap = {};
+  // ✅ Track skipped rows (เพื่อรายงานต่อ user — silent skip ทำให้ข้อมูลหายโดยไม่รู้ตัว)
+  const skipped = { count: 0, reasons: {}, examples: [] };
+  const _recordSkip = (reason, rowIdx, row) => {
+    skipped.count++;
+    skipped.reasons[reason] = (skipped.reasons[reason] || 0) + 1;
+    if (skipped.examples.length < 3) {
+      skipped.examples.push({ rowIdx, reason, sample: JSON.stringify(row).slice(0, 200) });
+    }
+  };
   const startRow = useMap.headerRows || 1;
   if (marketplace === 'lazada') {
       const trackingMap = {};
-      let lazSkipped = 0, lazProcessed = 0;
       for (let i = startRow; i < rows.length; i++) {
-        const row = rows[i]; if (!row) { lazSkipped++; continue; }
+        const row = rows[i]; if (!row) { _recordSkip('null_row', i, row); continue; }
         const tracking = cellToStr(row[useMap.tracking]).toUpperCase();
         const sku      = normSku(cellToStr(row[useMap.sku]), marketplace);
         if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') {
-          lazSkipped++;
-          console.log(`[Lazada] skip row ${i}: tracking='${tracking}', sku='${sku}', raw_tracking=${JSON.stringify(row[useMap.tracking])}, raw_sku=${JSON.stringify(row[useMap.sku])}`);
+          _recordSkip(!tracking ? 'no_tracking' : 'no_sku', i, row);
           continue;
         }
-        lazProcessed++;
         const key = tracking + '|' + sku;
         trackingMap[key] = (trackingMap[key] || 0) + 1;
         // ✅ ดึง orderId
@@ -5601,12 +5639,18 @@ async function readAndExtractFile(file) {
       // ✅ ใช้ trackingSkuMap สะสม qty ก่อน แก้ปัญหา Shopee แตก row ซ้ำ SKU เดียวกัน
       const trackingSkuMap = {}; // { "TRACKING|SKU": qty }
       for (let i = startRow; i < rows.length; i++) {
-        const row = rows[i]; if (!row) continue;
+        const row = rows[i]; if (!row) { _recordSkip('null_row', i, row); continue; }
         const tracking = cellToStr(row[useMap.tracking]).toUpperCase();
         const sku      = normSku(cellToStr(row[useMap.sku]), marketplace);
         const qty      = parseInt(row[useMap.qty]) || 1;
-        if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') continue;
-        if (tracking.length < 5 || tracking.includes(' ')) continue;
+        if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') {
+          _recordSkip(!tracking ? 'no_tracking' : 'no_sku', i, row);
+          continue;
+        }
+        if (tracking.length < 5 || tracking.includes(' ')) {
+          _recordSkip('bad_tracking_format', i, row);
+          continue;
+        }
         const key = tracking + '|' + sku;
         trackingSkuMap[key] = (trackingSkuMap[key] || 0) + qty;
         // ✅ ดึง orderId — รองรับ "การจัดส่งแบบรวม" (tracking เดียว หลาย orderId)
@@ -5638,7 +5682,10 @@ async function readAndExtractFile(file) {
       }
     }
 
-  return { file, marketplace, extractData, remarkMap, orderInfoMap };
+  if (skipped.count > 0) {
+    console.warn(`[${marketplace}] ${file.name}: ข้าม ${skipped.count} แถว`, skipped.reasons, skipped.examples);
+  }
+  return { file, marketplace, extractData, remarkMap, orderInfoMap, skipped };
 }
 
 // ===== Concurrency helper — รัน task พร้อมกันได้สูงสุด `limit` ตัว =====
@@ -5783,6 +5830,10 @@ async function processFileUpload() {
     const tCount = new Set(r.extractData.map(d => d.tracking)).size;
     const s = mpStyle[r.marketplace] || { bg: '#888' };
     const bg = mpFileBg[r.marketplace] || '#f5f0e0';
+    const skipCount = r.skipped?.count || 0;
+    const skipHtml = skipCount > 0
+      ? `<div style="font-size:0.78rem; color:#c44; margin-top:3px;">⚠ ข้าม ${skipCount} แถว (tracking/SKU ไม่ครบ) — ดูคอนโซลสำหรับรายละเอียด</div>`
+      : '';
     return `<div style="padding:8px 10px; margin:6px 0; background:${bg}; border-left:4px solid ${s.bg}; border-radius:8px;">
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         ${mpBadge(r.marketplace)}
@@ -5791,6 +5842,7 @@ async function processFileUpload() {
       <div style="font-size:0.82rem; color:#7a6440; margin-top:4px;">
         ${tCount} ใบ · ${r.extractData.length} รายการ
       </div>
+      ${skipHtml}
     </div>`;
   }).join('');
   const failHtml = readFailures.length
@@ -5895,8 +5947,15 @@ async function processFileUpload() {
 
   const dupMsg = totalDup > 0 ? `\n(ข้ามซ้ำ ${totalDup} รายการ)` : '';
   const bfMsg = totalBf > 0 ? `\n(เติม OrderId ย้อนหลัง ${totalBf} แถว)` : '';
+  // ✅ รวมแถวที่ parse ข้ามจากทุกไฟล์ — เพื่อให้ user รู้ว่ามีข้อมูลไม่ครบ
+  const totalParseSkipped = results.reduce((s, r) => s + (r.skipped?.count || 0), 0);
+  const parseSkipMsg = totalParseSkipped > 0 ? `\n⚠ ข้ามแถวที่อ่านไม่ครบ ${totalParseSkipped} แถว (เปิด console ดูรายละเอียด)` : '';
   if (lastFailures.length === 0) {
-    Swal.fire('สำเร็จ', `อัปโหลดสำเร็จ ${totalCount} รายการ จาก ${results.length} ไฟล์${dupMsg}${bfMsg}`, 'success');
+    Swal.fire({
+      title: totalParseSkipped > 0 ? 'สำเร็จ (มีคำเตือน)' : 'สำเร็จ',
+      text: `อัปโหลดสำเร็จ ${totalCount} รายการ จาก ${results.length} ไฟล์${dupMsg}${bfMsg}${parseSkipMsg}`,
+      icon: totalParseSkipped > 0 ? 'warning' : 'success',
+    });
   }
 }
 
