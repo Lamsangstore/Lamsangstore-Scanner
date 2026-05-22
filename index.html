@@ -2974,6 +2974,24 @@ function pickBestVideoMime() {
 let inactivityTimer = null;       // Timer 5 วิ แจ้งครั้งแรก
 let inactivityRepeatTimer = null; // Timer 30 วิ แจ้งซ้ำ
 
+// ✅ Auto-close หลังบันทึกพัสดุใบสุดท้าย — กันพนักงานลืมเปิดกล้องทิ้งไว้
+let _postParcelIdleTimer = null;
+const POST_PARCEL_IDLE_MS = 3 * 60 * 1000; // 3 นาที
+function _startPostParcelIdleTimer() {
+  _clearPostParcelIdleTimer();
+  if (!scanner) return; // ไม่อยู่โหมดสแกน → ไม่ต้องตั้ง
+  _postParcelIdleTimer = setTimeout(async () => {
+    if (currentP || isFinishing) return; // กำลังสแกนพัสดุใหม่อยู่ → ยกเลิก
+    console.log('[Idle] ไม่มีการสแกนพัสดุใหม่นาน 3 นาที — ปิดกล้องอัตโนมัติ');
+    try { speak("ไม่มีการใช้งานนาน 3 นาที กำลังปิดกล้องอัตโนมัติ ค่ะ"); } catch(e) {}
+    setStatus("⏰ ไม่มีการใช้งานนาน — ปิดกล้องอัตโนมัติ", "warning");
+    try { await closeAppCompletely(); } catch(e) { console.warn('[Idle] close error:', e); }
+  }, POST_PARCEL_IDLE_MS);
+}
+function _clearPostParcelIdleTimer() {
+  if (_postParcelIdleTimer) { clearTimeout(_postParcelIdleTimer); _postParcelIdleTimer = null; }
+}
+
 // ============================================================
 // 1. WAKE LOCK — ป้องกันหน้าจอดับระหว่างสแกน
 //    + auto-release เมื่อไม่มีการสแกนนานเกิน WAKE_LOCK_IDLE_MS
@@ -4483,6 +4501,8 @@ function editParcelId() {
 }
 
 function processNewParcel(text, carrier) {
+  // ✅ มีพัสดุใหม่ → ยกเลิก auto-close timer
+  _clearPostParcelIdleTimer();
   const wasEditing = isEditingId;
   currentP = text;
   if (!wasEditing) items = [];
@@ -4885,9 +4905,12 @@ async function resetAppForNext() {
   const sb = document.getElementById('saveBtn');
   if (sb) sb.classList.remove('ready');
   try { updateScanActionsBar(); updateScanHistoryBar(); } catch(e) {}
+  // ✅ เริ่มจับเวลา auto-close 3 นาที — กันพนักงานลืมเปิดกล้องทิ้งไว้หลังพัสดุใบสุดท้าย
+  _startPostParcelIdleTimer();
 }
 
 async function closeAppCompletely() {
+  _clearPostParcelIdleTimer();
   if (scanner) {
     try { if (scanner.isScanning) await scanner.stop(); } catch(e) { console.warn('[closeApp] scanner.stop error:', e); }
     scanner = null;
