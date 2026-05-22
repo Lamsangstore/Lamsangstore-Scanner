@@ -2805,7 +2805,7 @@ function selectMarketplace(value, el) {
 }
 
 const colMappings = {
-  'tiktok':  { tracking: 34, sku: 6,  qty: 9,  remark: [37, 52], orderId: 0, headerRows: 2 },
+  'tiktok':  { tracking: 34, sku: 6,  qty: 9,  remark: [37, 52], orderId: 0, packageId: 51, headerRows: 2 },
   'shopee':  { tracking: 13, sku: 18, qty: 22, remark: [49, 57], orderId: 0, headerRows: 1 },
   'lazada':  { tracking: 58, sku: 5,  qty: -1, remark: 75,       orderId: 12, headerRows: 1 },
   'page365': { tracking: 11, sku: 24, qty: 28, remark: [22, 31], orderId: 0, headerRows: 1, isCsv: true }
@@ -2816,12 +2816,13 @@ const colMappings = {
 // ป้องกันปัญหา marketplace เปลี่ยน column ในอนาคต
 const headerKeywords = {
   'tiktok': {
-    tracking: ['tracking id'],
-    sku:      ['seller sku'],
-    qty:      ['quantity'],
+    tracking:     ['tracking id'],
+    sku:          ['seller sku'],
+    qty:          ['quantity'],
     remarkBuyer:  ['buyer message'],
     remarkSeller: ['seller note'],
-    orderId:      ['order id']
+    orderId:      ['order id'],
+    packageId:    ['package id']
   },
   'shopee': {
     tracking: ['หมายเลขติดตามพัสดุ'],
@@ -2911,11 +2912,13 @@ function autoDetectColumns(marketplace, headerRow) {
   const dRemarkBuyer = findCol(kw.remarkBuyer);
   const dRemarkSeller = findCol(kw.remarkSeller);
   const dOrderId = findCol(kw.orderId);
+  const dPackageId = findCol(kw.packageId);
 
   if (dTracking >= 0) detected.tracking = dTracking;
   if (dSku >= 0) detected.sku = dSku;
   if (dQty >= 0) detected.qty = dQty;
   if (dOrderId >= 0) detected.orderId = dOrderId;
+  if (dPackageId >= 0) detected.packageId = dPackageId;
 
   // รวม remark columns ที่เจอ
   const remarkCols = [dRemarkBuyer, dRemarkSeller].filter(c => c >= 0);
@@ -5360,7 +5363,8 @@ function cellToStr(val) {
     // toLocaleString fullwide ไม่ใช้ comma ไม่ใช้ scientific notation
     return val.toLocaleString('fullwide', { useGrouping: false, maximumFractionDigits: 0 });
   }
-  return String(val).trim();
+  // ✅ strip whitespace + tabs ที่ TikTok ฝังใน cell (เช่น "584143648351290375\t")
+  return String(val).replace(/[\t\r]+/g, '').trim();
 }
 
 // normalize Order ID — คืนค่าตรงๆ (ไม่แปลง)
@@ -5579,6 +5583,7 @@ async function readAndExtractFile(file) {
     if (detected.qty !== undefined && map.qty !== -1) useMap.qty = detected.qty;
     if (detected.remark !== undefined) useMap.remark = detected.remark;
     if (detected.orderId !== undefined) useMap.orderId = detected.orderId;
+    if (detected.packageId !== undefined) useMap.packageId = detected.packageId;
   }
   let detectedStart = 1;
   for (let r = 1; r < Math.min(5, rows.length); r++) {
@@ -5640,7 +5645,12 @@ async function readAndExtractFile(file) {
       const trackingSkuMap = {}; // { "TRACKING|SKU": qty }
       for (let i = startRow; i < rows.length; i++) {
         const row = rows[i]; if (!row) { _recordSkip('null_row', i, row); continue; }
-        const tracking = cellToStr(row[useMap.tracking]).toUpperCase();
+        let tracking = cellToStr(row[useMap.tracking]).toUpperCase();
+        // ✅ TikTok: order ที่ยังไม่ได้รับ tracking จากขนส่ง ให้ใช้ Package ID แทน
+        // (CSV "ที่จะจัดส่ง" ส่วนใหญ่ยังไม่มี Tracking ID — ถ้าไม่ fallback จะ drop 90%+ ของแถว)
+        if (!tracking && marketplace === 'tiktok' && useMap.packageId !== undefined) {
+          tracking = cellToStr(row[useMap.packageId]).toUpperCase();
+        }
         const sku      = normSku(cellToStr(row[useMap.sku]), marketplace);
         const qty      = parseInt(row[useMap.qty]) || 1;
         if (!tracking || !sku || tracking === 'UNDEFINED' || sku === 'UNDEFINED') {
