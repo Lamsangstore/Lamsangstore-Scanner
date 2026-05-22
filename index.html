@@ -5513,13 +5513,40 @@ function _initGlobalDropOverlay() {
 }
 document.addEventListener('DOMContentLoaded', _initGlobalDropOverlay);
 
+// ✅ Quote-aware line splitter — ตัดบรรทัดเฉพาะ \n ที่อยู่นอก "..." เท่านั้น
+// กรณี Page365 ที่ address cell มี quote ครอบ + มี \n ข้างใน → ไม่ตัด → PapaParse จัดการเอง
+// กรณี Page365 ที่ address ไม่ได้ quote → ตัดปกติ → _preprocessMultilineDelimited จัดการต่อ
+function _splitLinesQuoteAware(text) {
+  const result = [];
+  let line = '';
+  let inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      inQuote = !inQuote;
+      line += ch;
+    } else if (!inQuote && ch === '\r') {
+      if (text[i + 1] === '\n') i++;
+      result.push(line);
+      line = '';
+    } else if (!inQuote && ch === '\n') {
+      result.push(line);
+      line = '';
+    } else {
+      line += ch;
+    }
+  }
+  if (line) result.push(line);
+  return result;
+}
+
 // อ่านไฟล์เดียว → auto-detect marketplace → extract ข้อมูล
 // คืนค่า { file, marketplace, extractData, remarkMap, orderInfoMap } หรือ throw error
 // ✅ Merge continuation lines — รองรับ CSV/TSV ที่มี newline ในเซลล์ที่ไม่ได้ครอบ quote
 // (Page365 export ที่อยู่ลูกค้ามี newline แต่ไม่ quote → PapaParse แตก row → tracking หาย)
 // Heuristic: บรรทัดที่มี delimiter น้อยกว่าครึ่งหนึ่งของ header → ถือเป็น continuation ของบรรทัดก่อนหน้า
 function _preprocessMultilineDelimited(text, delim) {
-  const lines = text.split(/\r?\n/);
+  const lines = _splitLinesQuoteAware(text); // ✅ quote-aware: ไม่ตัด \n ที่อยู่ใน "..."
   if (lines.length < 2) return text;
   const headerCount = (lines[0].match(new RegExp(delim === '\t' ? '\\t' : ',', 'g')) || []).length;
   if (headerCount < 5) return text; // ไฟล์น้อยคอลัมน์เกินไป — ไม่เสี่ยง preprocess
