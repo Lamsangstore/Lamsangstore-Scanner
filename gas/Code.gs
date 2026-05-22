@@ -372,21 +372,25 @@ function searchData(query) {
     const sheet = ss.getSheetByName(SHEET_SEARCH) || ss.getSheetByName(SHEET_ORDERS);
     if (!sheet) return [];
     const data    = sheet.getDataRange().getValues();
+    const tz      = Session.getScriptTimeZone();
+    // ✅ เก็บ raw Date ไว้ sort ก่อน format string (new Date("dd/MM/yyyy") = NaN ใน V8 → sort พัง)
+    // ✅ เริ่ม i=1 ข้าม header row (ไม่งั้นพิมพ์ "Tracking" จะตรงกับชื่อ header)
     const results = [];
-
-    for (let i = 0; i < data.length; i++) {
+    for (let i = 1; i < data.length; i++) {
       const strB = numToStr(data[i][1]).toUpperCase();
       const strD = numToStr(data[i][3]).toUpperCase();
 
       if (strB.includes(keyword) || strD.includes(keyword)) {
+        const rawDate = data[i][0] instanceof Date ? data[i][0] : new Date(data[i][0]);
+        const tsMs = isNaN(rawDate.getTime()) ? 0 : rawDate.getTime();
         const rowFormatted = data[i].map(c => {
-          if (c instanceof Date) return Utilities.formatDate(c, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
+          if (c instanceof Date) return Utilities.formatDate(c, tz, "dd/MM/yyyy HH:mm:ss");
           return numToStr(c);
         });
-        results.push(rowFormatted);
+        results.push({ ts: tsMs, row: rowFormatted });
       }
     }
-    return results.sort((a, b) => new Date(b[0]) - new Date(a[0]));
+    return results.sort((a, b) => b.ts - a.ts).map(r => r.row);
   } catch (e) {
     return [];
   }
@@ -410,6 +414,12 @@ function setupMarketplaceSheet() {
     if (headerRow.length < 7 || String(headerRow[6]).trim() === "") {
       sheet.getRange(1, 7).setValue("OrderId");
     }
+  }
+  // ✅ บังคับให้ column A (Timestamp) แสดงเป็น วันที่+เวลา ไม่ใช่วันที่เฉยๆ
+  try {
+    sheet.getRange("A2:A").setNumberFormat("dd/MM/yyyy HH:mm:ss");
+  } catch (e) {
+    Logger.log("[setupMarketplaceSheet] setNumberFormat error: " + e.message);
   }
   return sheet;
 }
@@ -613,11 +623,15 @@ function getReportData(startStr, endStr) {
       }
     }
 
-    const allProducts = Object.entries(skuCount)
+    // ✅ จำกัด allProducts สูงสุด 200 SKUs (กัน response > 6MB ตอนช่วงวันยาว)
+    const ALL_PRODUCTS_LIMIT = 200;
+    const sortedProducts = Object.entries(skuCount)
       .map(([sku, count]) => ({ sku, name: productMap[sku] || sku, count }))
       .sort((a, b) => b.count - a.count);
+    const truncated   = sortedProducts.length > ALL_PRODUCTS_LIMIT;
+    const allProducts = truncated ? sortedProducts.slice(0, ALL_PRODUCTS_LIMIT) : sortedProducts;
 
-    return { totalOrders, totalItems, allProducts, dailyBreakdown, byMarketplace };
+    return { totalOrders, totalItems, allProducts, dailyBreakdown, byMarketplace, productsTruncated: truncated, totalUniqueProducts: sortedProducts.length };
   } catch(e) {
     return { totalOrders: 0, totalItems: 0, allProducts: [], dailyBreakdown: {}, byMarketplace: {}, error: e.toString() };
   }
@@ -640,18 +654,19 @@ function _maybeCleanUpOldMarketplaceData() {
   }
 }
 
+// ✅ เก็บข้อมูล MarketplaceData ย้อนหลัง 2 วัน (เปลี่ยนจาก 3 วัน)
 function cleanUpOldMarketplaceData() {
   try {
     const sheet = setupMarketplaceSheet();
     const data  = sheet.getDataRange().getValues();
     if (data.length <= 1) return;
 
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 2);
 
     const newData = [data[0]];
     for (let i = 1; i < data.length; i++) {
-      if (new Date(data[i][0]) >= threeDaysAgo) {
+      if (new Date(data[i][0]) >= cutoff) {
         const row = data[i];
         while (row.length < 7) row.push("");
         newData.push(row);
@@ -671,6 +686,14 @@ function cleanUpOldMarketplaceData() {
 // cleanUpOldOrders
 // ============================================================
 function cleanUpOldOrders() {
+  // ✅ LockService — กัน saveData ที่กำลังเขียนช่วงตี 2 ถูก clearContents+setValues ทับ
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch(e) {
+    Logger.log("[cleanUpOldOrders] ไม่ได้ lock ภายใน 30s: " + e.message);
+    return;
+  }
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_ORDERS);
@@ -708,6 +731,8 @@ function cleanUpOldOrders() {
     }
   } catch (e) {
     Logger.log("Error in cleanUpOldOrders: " + e.message);
+  } finally {
+    try { lock.releaseLock(); } catch(_) {}
   }
 }
 

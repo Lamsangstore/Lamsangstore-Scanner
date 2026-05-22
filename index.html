@@ -2942,6 +2942,7 @@ let _flushedIds = new Set(); // ป้องกัน duplicate flush
 let productMap = {}, currentP = "", items = [], scanner, searchScanner, lastScanTime = 0;
 let sessionParcels = {}, scanBuffer = [], bufferTimeout = null, isFinishing = false, isEditingId = false;
 let isSpeakingRemark = false; // ✅ ล็อคสแกนสินค้าระหว่างพูดเลขพัสดุ + remark
+let _isRestartingCamera = false; // ✅ ล็อคสแกนสินค้าระหว่างกล้องกำลัง restart (กันสินค้าต้นๆ หายจากวิดีโอ)
 let duplicateParcelAlerts = {}; // ✅ ป้องกันแจ้งเตือนซ้ำ "ปิดงานไปแล้ว"
 const DUPLICATE_ALERT_COOLDOWN_MS = 15 * 1000; // 15 วินาที ก่อนแจ้งซ้ำ
 let expectedItemsArray = [], scannedItemsMap = {}, isStrictValidationMode = false;
@@ -3801,13 +3802,14 @@ function stopCameraRecording() {
       safeResolve([...recordedChunks]);
     }, { once: true });
 
-    // ✅ ถ้า 'stop' event ไม่ fire ภายใน 3 วินาที → resolve ด้วย chunks ที่มีอยู่
+    // ✅ ถ้า 'stop' event ไม่ fire ภายใน 8 วินาที → resolve ด้วย chunks ที่มีอยู่
+    // (เพิ่มจาก 3s เพราะวิดีโอใหญ่บนมือถือเก่า flush ไม่ทัน → วินาทีท้ายของวิดีโอหายไป)
     setTimeout(() => {
       if (!resolved) {
         console.warn('[stopCameraRecording] timeout — force resolve');
         safeResolve([...recordedChunks]);
       }
-    }, 3000);
+    }, 8000);
 
     try {
       mediaRecorder.stop();
@@ -3949,8 +3951,10 @@ async function _fetchOrderCacheBackground(retries = 2) {
           infoFromOrders[tracking] = { orderId: normOrderId(first.orderId || '', first.marketplace), marketplace: first.marketplace };
         }
       }
-      if (Object.keys(remarkFromOrders).length > 0) localStorage.setItem('orderRemarkMap', JSON.stringify(remarkFromOrders));
-      if (Object.keys(infoFromOrders).length > 0) localStorage.setItem('orderInfoMap', JSON.stringify(infoFromOrders));
+      // ✅ เขียนทับเสมอ (รวมกรณีว่าง) — ก่อนหน้านี้ if(length>0) ทำให้ลบ marketplace ออก แต่ cache เก่ายังอยู่
+      // ✅ Prune: เก็บเฉพาะ tracking ที่ยังอยู่ใน normalizedOrderRes — กัน localStorage โตไม่หยุด
+      localStorage.setItem('orderRemarkMap', JSON.stringify(remarkFromOrders));
+      localStorage.setItem('orderInfoMap', JSON.stringify(infoFromOrders));
       return true;
     } catch(e) {
       console.warn(`[Order Cache] attempt ${attempt + 1}/${retries + 1} exception:`, e.message);
@@ -3975,9 +3979,17 @@ async function fetchBackgroundCache(cacheKey, cacheTimeKey) {
 // ✅ v2.8: refresh เฉพาะ orders จาก GAS (ไม่ดึง product ซ้ำ — ประหยัด quota)
 // เรียกหลัง save สำเร็จ เพื่อให้ localOrdersCache สะท้อนสถานะล่าสุดจาก Sheet
 let _isRefreshingOrders = false;
-async function _refreshOrderCacheBackground() {
+let _lastOrderRefreshAt = 0;
+const ORDER_REFRESH_MIN_INTERVAL_MS = 30000; // อย่างน้อย 30s/ครั้ง — กัน rate limit ตอนแพ็กถี่ๆ
+async function _refreshOrderCacheBackground({ force = false } = {}) {
   if (_isRefreshingOrders) return;
+  const now = Date.now();
+  if (!force && (now - _lastOrderRefreshAt) < ORDER_REFRESH_MIN_INTERVAL_MS) {
+    console.log('[Order Cache] ข้าม refresh — เพิ่งทำเมื่อ', Math.round((now - _lastOrderRefreshAt)/1000), 'วิที่แล้ว');
+    return;
+  }
   _isRefreshingOrders = true;
+  _lastOrderRefreshAt = now;
   await _fetchOrderCacheBackground();
   _isRefreshingOrders = false;
 }
@@ -4032,18 +4044,29 @@ function _startMarketplaceVersionPolling() {
   }
 }
 
-function _scheduleVersionPoll() {
+function _startVersionPollInterval() {
   if (_marketplaceVersionTimer) clearInterval(_marketplaceVersionTimer);
   _marketplaceVersionTimer = setInterval(_pollMarketplaceVersion, 30000);
-  console.log('[Polling] เริ่ม poll marketplace version ทุก 30s (Drive direct fetch)');
-  // ✅ Poll ทันทีเมื่อ user สลับกลับมาที่แอป — ไม่ต้องรอครบ 30 วิ
-  // และ poll ตอน window focus ด้วย (รองรับเดสก์ท็อปและกรณี iOS Safari ไม่ fire visibilitychange บางครั้ง)
+}
+function _stopVersionPollInterval() {
+  if (_marketplaceVersionTimer) { clearInterval(_marketplaceVersionTimer); _marketplaceVersionTimer = null; }
+}
+function _scheduleVersionPoll() {
+  // ✅ เริ่ม interval เฉพาะถ้า tab ยัง visible — กัน quota ที่ Drive ถูกเรียกซ้ำๆ ตอน tab ซ่อน
+  if (document.visibilityState === 'visible') _startVersionPollInterval();
+  console.log('[Polling] เริ่ม poll marketplace version ทุก 30s (Drive direct fetch, pause เมื่อ hidden)');
   if (!_visibilityPollBound) {
     _visibilityPollBound = true;
     let _lastVisibilityPollAt = 0;
-    const VISIBILITY_POLL_COOLDOWN = 5000; // กัน double-fire ใน 5 วิ
+    const VISIBILITY_POLL_COOLDOWN = 5000;
     const _triggerOnVisible = () => {
-      if (document.visibilityState !== 'visible') return;
+      if (document.visibilityState !== 'visible') {
+        // tab ซ่อน → หยุด interval ประหยัด quota
+        _stopVersionPollInterval();
+        return;
+      }
+      // กลับมาที่แอป → start interval + poll ทันทีถ้าผ่าน cooldown
+      _startVersionPollInterval();
       const now = Date.now();
       if (now - _lastVisibilityPollAt < VISIBILITY_POLL_COOLDOWN) return;
       _lastVisibilityPollAt = now;
@@ -4206,8 +4229,8 @@ function onScanBuffer(text, result) {
 
   const isProduct = upperText.startsWith("B");
 
-  // ✅ ล็อคสแกนสินค้าระหว่างพูด remark
-  if (isProduct && isSpeakingRemark) return;
+  // ✅ ล็อคสแกนสินค้าระหว่างพูด remark หรือกล้องกำลัง restart
+  if (isProduct && (isSpeakingRemark || _isRestartingCamera)) return;
 
   // สำหรับสินค้า: ถ้า SKU นี้ยังต้องการอีก ลด cooldown เหลือ 800ms
   // สำหรับพัสดุ/อื่นๆ: คง cooldown 2500ms ป้องกัน double-scan
@@ -4379,8 +4402,13 @@ async function processFinalScan(text) {
     if (sessionParcels[upperText] && !isEditingId) {
       // ✅ ป้องกันแจ้งเตือนถี่เกินไป (เช่น ติดสติ๊กเกอร์ยังไม่เสร็จ)
       const lastAlert = duplicateParcelAlerts[upperText] || 0;
-      if (Date.now() - lastAlert < DUPLICATE_ALERT_COOLDOWN_MS) return; // ข้ามเงียบๆ
-      duplicateParcelAlerts[upperText] = Date.now();
+      const _now = Date.now();
+      if (_now - lastAlert < DUPLICATE_ALERT_COOLDOWN_MS) return; // ข้ามเงียบๆ
+      // ✅ GC entries เก่ากว่า cooldown — กัน map โตไม่หยุดตลอดวัน
+      for (const k in duplicateParcelAlerts) {
+        if (_now - duplicateParcelAlerts[k] > DUPLICATE_ALERT_COOLDOWN_MS) delete duplicateParcelAlerts[k];
+      }
+      duplicateParcelAlerts[upperText] = _now;
       speak("พัสดุใบนี้สแกนปิดงานไปแล้วค่ะ");
       setStatus(_S.err + "พัสดุ " + upperText + " ปิดงานไปแล้ว", "danger"); return;
     }
@@ -4495,8 +4523,19 @@ function processNewParcel(text, carrier) {
   } else {
     // ล็อคสแกนสินค้าตั้งแต่เริ่มพูดเลขพัสดุ
     isSpeakingRemark = true;
-    // เริ่มบันทึกวิดีโอทันที (ไม่รอ stop เก่าจบ — fire-and-forget)
-    stopCameraRecording().then(() => startCameraRecording(true));
+    // ✅ Restart วิดีโอแบบ async — บล็อคสแกนสินค้าจนกว่ากล้องใหม่จะ recording จริง
+    // (ก่อนหน้านี้ fire-and-forget ทำให้สินค้า 1-2 ชิ้นแรกไม่ติดวิดีโอ ถ้าผู้ใช้สแกนเร็ว)
+    _isRestartingCamera = true;
+    (async () => {
+      try {
+        await stopCameraRecording();
+        await startCameraRecording(true);
+      } catch(e) {
+        console.warn('[processNewParcel] restart camera error:', e);
+      } finally {
+        _isRestartingCamera = false;
+      }
+    })();
     // พูดทันที — "พัสดุ {carrier} ใหม่ ลงท้ายด้วย X X X X"
     const parcelMsg = `พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`;
     _speakParcelThenRemark(parcelMsg, text, 1200);
@@ -4774,6 +4813,8 @@ async function _doFinishWork(isManual = false) {
 
     // Upload เบื้องหลัง ไม่ await
     processBackgroundUpload(snapshotParcelId, snapshotItems, videoChunks, snapshotRemark, snapshotOrderId, snapshotMarketplace);
+    // ✅ ปล่อย memory ทันที — snapshot ถูกส่งให้ background แล้ว ไม่ต้องเก็บใน global
+    recordedChunks = [];
   } catch (err) {
     console.error('[finishWork error]', err);
     isFinishing = false;
@@ -6080,7 +6121,34 @@ async function processFileUpload() {
 let lastReportFetchTime = 0;
 let lastReportParams = '';
 
-function openTab(tab, btn) {
+async function openTab(tab, btn) {
+  // ✅ ถ้าออกจาก scan tab → confirm ถ้ามีพัสดุค้าง / หยุดกล้องเพื่อประหยัดแบต
+  // กันกรณีกล้อง+ไมโครโฟน LED ติดค้างขณะดู Dashboard, แบตหมด, RAM โต, วิดีโอติด overlay tab อื่น
+  if (tab !== 'scan' && currentP && !isFinishing) {
+    const ok = await Swal.fire({
+      title: 'กำลังสแกนพัสดุอยู่',
+      html: `<div style="font-size:0.9rem; color:#7a6440; line-height:1.6;">มีพัสดุค้างใน scan tab — ถ้าออกตอนนี้ <strong>กล้องจะหยุด</strong> แต่ข้อมูลพัสดุยังอยู่<br>กลับเข้ามา scan ใหม่ต้องกดเริ่มกล้องอีกครั้ง</div>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'ออกไป tab อื่น',
+      cancelButtonText: 'อยู่ scan ต่อ',
+      reverseButtons: true,
+      background: '#fff0f3',
+      customClass: { popup: 'swal-popup' },
+    });
+    if (!ok.isConfirmed) return;
+  }
+  if (tab !== 'scan') {
+    // หยุดกล้อง+อัดวิดีโอ+wake lock — ทุกอย่างที่ไม่จำเป็นตอนอยู่ tab อื่น
+    try { if (scanner && scanner.isScanning) await scanner.stop(); } catch(e) {}
+    try { if (isRecording) await stopCameraRecording(); } catch(e) {}
+    try { if (cameraStream && cameraStreamOwned) cameraStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+    cameraStream = null; cameraStreamOwned = false;
+    try { releaseWakeLock(); } catch(e) {}
+    const reader = document.getElementById("reader");
+    if (reader) reader.style.display = "none";
+  }
+
   document.querySelectorAll('#scan, #search, #dash, #upload').forEach(el => el.style.display = 'none');
   const target = document.getElementById(tab);
   target.style.display = 'block';
