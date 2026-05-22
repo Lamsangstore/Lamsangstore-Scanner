@@ -640,18 +640,19 @@ function _maybeCleanUpOldMarketplaceData() {
   }
 }
 
+// ✅ เก็บข้อมูล MarketplaceData ย้อนหลัง 2 วัน (เปลี่ยนจาก 3 วัน)
 function cleanUpOldMarketplaceData() {
   try {
     const sheet = setupMarketplaceSheet();
     const data  = sheet.getDataRange().getValues();
     if (data.length <= 1) return;
 
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 2);
 
     const newData = [data[0]];
     for (let i = 1; i < data.length; i++) {
-      if (new Date(data[i][0]) >= threeDaysAgo) {
+      if (new Date(data[i][0]) >= cutoff) {
         const row = data[i];
         while (row.length < 7) row.push("");
         newData.push(row);
