@@ -5572,13 +5572,33 @@ function _preprocessMultilineDelimited(text, delim) {
   return out.join('\n');
 }
 
+// ✅ อ่านไฟล์ text + auto-detect encoding จาก BOM
+// Page365 export เป็น UTF-16 LE — Chrome auto-detect แต่ Firefox/Safari ไม่ → ต้อง decode เอง
+async function _readTextAutoEncoding(file) {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let text;
+  if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    // UTF-16 LE — strip BOM
+    text = new TextDecoder('utf-16le').decode(buffer.slice(2));
+  } else if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+    // UTF-16 BE — strip BOM
+    text = new TextDecoder('utf-16be').decode(buffer.slice(2));
+  } else {
+    // UTF-8 (มี/ไม่มี BOM ก็ได้ — TextDecoder('utf-8') strip BOM ให้อัตโนมัติ)
+    text = new TextDecoder('utf-8').decode(buffer);
+  }
+  // ✅ normalize line endings: \r\n / \r → \n (รองรับ Mac เก่า + Windows)
+  return text.replace(/\r\n?/g, '\n');
+}
+
 async function readAndExtractFile(file) {
   // ตัดสินใจจากนามสกุลก่อน — .csv/.tsv → text, อื่นๆ → xlsx
   const lowerName = (file.name || '').toLowerCase();
   const isTextFile = lowerName.endsWith('.csv') || lowerName.endsWith('.tsv') || lowerName.endsWith('.txt');
   let rows = [];
   if (isTextFile) {
-    let text = await file.text();
+    let text = await _readTextAutoEncoding(file);
     // ตรวจ delimiter: ถ้ามี tab ใช้ tab, ไม่งั้นใช้ comma
     const firstLine = text.split('\n')[0] || '';
     const delim = firstLine.includes('\t') ? '\t' : ',';
@@ -5775,7 +5795,8 @@ async function _uploadResultsParallel(items, concurrency = 3) {
   _showProgressDialog('กำลังอัปโหลด', items.length);
   await _runWithLimit(items, concurrency, async (r) => {
     try {
-      const resp = await callGAS("saveMarketplaceData", { data: r.extractData, fileName: r.file.name, marketplace: r.marketplace });
+      // ⏱️ timeout 90s: ไฟล์ใหญ่ + รอ LockService queue ใช้เวลา > 15s ค่อนข้างปกติ
+      const resp = await callGAS("saveMarketplaceData", { data: r.extractData, fileName: r.file.name, marketplace: r.marketplace }, 90000);
       if (resp && resp.success) {
         agg.totalCount += resp.count || 0;
         agg.totalDup   += resp.duplicateSkipped || 0;
