@@ -411,6 +411,12 @@ function setupMarketplaceSheet() {
       sheet.getRange(1, 7).setValue("OrderId");
     }
   }
+  // ✅ บังคับให้ column A (Timestamp) แสดงเป็น วันที่+เวลา ไม่ใช่วันที่เฉยๆ
+  try {
+    sheet.getRange("A2:A").setNumberFormat("dd/MM/yyyy HH:mm:ss");
+  } catch (e) {
+    Logger.log("[setupMarketplaceSheet] setNumberFormat error: " + e.message);
+  }
   return sheet;
 }
 
