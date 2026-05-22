@@ -4830,6 +4830,8 @@ async function resetAppForNext() {
   undoStack = []; // ✅ ล้าง undo history เมื่อเริ่มพัสดุใหม่
   resetRemark();
   hideCustomerRemark();
+  hideOrderFetchErrorBanner();
+  hideOrderNotFoundBanner();
   document.getElementById("orderChecklistPanel").style.display = "none";
   const pw = document.getElementById('checklistProgressWrap');
   if (pw) pw.style.display = 'none';
@@ -4995,7 +4997,7 @@ async function _fetchExpectedItems(tracking) {
   }
 }
 
-async function checkExpectedItems(tracking) {
+async function checkExpectedItems(tracking, _isRetry = false) {
   document.getElementById("orderChecklistPanel").style.display = "none";
 
   let expectedData = await _fetchExpectedItems(tracking);
@@ -5018,9 +5020,44 @@ async function checkExpectedItems(tracking) {
     items.forEach(sku => { scannedItemsMap[sku] = (scannedItemsMap[sku] || 0) + 1; });
     document.getElementById("orderChecklistPanel").style.display = "block";
     updateChecklistUI();
-  } else {
-    isStrictValidationMode = false; expectedItemsArray = []; scannedItemsMap = {};
+    hideOrderNotFoundBanner();
+    return;
   }
+
+  // ✅ ไม่พบรายการ — ลอง refresh Marketplace cache แล้วลองใหม่ 1 ครั้ง
+  // (กันกรณี cache เก่า, อัปโหลดยังไม่ flush, หรือ scan ก่อนอัปโหลดไม่กี่วินาที)
+  if (!_isRetry) {
+    console.log("[Scan] ไม่พบรายการสำหรับ", tracking, "— ลอง refresh Marketplace cache");
+    setStatus(_S.info + "กำลังค้นหารายการสินค้าจาก Marketplace...", "info");
+    const refreshed = await _fetchOrderCacheBackground();
+    if (refreshed) return checkExpectedItems(tracking, true);
+  }
+
+  // ยังไม่พบหลัง retry → non-strict + banner แจ้งให้ลองอีก
+  isStrictValidationMode = false; expectedItemsArray = []; scannedItemsMap = {};
+  showOrderNotFoundBanner(tracking);
+}
+
+// Banner เมื่อ Marketplace ไม่มีข้อมูลพัสดุนี้ (ต่างจาก error banner — สีอ่อนกว่า)
+function showOrderNotFoundBanner(tracking) {
+  let banner = document.getElementById('orderNotFoundBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'orderNotFoundBanner';
+    banner.style.cssText = 'margin-top:8px; padding:10px 12px; background:#eef5fc; border-left:4px solid #5a8fc5; border-radius:8px; font-size:0.82rem; color:#2c5285; text-align:left; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
+    const statusEl = document.getElementById('statusLabel');
+    if (statusEl && statusEl.parentNode) statusEl.parentNode.insertBefore(banner, statusEl.nextSibling);
+  }
+  banner.innerHTML = `
+    <span style="flex:1; min-width:140px;">ℹ ไม่พบรายการสินค้าสำหรับพัสดุนี้ใน Marketplace</span>
+    <button onclick="retryFetchExpected('${escHtml(tracking)}')" style="background:#5a8fc5; color:white; border:none; padding:5px 12px; border-radius:8px; font-family:'Mitr',sans-serif; font-size:0.78rem; cursor:pointer; font-weight:600;">🔁 ค้นหาใหม่</button>
+  `;
+  banner.style.display = 'flex';
+}
+
+function hideOrderNotFoundBanner() {
+  const banner = document.getElementById('orderNotFoundBanner');
+  if (banner) banner.style.display = 'none';
 }
 
 // Banner แจ้งเตือนเมื่อดึงข้อมูลออเดอร์ไม่ได้ + ปุ่ม retry
@@ -5049,6 +5086,10 @@ async function retryFetchExpected(tracking) {
   const banner = document.getElementById('orderFetchErrorBanner');
   if (banner) {
     banner.innerHTML = '<span>⏳ กำลังลองใหม่...</span>';
+  }
+  const nfBanner = document.getElementById('orderNotFoundBanner');
+  if (nfBanner) {
+    nfBanner.innerHTML = '<span>⏳ กำลังค้นหาใหม่...</span>';
   }
   // บังคับ refetch cache ก่อน เผื่อ marketplace data เพิ่งอัปเดต
   await _fetchOrderCacheBackground();
@@ -5572,13 +5613,33 @@ function _preprocessMultilineDelimited(text, delim) {
   return out.join('\n');
 }
 
+// ✅ อ่านไฟล์ text + auto-detect encoding จาก BOM
+// Page365 export เป็น UTF-16 LE — Chrome auto-detect แต่ Firefox/Safari ไม่ → ต้อง decode เอง
+async function _readTextAutoEncoding(file) {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let text;
+  if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    // UTF-16 LE — strip BOM
+    text = new TextDecoder('utf-16le').decode(buffer.slice(2));
+  } else if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+    // UTF-16 BE — strip BOM
+    text = new TextDecoder('utf-16be').decode(buffer.slice(2));
+  } else {
+    // UTF-8 (มี/ไม่มี BOM ก็ได้ — TextDecoder('utf-8') strip BOM ให้อัตโนมัติ)
+    text = new TextDecoder('utf-8').decode(buffer);
+  }
+  // ✅ normalize line endings: \r\n / \r → \n (รองรับ Mac เก่า + Windows)
+  return text.replace(/\r\n?/g, '\n');
+}
+
 async function readAndExtractFile(file) {
   // ตัดสินใจจากนามสกุลก่อน — .csv/.tsv → text, อื่นๆ → xlsx
   const lowerName = (file.name || '').toLowerCase();
   const isTextFile = lowerName.endsWith('.csv') || lowerName.endsWith('.tsv') || lowerName.endsWith('.txt');
   let rows = [];
   if (isTextFile) {
-    let text = await file.text();
+    let text = await _readTextAutoEncoding(file);
     // ตรวจ delimiter: ถ้ามี tab ใช้ tab, ไม่งั้นใช้ comma
     const firstLine = text.split('\n')[0] || '';
     const delim = firstLine.includes('\t') ? '\t' : ',';
@@ -5775,7 +5836,8 @@ async function _uploadResultsParallel(items, concurrency = 3) {
   _showProgressDialog('กำลังอัปโหลด', items.length);
   await _runWithLimit(items, concurrency, async (r) => {
     try {
-      const resp = await callGAS("saveMarketplaceData", { data: r.extractData, fileName: r.file.name, marketplace: r.marketplace });
+      // ⏱️ timeout 90s: ไฟล์ใหญ่ + รอ LockService queue ใช้เวลา > 15s ค่อนข้างปกติ
+      const resp = await callGAS("saveMarketplaceData", { data: r.extractData, fileName: r.file.name, marketplace: r.marketplace }, 90000);
       if (resp && resp.success) {
         agg.totalCount += resp.count || 0;
         agg.totalDup   += resp.duplicateSkipped || 0;
