@@ -5683,10 +5683,11 @@ async function readAndExtractFile(file) {
       }
     }
 
+  const totalDataRows = rows.length - (useMap.headerRows || 1);
   if (skipped.count > 0) {
-    console.warn(`[${marketplace}] ${file.name}: ข้าม ${skipped.count} แถว`, skipped.reasons, skipped.examples);
+    console.warn(`[${marketplace}] ${file.name}: ข้าม ${skipped.count}/${totalDataRows} แถว`, skipped.reasons, skipped.examples);
   }
-  return { file, marketplace, extractData, remarkMap, orderInfoMap, skipped };
+  return { file, marketplace, extractData, remarkMap, orderInfoMap, skipped, totalDataRows };
 }
 
 // ===== Concurrency helper — รัน task พร้อมกันได้สูงสุด `limit` ตัว =====
@@ -5827,22 +5828,28 @@ async function processFileUpload() {
     lazada:  'rgba(15,20,109,0.08)',
     page365: 'rgba(24,119,242,0.08)',
   };
+  const _skipReasonLabel = { no_tracking: 'ไม่มี Tracking ID', no_sku: 'ไม่มี SKU', bad_tracking_format: 'Tracking ไม่ถูกต้อง', null_row: 'แถวว่าง' };
   const perFile = results.map(r => {
     const tCount = new Set(r.extractData.map(d => d.tracking)).size;
     const s = mpStyle[r.marketplace] || { bg: '#888' };
     const bg = mpFileBg[r.marketplace] || '#f5f0e0';
     const skipCount = r.skipped?.count || 0;
-    const skipHtml = skipCount > 0
-      ? `<div style="font-size:0.78rem; color:#c44; margin-top:3px;">⚠ ข้าม ${skipCount} แถว (tracking/SKU ไม่ครบ) — ดูคอนโซลสำหรับรายละเอียด</div>`
-      : '';
+    const total = r.totalDataRows || (r.extractData.length + skipCount);
+    const rowSummary = skipCount > 0
+      ? `${tCount} ใบ · ${r.extractData.length} รายการ <span style="color:#a08a5a;">(${r.extractData.length + skipCount}/${total} แถว)</span>`
+      : `${tCount} ใบ · ${r.extractData.length} รายการ`;
+    const skipHtml = skipCount > 0 ? (() => {
+      const parts = Object.entries(r.skipped.reasons)
+        .map(([k, v]) => `${_skipReasonLabel[k] || k} ${v} แถว`)
+        .join(', ');
+      return `<div style="font-size:0.78rem; color:#c44; margin-top:3px;">⚠ ข้าม ${skipCount} แถว — ${parts}</div>`;
+    })() : '';
     return `<div style="padding:8px 10px; margin:6px 0; background:${bg}; border-left:4px solid ${s.bg}; border-radius:8px;">
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         ${mpBadge(r.marketplace)}
         <strong style="font-size:0.88rem; word-break:break-all;">📄 ${escHtml(r.file.name)}</strong>
       </div>
-      <div style="font-size:0.82rem; color:#7a6440; margin-top:4px;">
-        ${tCount} ใบ · ${r.extractData.length} รายการ
-      </div>
+      <div style="font-size:0.82rem; color:#7a6440; margin-top:4px;">${rowSummary}</div>
       ${skipHtml}
     </div>`;
   }).join('');
@@ -5946,16 +5953,36 @@ async function processFileUpload() {
   _renderDzList();
   _fetchOrderCacheBackground();
 
-  const dupMsg = totalDup > 0 ? `\n(ข้ามซ้ำ ${totalDup} รายการ)` : '';
-  const bfMsg = totalBf > 0 ? `\n(เติม OrderId ย้อนหลัง ${totalBf} แถว)` : '';
-  // ✅ รวมแถวที่ parse ข้ามจากทุกไฟล์ — เพื่อให้ user รู้ว่ามีข้อมูลไม่ครบ
   const totalParseSkipped = results.reduce((s, r) => s + (r.skipped?.count || 0), 0);
-  const parseSkipMsg = totalParseSkipped > 0 ? `\n⚠ ข้ามแถวที่อ่านไม่ครบ ${totalParseSkipped} แถว (เปิด console ดูรายละเอียด)` : '';
   if (lastFailures.length === 0) {
+    // สร้างรายการ per-file สำหรับ result dialog
+    const resultPerFile = results.map(r => {
+      const tCount = new Set(r.extractData.map(d => d.tracking)).size;
+      const skipCount = r.skipped?.count || 0;
+      const total = r.totalDataRows || (r.extractData.length + skipCount);
+      const rowInfo = skipCount > 0
+        ? `${tCount} ใบ · <span style="color:#7a6440;">${r.extractData.length}/${total} แถว</span>`
+        : `${tCount} ใบ · ${r.extractData.length} รายการ`;
+      const skipDetail = skipCount > 0 ? (() => {
+        const parts = Object.entries(r.skipped.reasons)
+          .map(([k, v]) => `${_skipReasonLabel[k] || k} ${v}`)
+          .join(', ');
+        return `<div style="font-size:0.75rem;color:#c44;">⚠ ข้าม ${skipCount} — ${parts}</div>`;
+      })() : '';
+      const mpName = (mpStyle[r.marketplace] || {}).name || r.marketplace;
+      return `<div style="font-size:0.82rem;color:#5a4a30;line-height:1.6;">[${mpName}] ${escHtml(r.file.name.replace(/\.[^.]+$/, ''))}<br>${rowInfo}${skipDetail}</div>`;
+    }).join('');
+    const dupLine   = totalDup > 0 ? `<div style="font-size:0.8rem;color:#a08a5a;">ข้ามซ้ำ ${totalDup} รายการ</div>` : '';
+    const bfLine    = totalBf  > 0 ? `<div style="font-size:0.8rem;color:#a08a5a;">เติม OrderId ย้อนหลัง ${totalBf} แถว</div>` : '';
     Swal.fire({
       title: totalParseSkipped > 0 ? 'สำเร็จ (มีคำเตือน)' : 'สำเร็จ',
-      text: `อัปโหลดสำเร็จ ${totalCount} รายการ จาก ${results.length} ไฟล์${dupMsg}${bfMsg}${parseSkipMsg}`,
+      html: `<div style="text-align:left;line-height:1.8;">
+        <div>✅ อัปโหลดสำเร็จ <strong>${totalCount}</strong> รายการ จาก <strong>${results.length}</strong> ไฟล์</div>
+        ${dupLine}${bfLine}
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e0d8c0;">${resultPerFile}</div>
+      </div>`,
       icon: totalParseSkipped > 0 ? 'warning' : 'success',
+      customClass: { popup: 'swal-popup' },
     });
   }
 }
