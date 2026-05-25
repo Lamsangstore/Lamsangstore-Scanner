@@ -65,7 +65,7 @@
     }
 
     /* ── LAYOUT ── */
-    .container { max-width: 680px; margin: 0 auto; padding: 24px 16px 64px; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; }
 
     /* ── HERO ── */
     .hero {
@@ -182,6 +182,34 @@
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
+
+    /* ── MOBILE (≤640px) ── */
+    @media (max-width: 640px) {
+      body { font-size: 15px; }
+      .topbar { padding: 0 14px; height: 54px; gap: 10px; }
+      .topbar-logo { width: 36px; height: 36px; border-radius: 12px; }
+      .topbar-title { font-size: 0.85rem; }
+      .topbar-sub { font-size: 0.65rem; }
+      .back-btn { font-size: 0.72rem; padding: 7px 12px; }
+      .container { padding: 18px 12px 110px; }
+      .hero { padding: 22px 18px 18px; margin-bottom: 22px; border-radius: 18px; }
+      .hero-icon { width: 60px; height: 60px; border-radius: 18px; margin-bottom: 12px; }
+      .hero-icon svg { width: 28px; height: 28px; }
+      .hero h1 { font-size: 1.05rem; }
+      .hero p { font-size: 0.82rem; }
+      .section-divider { margin: 30px 0 14px; gap: 8px; }
+      .section-divider span { font-size: 0.86rem; padding: 9px 14px; border-radius: 20px; letter-spacing: 0.2px; white-space: normal; text-align: center; }
+      .step-card { padding: 18px 16px; margin-bottom: 14px; border-radius: 16px; }
+      .step-header { gap: 12px; margin-bottom: 12px; }
+      .step-number { width: 32px; height: 32px; font-size: 0.9rem; }
+      .step-card h2 { font-size: 0.94rem; line-height: 1.35; }
+      .step-card p { font-size: 0.88rem; line-height: 1.7; }
+      .img-box { padding: 4px; border-radius: 12px; }
+      .warn-card { padding: 18px 16px; border-radius: 16px; }
+      .fab-wrap { right: 12px; bottom: 12px; gap: 7px; }
+      .fab-item { padding: 8px 13px; font-size: 0.74rem; border-radius: 18px; gap: 7px; }
+      .fab-item .fab-num { width: 20px; height: 20px; font-size: 0.68rem; }
+    }
   </style>
 </head>
 <body>
@@ -273,17 +301,26 @@
       <div class="step-number">7</div>
       <h2>เปิดหน้าต่างอัปโหลด</h2>
     </div>
-    <p>เปิด Lamsangstore Scanner แล้วกดปุ่ม <span class="highlight">"📥 อัพโหลด"</span> ที่แถบเมนูด้านล่าง จะมีหน้าต่างป๊อปอัปแสดงขึ้นมา</p>
-    <div class="img-box"><img src="TT5.jpg" alt="หน้าแรก Scanner"></div>
+    <p>เปิด Lamsangstore Scanner แล้วกดปุ่ม <span class="highlight">"📥 อัพโหลด" (1)</span> ที่แถบเมนูด้านล่างขวา จะมีหน้าต่างป๊อปอัปแสดงขึ้นมา</p>
+    <div class="img-box"><img src="UP1.jpg" alt="กดปุ่มอัปโหลดที่แถบเมนูล่าง"></div>
   </div>
 
   <div class="step-card">
     <div class="step-header">
       <div class="step-number">8</div>
-      <h2>เลือก TikTok Shop และอัปโหลด</h2>
+      <h2>เลือกหรือลากไฟล์เข้าไปในกรอบ</h2>
     </div>
-    <p>ในส่วน "เลือกช่องทาง (Marketplace)" คลิกเลือก <span class="highlight">"TikTok Shop"</span> จากนั้นคลิก <strong>"เลือกไฟล์ (.xlsx, .csv)"</strong> เพื่อเลือกไฟล์ที่ดาวน์โหลดมา เมื่อชื่อไฟล์ปรากฏแล้ว กดปุ่ม <span class="highlight">"อัปโหลดข้อมูล"</span></p>
-    <div class="img-box"><img src="TT6.jpg" alt="เลือกระบบและอัปโหลดไฟล์"></div>
+    <p>คลิกที่ <span class="highlight">กรอบประใหญ่ (1)</span> หรือลากไฟล์ที่ดาวน์โหลดมาจาก TikTok Shop วางในกรอบ — รองรับ <code>.xlsx</code> และ <code>.csv</code> <strong>เลือกได้หลายไฟล์พร้อมกัน</strong> (ระบบตรวจจับ Marketplace อัตโนมัติจากหัวคอลัมน์ของไฟล์) เมื่อเห็นรายการไฟล์ปรากฏแล้ว คลิกปุ่ม <span class="highlight">"อัปโหลดข้อมูล" (2)</span></p>
+    <div class="img-box"><img src="UP3.jpg" alt="เลือกหรือลากไฟล์เข้าระบบ"></div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-header">
+      <div class="step-number">9</div>
+      <h2>ตรวจสอบและยืนยันการอัปโหลด</h2>
+    </div>
+    <p>ระบบจะแสดงป๊อปอัป <strong>"ตรวจสอบข้อมูลก่อนอัปโหลด"</strong> สรุปจำนวน พัสดุรวม / รายการสินค้ารวม / หมายเหตุลูกค้า / ไฟล์ พร้อม Marketplace ที่ตรวจจับได้ของแต่ละไฟล์ หากมีคำเตือนสีส้ม (เช่น "ข้าม X แถว — ไม่มี Tracking ID") ให้ตรวจสอบไฟล์ก่อน เมื่อข้อมูลถูกต้องแล้ว คลิก <span class="highlight">"อัปโหลดเลย" (1)</span> เพื่อยืนยัน</p>
+    <div class="img-box"><img src="UP4.jpg" alt="ตรวจสอบข้อมูลก่อนอัปโหลด"></div>
   </div>
 
   <div class="warn-card">
