@@ -8,3 +8,13 @@
 .vscode/
 .idea/
 *.swp
+
+# macOS screenshots & screen recordings (raw captures, not used in guides)
+ภาพถ่ายหน้าจอ*.png
+การบันทึกหน้าจอ*.mov
+Screen Shot *.png
+Screenshot *.png
+Screen Recording *.mov
+
+# Backup folder for original/uncropped screenshots
+originals/
