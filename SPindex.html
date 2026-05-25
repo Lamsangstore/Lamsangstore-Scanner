@@ -87,19 +87,22 @@
 
     /* ── SECTION DIVIDER ── */
     .section-divider {
-      display: flex; align-items: center; gap: 10px;
-      margin: 32px 0 16px;
+      display: flex; align-items: center; gap: 12px;
+      margin: 44px 0 22px;
     }
     .section-divider::before,
     .section-divider::after {
-      content: ''; flex: 1; height: 2px;
-      background: linear-gradient(90deg, transparent, var(--sd), transparent);
+      content: ''; flex: 1; height: 3px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.5;
     }
     .section-divider span {
-      font-size: 0.74rem; font-weight: 600; color: var(--text3);
-      white-space: nowrap; letter-spacing: 0.4px;
-      background: var(--bg); padding: 5px 14px; border-radius: 20px;
-      box-shadow: 3px 3px 8px var(--sd), -3px -3px 8px var(--sl);
+      font-size: 1.05rem; font-weight: 700; color: white;
+      white-space: nowrap; letter-spacing: 0.3px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      padding: 12px 22px; border-radius: 24px;
+      box-shadow: 6px 6px 16px var(--sd), -4px -4px 12px var(--sl);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.15);
     }
 
     /* ── STEP CARD ── */
@@ -141,6 +144,33 @@
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg-d); }
     ::-webkit-scrollbar-thumb { background: rgba(190,188,180,0.55); border-radius: 10px; }
+
+    /* ── FLOATING SHORTCUT (FAB) ── */
+    html { scroll-behavior: smooth; }
+    .fab-wrap {
+      position: fixed; right: 20px; bottom: 22px; z-index: 100;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+    }
+    .fab-item {
+      background: var(--bg); color: var(--text);
+      font-family: 'Mitr', sans-serif; font-size: 0.86rem; font-weight: 500;
+      text-decoration: none;
+      padding: 11px 18px; border-radius: 22px; white-space: nowrap;
+      display: flex; align-items: center; gap: 9px;
+      box-shadow: 5px 5px 13px var(--sd), -4px -4px 10px var(--sl);
+      transition: box-shadow 0.15s, color 0.15s;
+    }
+    .fab-item:hover, .fab-item:active {
+      box-shadow: inset 3px 3px 8px var(--sd), inset -3px -3px 8px var(--sl);
+      color: var(--accent);
+    }
+    .fab-item .fab-num {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white; font-size: 0.78rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -167,19 +197,40 @@
     <p>วิธีดาวน์โหลดไฟล์ Excel และนำเข้าสู่ระบบ Lamsangstore Scanner</p>
   </div>
 
-  <div class="section-divider"><span>ส่วนที่ 1 — เตรียมจัดส่งและดาวน์โหลดไฟล์</span></div>
+  <div id="sec1" class="section-divider"><span>ส่วนที่ 1 — พิมพ์ใบปะหน้าพัสดุ</span></div>
 
   <div class="step-card">
     <div class="step-header">
       <div class="step-number">1</div>
-      <h2>ดำเนินการสั่งปริ้นพัสดุให้เรียบร้อย</h2>
+      <h2>เข้าหน้า "ที่ต้องจัดส่ง" และเริ่ม "จัดส่งแบบชุด"</h2>
     </div>
-    <p>ก่อนดาวน์โหลดข้อมูล ให้ดำเนินการแพ็คสินค้า Drop-off และ <strong>สั่งพิมพ์ใบปะหน้าพัสดุผ่านระบบ Shopee ตามขั้นตอนปกติให้เสร็จสมบูรณ์</strong> ก่อน</p>
+    <p>จากเมนูซ้าย คลิก <span class="highlight">"คำสั่งซื้อของฉัน" (1)</span> จากนั้นเลือกแท็บ <span class="highlight">"ที่ต้องจัดส่ง" (2)</span> → แท็บย่อย <span class="highlight">"ยังไม่ดำเนินการ" (3)</span> และเลือก <span class="highlight">"ทั้งหมด" (4)</span> ที่ "ความเร่งด่วนในการจัดส่ง" สุดท้ายคลิกปุ่มสีแดง <span class="highlight">"จัดส่งแบบชุด" (5)</span> ที่มุมขวาล่าง</p>
+    <div class="img-box"><img src="SP4.jpg" alt="เข้าหน้าจัดส่งแบบชุด Shopee"></div>
   </div>
 
   <div class="step-card">
     <div class="step-header">
       <div class="step-number">2</div>
+      <h2>เลือกช่องทางขนส่งและสั่งจัดส่งแบบ Drop off</h2>
+    </div>
+    <p>ในหน้า "จัดส่งแบบชุด" ให้อยู่ที่แท็บ <span class="highlight">"สินค้าที่ต้องจัดส่ง" (1)</span> → เลือก <span class="highlight">"ทั้งหมด" (2)</span> ที่ความเร่งด่วน → คลิก <span class="highlight">"Flash Express" (3)</span> (หรือช่องทางที่ต้องการ) → ติ๊ก <span class="highlight">checkbox บนหัวตาราง (4)</span> เพื่อเลือกออเดอร์ทั้งหมด สุดท้ายคลิก <span class="highlight">"ทำการจัดส่งสินค้าทั้งหมดนี้ที่สาขา" (5)</span> ในกล่อง "Drop off" ทางขวา</p>
+    <div class="img-box"><img src="SP5.jpg" alt="เลือกช่องทางและสั่ง Drop off Shopee"></div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-header">
+      <div class="step-number">3</div>
+      <h2>พิมพ์ใบปะหน้าจากตัวอย่างก่อนพิมพ์</h2>
+    </div>
+    <p>ระบบจะเปิดหน้า <strong>"ตัวอย่างก่อนพิมพ์"</strong> แสดงใบปะหน้าพัสดุ Flash Express ให้คลิกปุ่ม <span class="highlight">"พิมพ์เอกสาร" (1)</span> ที่มุมขวาบน จากนั้นเลือกเครื่องพิมพ์และขนาดกระดาษให้ถูกต้อง (เช่น 100×150 สำหรับ Sticker) ก่อนกดยืนยันการพิมพ์</p>
+    <div class="img-box"><img src="SP6.jpg" alt="ตัวอย่างก่อนพิมพ์ Shopee"></div>
+  </div>
+
+  <div id="sec2" class="section-divider"><span>ส่วนที่ 2 — ดาวน์โหลดไฟล์</span></div>
+
+  <div class="step-card">
+    <div class="step-header">
+      <div class="step-number">4</div>
       <h2>เลือกแท็บ "ดำเนินการแล้ว" และส่งออกข้อมูล</h2>
     </div>
     <p><strong>ข้อนี้สำคัญมาก!</strong> ที่หน้า "คำสั่งซื้อของฉัน" ให้คลิกแท็บ <span class="highlight">"ที่ต้องจัดส่ง"</span> แล้วเลือก <span class="highlight">"ดำเนินการแล้ว"</span> จากนั้นคลิก <span class="highlight">"ดาวน์โหลด"</span> มุมขวาบน จะมีป๊อปอัปให้เลือกวันที่ — ไม่ต้องแก้ไขอะไร กดดาวน์โหลดได้เลย</p>
@@ -188,18 +239,18 @@
 
   <div class="step-card">
     <div class="step-header">
-      <div class="step-number">3</div>
+      <div class="step-number">5</div>
       <h2>ดาวน์โหลดไฟล์ Excel</h2>
     </div>
     <p>เมื่อหน้าต่างรายงานปรากฏขึ้น ให้ดูที่รายงานอันบนสุด (ล่าสุด) แล้วคลิกปุ่ม <span class="highlight">"ดาวน์โหลด"</span> เพื่อเซฟไฟล์ Excel ลงเครื่อง</p>
     <div class="img-box"><img src="SP3.jpg" alt="ดาวน์โหลดไฟล์ Excel"></div>
   </div>
 
-  <div class="section-divider"><span>ส่วนที่ 2 — อัปโหลดไฟล์เข้าสู่ Scanner</span></div>
+  <div id="sec3" class="section-divider"><span>ส่วนที่ 3 — อัปโหลดไฟล์เข้าสู่ Scanner</span></div>
 
   <div class="step-card">
     <div class="step-header">
-      <div class="step-number">4</div>
+      <div class="step-number">6</div>
       <h2>เปิดหน้าต่างอัปโหลด</h2>
     </div>
     <p>เปิด Lamsangstore Scanner แล้วกดปุ่ม <span class="highlight">"📥 อัพโหลด"</span> ที่แถบเมนูด้านล่าง จะมีหน้าต่างป๊อปอัปแสดงขึ้นมา</p>
@@ -208,7 +259,7 @@
 
   <div class="step-card">
     <div class="step-header">
-      <div class="step-number">5</div>
+      <div class="step-number">7</div>
       <h2>เลือก Shopee และอัปโหลด</h2>
     </div>
     <p>ในส่วน "เลือกช่องทาง (Marketplace)" คลิกเลือก <span class="highlight">"Shopee"</span> จากนั้นคลิก <strong>"เลือกไฟล์ (.xlsx, .csv)"</strong> แล้วเลือกไฟล์ที่ดาวน์โหลดมา เมื่อชื่อไฟล์ปรากฏแล้ว กดปุ่ม <span class="highlight">"อัปโหลดข้อมูล"</span></p>
@@ -216,5 +267,12 @@
   </div>
 
 </div>
+
+<div class="fab-wrap">
+  <a href="#sec1" class="fab-item"><span class="fab-num">1</span>พิมพ์ใบปะหน้าพัสดุ</a>
+  <a href="#sec2" class="fab-item"><span class="fab-num">2</span>ดาวน์โหลดไฟล์</a>
+  <a href="#sec3" class="fab-item"><span class="fab-num">3</span>อัปโหลดเข้า Scanner</a>
+</div>
+
 </body>
 </html>

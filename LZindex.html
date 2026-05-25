@@ -87,19 +87,22 @@
 
     /* ── SECTION DIVIDER ── */
     .section-divider {
-      display: flex; align-items: center; gap: 10px;
-      margin: 32px 0 16px;
+      display: flex; align-items: center; gap: 12px;
+      margin: 44px 0 22px;
     }
     .section-divider::before,
     .section-divider::after {
-      content: ''; flex: 1; height: 2px;
-      background: linear-gradient(90deg, transparent, var(--sd), transparent);
+      content: ''; flex: 1; height: 3px;
+      background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+      opacity: 0.5;
     }
     .section-divider span {
-      font-size: 0.74rem; font-weight: 600; color: var(--text3);
-      white-space: nowrap; letter-spacing: 0.4px;
-      background: var(--bg); padding: 5px 14px; border-radius: 20px;
-      box-shadow: 3px 3px 8px var(--sd), -3px -3px 8px var(--sl);
+      font-size: 1.05rem; font-weight: 700; color: white;
+      white-space: nowrap; letter-spacing: 0.3px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      padding: 12px 22px; border-radius: 24px;
+      box-shadow: 6px 6px 16px var(--sd), -4px -4px 12px var(--sl);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.15);
     }
 
     /* ── STEP CARD ── */
@@ -141,6 +144,33 @@
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg-d); }
     ::-webkit-scrollbar-thumb { background: rgba(190,188,180,0.55); border-radius: 10px; }
+
+    /* ── FLOATING SHORTCUT (FAB) ── */
+    html { scroll-behavior: smooth; }
+    .fab-wrap {
+      position: fixed; right: 20px; bottom: 22px; z-index: 100;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+    }
+    .fab-item {
+      background: var(--bg); color: var(--text);
+      font-family: 'Mitr', sans-serif; font-size: 0.86rem; font-weight: 500;
+      text-decoration: none;
+      padding: 11px 18px; border-radius: 22px; white-space: nowrap;
+      display: flex; align-items: center; gap: 9px;
+      box-shadow: 5px 5px 13px var(--sd), -4px -4px 10px var(--sl);
+      transition: box-shadow 0.15s, color 0.15s;
+    }
+    .fab-item:hover, .fab-item:active {
+      box-shadow: inset 3px 3px 8px var(--sd), inset -3px -3px 8px var(--sl);
+      color: var(--accent2);
+    }
+    .fab-item .fab-num {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white; font-size: 0.78rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -167,7 +197,7 @@
     <p>วิธีดาวน์โหลดไฟล์ Excel และนำเข้าสู่ระบบ Lamsangstore Scanner</p>
   </div>
 
-  <div class="section-divider"><span>ส่วนที่ 1 — เตรียมจัดส่งและดาวน์โหลดไฟล์</span></div>
+  <div id="sec1" class="section-divider"><span>ส่วนที่ 1 — เตรียมจัดส่งและดาวน์โหลดไฟล์</span></div>
 
   <div class="step-card">
     <div class="step-header">
@@ -186,7 +216,7 @@
     <div class="img-box"><img src="LZ1.jpg" alt="ขั้นตอนการส่งออก Lazada"></div>
   </div>
 
-  <div class="section-divider"><span>ส่วนที่ 2 — อัปโหลดไฟล์เข้าสู่ Scanner</span></div>
+  <div id="sec2" class="section-divider"><span>ส่วนที่ 2 — อัปโหลดไฟล์เข้าสู่ Scanner</span></div>
 
   <div class="step-card">
     <div class="step-header">
@@ -207,5 +237,11 @@
   </div>
 
 </div>
+
+<div class="fab-wrap">
+  <a href="#sec1" class="fab-item"><span class="fab-num">1</span>ดาวน์โหลดไฟล์</a>
+  <a href="#sec2" class="fab-item"><span class="fab-num">2</span>อัปโหลดเข้า Scanner</a>
+</div>
+
 </body>
 </html>

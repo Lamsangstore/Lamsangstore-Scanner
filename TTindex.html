@@ -87,19 +87,22 @@
 
     /* ── SECTION DIVIDER ── */
     .section-divider {
-      display: flex; align-items: center; gap: 10px;
-      margin: 32px 0 16px;
+      display: flex; align-items: center; gap: 12px;
+      margin: 44px 0 22px;
     }
     .section-divider::before,
     .section-divider::after {
-      content: ''; flex: 1; height: 2px;
-      background: linear-gradient(90deg, transparent, var(--sd), transparent);
+      content: ''; flex: 1; height: 3px;
+      background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+      opacity: 0.5;
     }
     .section-divider span {
-      font-size: 0.74rem; font-weight: 600; color: var(--text3);
-      white-space: nowrap; letter-spacing: 0.4px;
-      background: var(--bg); padding: 5px 14px; border-radius: 20px;
-      box-shadow: 3px 3px 8px var(--sd), -3px -3px 8px var(--sl);
+      font-size: 1.05rem; font-weight: 700; color: white;
+      white-space: nowrap; letter-spacing: 0.3px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      padding: 12px 22px; border-radius: 24px;
+      box-shadow: 6px 6px 16px var(--sd), -4px -4px 12px var(--sl);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.15);
     }
 
     /* ── STEP CARD ── */
@@ -152,6 +155,33 @@
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg-d); }
     ::-webkit-scrollbar-thumb { background: rgba(190,188,180,0.55); border-radius: 10px; }
+
+    /* ── FLOATING SHORTCUT (FAB) ── */
+    html { scroll-behavior: smooth; }
+    .fab-wrap {
+      position: fixed; right: 20px; bottom: 22px; z-index: 100;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+    }
+    .fab-item {
+      background: var(--bg); color: var(--text);
+      font-family: 'Mitr', sans-serif; font-size: 0.86rem; font-weight: 500;
+      text-decoration: none;
+      padding: 11px 18px; border-radius: 22px; white-space: nowrap;
+      display: flex; align-items: center; gap: 9px;
+      box-shadow: 5px 5px 13px var(--sd), -4px -4px 10px var(--sl);
+      transition: box-shadow 0.15s, color 0.15s;
+    }
+    .fab-item:hover, .fab-item:active {
+      box-shadow: inset 3px 3px 8px var(--sd), inset -3px -3px 8px var(--sl);
+      color: var(--accent2);
+    }
+    .fab-item .fab-num {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white; font-size: 0.78rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -178,49 +208,69 @@
     <p>วิธีดาวน์โหลดไฟล์ Excel จาก TikTok Seller Center และอัปโหลดเข้า Lamsangstore Scanner</p>
   </div>
 
-  <div class="section-divider"><span>ส่วนที่ 1 — ดาวน์โหลดไฟล์จาก TikTok Seller Center</span></div>
+  <div id="sec1" class="section-divider"><span>ส่วนที่ 1 — พิมพ์ใบปะหน้าพัสดุ</span></div>
 
   <div class="step-card">
     <div class="step-header">
       <div class="step-number">1</div>
-      <h2>เข้าสู่เมนูจัดการคำสั่งซื้อ</h2>
+      <h2>เข้าหน้าจัดการคำสั่งซื้อ</h2>
     </div>
-    <p>ล็อกอินเข้าสู่ TikTok Seller Center ที่เมนูด้านซ้ายมือ ให้คลิกที่ <strong>"คำสั่งซื้อ"</strong> จากนั้นเลือกเมนูย่อย <span class="highlight">"จัดการคำสั่งซื้อ"</span></p>
+    <p>ล็อกอินเข้าสู่ TikTok Seller Center ที่เมนูด้านซ้ายมือ ให้คลิก <strong>"คำสั่งซื้อ"</strong> → <span class="highlight">"จัดการคำสั่งซื้อ"</span> แล้วเข้าแท็บ <span class="highlight">"รอดำเนินการ"</span> (หรือคลิกการ์ดสถิติ "รอจัดส่ง" ที่หน้าแรกเพื่อเข้าตรงไปยังแท็บนี้ได้เลย)</p>
     <div class="img-box"><img src="TT1.jpg" alt="เมนูจัดการคำสั่งซื้อ"></div>
   </div>
 
   <div class="step-card">
     <div class="step-header">
       <div class="step-number">2</div>
-      <h2>เตรียมการจัดส่ง</h2>
+      <h2>กรองออเดอร์ที่ต้องการพิมพ์ (ทางเลือก)</h2>
     </div>
-    <p>ในแท็บ "รอดำเนินการ" ให้ติ๊กเลือกออเดอร์ที่ต้องการจัดส่ง จากนั้นคลิกปุ่มสีเขียว <span class="highlight">"เตรียมการจัดส่งหลายรายการ"</span> แล้วดำเนินการพิมพ์ใบปะหน้าตามปกติจนเสร็จสิ้น</p>
-    <div class="img-box"><img src="TT2.jpg" alt="เตรียมการจัดส่ง"></div>
+    <p>หากต้องการพิมพ์เฉพาะออเดอร์บางประเภท ให้คลิกปุ่ม <span class="highlight">"ตัวกรอง" (1)</span> บนแถบเครื่องมือ จากนั้นเลื่อนหาหัวข้อ "ข้อยกเว้นคำสั่งซื้อ" แล้วเลือก <span class="highlight">"เปิดจองล่วงหน้า" (2)</span> สุดท้ายคลิก <span class="highlight">"นำไปใช้" (3)</span> ระบบจะแสดงเฉพาะออเดอร์ที่ตรงกับเงื่อนไข</p>
+    <div class="img-box"><img src="TT7.jpg" alt="ตัวกรองออเดอร์ TikTok"></div>
   </div>
 
   <div class="step-card">
     <div class="step-header">
       <div class="step-number">3</div>
-      <h2>ส่งออกคำสั่งซื้อ</h2>
+      <h2>เลือกออเดอร์ทั้งหมดและสั่งเตรียมการจัดส่ง</h2>
     </div>
-    <p>เมื่อจัดการออเดอร์เรียบร้อยแล้ว ให้มองหาปุ่มเมนูทางด้านขวามือ คลิกที่ <span class="highlight">"ดาวน์โหลด"</span> เพื่อเปิดหน้าต่างสำหรับดาวน์โหลดข้อมูล</p>
-    <div class="img-box"><img src="TT3.jpg" alt="ส่งออกคำสั่งซื้อ"></div>
+    <p>ติ๊กที่ <strong>checkbox บนหัวตาราง</strong> เพื่อเลือกออเดอร์ทั้งหมดในหน้านี้ จากนั้นคลิกปุ่มสีเขียว <span class="highlight">"เตรียมการจัดส่ง+พิมพ์"</span> ระบบจะนำไปยังหน้าผลลัพธ์การสร้างใบปะหน้า</p>
+    <div class="img-box"><img src="TT2.jpg" alt="เตรียมการจัดส่ง"></div>
   </div>
 
   <div class="step-card">
     <div class="step-header">
       <div class="step-number">4</div>
+      <h2>พิมพ์เอกสารใบปะหน้า</h2>
+    </div>
+    <p>คลิกปุ่ม <span class="highlight">"พิมพ์เอกสาร (จำนวน)"</span> จะมีป๊อปอัป "พิมพ์เอกสาร" ขึ้นมา ให้ติ๊กเลือกเอกสาร <span class="highlight">"ฉลากจัดส่ง (A6)" และ "รายการแพ็คสินค้า (A6)" (1)</span> จากนั้นคลิกปุ่ม <span class="highlight">"พิมพ์" (2)</span> เมื่อไฟล์ PDF เปิดขึ้น ให้กดปุ่ม <span class="highlight">"พิมพ์ (Print)"</span> ที่มุมขวาบนเพื่อพิมพ์ออกทางเครื่องพิมพ์</p>
+    <div class="img-box"><img src="TT8.jpg" alt="ป๊อปอัปพิมพ์เอกสาร TikTok"></div>
+  </div>
+
+  <div id="sec2" class="section-divider"><span>ส่วนที่ 2 — ดาวน์โหลดไฟล์จาก TikTok Seller Center</span></div>
+
+  <div class="step-card">
+    <div class="step-header">
+      <div class="step-number">5</div>
+      <h2>ส่งออกคำสั่งซื้อ</h2>
+    </div>
+    <p>กลับไปยังหน้า "จัดการคำสั่งซื้อ" แท็บ "รอดำเนินการ" ให้มองหาปุ่มเมนูทางด้านขวามือ คลิกที่ <span class="highlight">"ดาวน์โหลด"</span> เพื่อเปิดหน้าต่างสำหรับดาวน์โหลดข้อมูล</p>
+    <div class="img-box"><img src="TT3.jpg" alt="ส่งออกคำสั่งซื้อ"></div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-header">
+      <div class="step-number">6</div>
       <h2>ดาวน์โหลดไฟล์ Excel</h2>
     </div>
     <p>ในหน้าต่างส่งออก ตรวจสอบให้แน่ใจว่าเลือกรูปแบบไฟล์เป็น <strong>Excel</strong> จากนั้นดูที่รายการล่าสุด แล้วคลิก <span class="highlight">"ดาวน์โหลด"</span> ไฟล์จะถูกเซฟลงเครื่องทันที</p>
     <div class="img-box"><img src="TT4.jpg" alt="ดาวน์โหลดไฟล์ Excel"></div>
   </div>
 
-  <div class="section-divider"><span>ส่วนที่ 2 — อัปโหลดไฟล์เข้าสู่ Scanner</span></div>
+  <div id="sec3" class="section-divider"><span>ส่วนที่ 3 — อัปโหลดไฟล์เข้าสู่ Scanner</span></div>
 
   <div class="step-card">
     <div class="step-header">
-      <div class="step-number">5</div>
+      <div class="step-number">7</div>
       <h2>เปิดหน้าต่างอัปโหลด</h2>
     </div>
     <p>เปิด Lamsangstore Scanner แล้วกดปุ่ม <span class="highlight">"📥 อัพโหลด"</span> ที่แถบเมนูด้านล่าง จะมีหน้าต่างป๊อปอัปแสดงขึ้นมา</p>
@@ -229,7 +279,7 @@
 
   <div class="step-card">
     <div class="step-header">
-      <div class="step-number">6</div>
+      <div class="step-number">8</div>
       <h2>เลือก TikTok Shop และอัปโหลด</h2>
     </div>
     <p>ในส่วน "เลือกช่องทาง (Marketplace)" คลิกเลือก <span class="highlight">"TikTok Shop"</span> จากนั้นคลิก <strong>"เลือกไฟล์ (.xlsx, .csv)"</strong> เพื่อเลือกไฟล์ที่ดาวน์โหลดมา เมื่อชื่อไฟล์ปรากฏแล้ว กดปุ่ม <span class="highlight">"อัปโหลดข้อมูล"</span></p>
@@ -245,5 +295,12 @@
   </div>
 
 </div>
+
+<div class="fab-wrap">
+  <a href="#sec1" class="fab-item"><span class="fab-num">1</span>พิมพ์ใบปะหน้าพัสดุ</a>
+  <a href="#sec2" class="fab-item"><span class="fab-num">2</span>ดาวน์โหลดจาก TikTok</a>
+  <a href="#sec3" class="fab-item"><span class="fab-num">3</span>อัปโหลดเข้า Scanner</a>
+</div>
+
 </body>
 </html>
