@@ -480,22 +480,33 @@ function saveMarketplaceData(body) {
       ]);
     });
 
+    let verified = 0;
     if (newRows.length > 0) {
-      sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, 7).setValues(newRows);
+      const startRow = sheet.getLastRow() + 1;
+      sheet.getRange(startRow, 1, newRows.length, 7).setValues(newRows);
+      // ✅ force commit ทันที — ไม่ให้ค้างใน batch ที่อาจ rollback
+      SpreadsheetApp.flush();
+      // ✅ verify: อ่านกลับมานับว่ามีแถวที่เขียนจริงครบไหม (กัน "บอกสำเร็จแต่ข้อมูลหาย")
+      const verifyValues = sheet.getRange(startRow, 1, newRows.length, 1).getValues();
+      verified = verifyValues.filter(r => r[0] !== '' && r[0] != null).length;
+      if (verified !== newRows.length) {
+        Logger.log('[saveMarketplaceData] verify FAIL: expected ' + newRows.length + ' got ' + verified + ' file=' + fileName);
+        return { success: false, error: 'Write verification failed: ' + verified + '/' + newRows.length + ' rows committed' };
+      }
     }
 
     logSheet.appendRow([timestamp, fileName, marketplace, newRows.length]);
 
-    // ✅ cleanup เฉพาะถ้าผ่านมาเกิน 1 ชม. แล้ว — กัน lock ค้างนานเมื่ออัปโหลดถี่ๆ
-    _maybeCleanUpOldMarketplaceData();
-
     if (newRows.length > 0) _bumpMarketplaceVersion();
 
-    return { success: true, count: newRows.length, duplicateSkipped };
+    return { success: true, count: newRows.length, duplicateSkipped, verified };
   } catch (e) {
     return { success: false, error: e.toString() };
   } finally {
     try { lock.releaseLock(); } catch(_) {}
+    // ✅ cleanup ย้ายมารันหลัง release lock แล้ว — ถ้า cleanup fail จะไม่กระทบรายการที่เพิ่งเขียน
+    // เพราะ saveMarketplaceData ปิด transaction ไปเรียบร้อยแล้ว
+    try { _maybeCleanUpOldMarketplaceData(); } catch(_) {}
   }
 }
 
@@ -655,7 +666,17 @@ function _maybeCleanUpOldMarketplaceData() {
 }
 
 // ✅ เก็บข้อมูล MarketplaceData ย้อนหลัง 2 วัน (เปลี่ยนจาก 3 วัน)
+// ใช้ LockService + deleteRows (ไม่ใช้ clearContents + setValues)
+// เหตุผล: ถ้า setValues fail หลัง clearContents → ชีตจะว่างเปล่า ข้อมูลหายหมด
+// deleteRows ทำงานทีละช่วง — ถ้า fail กลางทาง ส่วนที่เหลือยังอยู่
 function cleanUpOldMarketplaceData() {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch(e) {
+    Logger.log("[cleanUpOldMarketplaceData] ไม่ได้ lock ภายใน 30s: " + e.message);
+    return;
+  }
   try {
     const sheet = setupMarketplaceSheet();
     const data  = sheet.getDataRange().getValues();
@@ -664,21 +685,35 @@ function cleanUpOldMarketplaceData() {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 2);
 
-    const newData = [data[0]];
+    // หา row indices ที่ต้องลบ (1-indexed ฝั่ง sheet)
+    const rowsToDelete = [];
     for (let i = 1; i < data.length; i++) {
-      if (new Date(data[i][0]) >= cutoff) {
-        const row = data[i];
-        while (row.length < 7) row.push("");
-        newData.push(row);
+      const ts = data[i][0];
+      if (ts && new Date(ts) < cutoff) {
+        rowsToDelete.push(i + 1); // sheet rows เริ่มที่ 1
       }
     }
+    if (rowsToDelete.length === 0) return;
 
-    if (newData.length !== data.length) {
-      sheet.clearContents();
-      sheet.getRange(1, 1, newData.length, 7).setValues(newData);
+    // จัดกลุ่ม contiguous ranges แล้วลบจากล่างขึ้นบน (กัน index shift)
+    rowsToDelete.sort((a, b) => b - a);
+    let i = 0;
+    while (i < rowsToDelete.length) {
+      const top = rowsToDelete[i];
+      let count = 1;
+      while (i + 1 < rowsToDelete.length && rowsToDelete[i + 1] === top - count) {
+        count++;
+        i++;
+      }
+      const start = top - count + 1;
+      sheet.deleteRows(start, count);
+      i++;
     }
+    SpreadsheetApp.flush();
   } catch (e) {
     Logger.log("Error cleaning up marketplace: " + e.message);
+  } finally {
+    try { lock.releaseLock(); } catch(_) {}
   }
 }
 

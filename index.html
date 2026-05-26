@@ -5894,6 +5894,7 @@ function _updateProgressDialog(label, done, total, currentName) {
 }
 
 // อัปโหลด results เข้า GAS แบบขนาน — return aggregates + failures (พร้อม result object เพื่อ retry)
+// แนบ _serverWritten / _serverDup ลงในแต่ละ result เพื่อใช้รายงานต่อไฟล์ใน popup สำเร็จ
 async function _uploadResultsParallel(items, concurrency = 3) {
   const agg = { totalCount: 0, totalDup: 0, totalBf: 0, failures: [] };
   let done = 0;
@@ -5903,6 +5904,8 @@ async function _uploadResultsParallel(items, concurrency = 3) {
       // ⏱️ timeout 90s: ไฟล์ใหญ่ + รอ LockService queue ใช้เวลา > 15s ค่อนข้างปกติ
       const resp = await callGAS("saveMarketplaceData", { data: r.extractData, fileName: r.file.name, marketplace: r.marketplace }, 90000);
       if (resp && resp.success) {
+        r._serverWritten = resp.count || 0;
+        r._serverDup     = resp.duplicateSkipped || 0;
         agg.totalCount += resp.count || 0;
         agg.totalDup   += resp.duplicateSkipped || 0;
         agg.totalBf    += resp.backfilled || 0;
@@ -5964,6 +5967,23 @@ async function processFileUpload() {
     totalRemark += Object.keys(r.remarkMap).length;
   }
 
+  // ตรวจรายการซ้ำข้าม-ไฟล์ (tracking|sku|orderId) — GAS จะข้ามแถวซ้ำ ทำให้ Sheet มีน้อยกว่าที่นับ
+  // นับล่วงหน้าให้ user เห็นใน popup ยืนยัน + เก็บไว้รายงานต่อไฟล์ใน popup สำเร็จ
+  const _crossSeen = new Set();
+  let crossFileDups = 0;
+  for (const r of results) {
+    let perFileCross = 0;
+    for (const d of r.extractData) {
+      const k = `${d.tracking}|${d.sku}|${d.orderId || ''}`;
+      if (_crossSeen.has(k)) { crossFileDups++; perFileCross++; }
+      else _crossSeen.add(k);
+    }
+    r._crossDup = perFileCross;
+  }
+  const crossDupHtml = crossFileDups > 0
+    ? `<div style="margin-top:6px; padding:8px 10px; background:#fff3cd; border-left:3px solid #d4a017; border-radius:6px; font-size:0.84rem; color:#7a5a10;">⚠ พบรายการซ้ำระหว่างไฟล์ <strong>${crossFileDups} รายการ</strong> — ระบบจะเขียนเฉพาะรายการแรกที่พบ</div>`
+    : '';
+
   // รายการต่อไฟล์ — badge สีตาม brand ของแต่ละ marketplace
   const mpStyle = {
     tiktok:  { name: 'TikTok',  bg: '#010101', fg: '#ffffff' },
@@ -6021,6 +6041,7 @@ async function processFileUpload() {
         <div>📋 รายการสินค้ารวม: <strong>${totalItems} รายการ</strong></div>
         <div>📝 หมายเหตุลูกค้า: <strong>${totalRemark} ใบ</strong></div>
         <div>📁 ไฟล์: <strong>${results.length} ไฟล์</strong></div>
+        ${crossDupHtml}
         <div style="margin-top:8px; padding-top:8px; border-top:1px solid #e0d8c0;">
           ${perFile}
         </div>
@@ -6108,14 +6129,16 @@ async function processFileUpload() {
 
   const totalParseSkipped = results.reduce((s, r) => s + (r.skipped?.count || 0), 0);
   if (lastFailures.length === 0) {
-    // สร้างรายการ per-file สำหรับ result dialog
+    // สร้างรายการ per-file สำหรับ result dialog — โชว์ "เขียนใหม่ / ข้ามซ้ำ" ที่ GAS ตอบกลับจริง
     const resultPerFile = results.map(r => {
       const tCount = new Set(r.extractData.map(d => d.tracking)).size;
       const skipCount = r.skipped?.count || 0;
-      const total = r.totalDataRows || (r.extractData.length + skipCount);
-      const rowInfo = skipCount > 0
-        ? `${tCount} ใบ · <span style="color:#7a6440;">${r.extractData.length}/${total} แถว</span>`
-        : `${tCount} ใบ · ${r.extractData.length} รายการ`;
+      const sent = r.extractData.length;
+      const written = r._serverWritten ?? sent;
+      const dup = r._serverDup ?? 0;
+      const dupLine = dup > 0
+        ? `<div style="font-size:0.78rem;color:#a08a5a;">✏️ เขียนใหม่ ${written} · ⤴ ข้ามซ้ำ ${dup}</div>`
+        : '';
       const skipDetail = skipCount > 0 ? (() => {
         const parts = Object.entries(r.skipped.reasons)
           .map(([k, v]) => `${_skipReasonLabel[k] || k} ${v}`)
@@ -6123,14 +6146,22 @@ async function processFileUpload() {
         return `<div style="font-size:0.75rem;color:#c44;">⚠ ข้าม ${skipCount} — ${parts}</div>`;
       })() : '';
       const mpName = (mpStyle[r.marketplace] || {}).name || r.marketplace;
-      return `<div style="font-size:0.82rem;color:#5a4a30;line-height:1.6;">[${mpName}] ${escHtml(r.file.name.replace(/\.[^.]+$/, ''))}<br>${rowInfo}${skipDetail}</div>`;
+      const totalRows = r.totalDataRows || (sent + skipCount);
+      const rowInfo = skipCount > 0
+        ? `${tCount} ใบ · <span style="color:#7a6440;">${sent}/${totalRows} แถว</span>`
+        : `${tCount} ใบ · ${sent} รายการ`;
+      return `<div style="font-size:0.82rem;color:#5a4a30;line-height:1.6;margin-bottom:6px;">[${mpName}] ${escHtml(r.file.name.replace(/\.[^.]+$/, ''))}<br>${rowInfo}${dupLine}${skipDetail}</div>`;
     }).join('');
-    const dupLine   = totalDup > 0 ? `<div style="font-size:0.8rem;color:#a08a5a;">ข้ามซ้ำ ${totalDup} รายการ</div>` : '';
+    const totalSent = results.reduce((s, r) => s + r.extractData.length, 0);
+    const dupLine = totalDup > 0
+      ? `<div style="margin-top:4px; padding:6px 10px; background:#fff3cd; border-left:3px solid #d4a017; border-radius:6px; font-size:0.84rem; color:#7a5a10;">⤴ ข้ามซ้ำ <strong>${totalDup}</strong> รายการ (มีอยู่ใน Sheet แล้ว — จึงไม่เขียนซ้ำ)</div>`
+      : '';
     const bfLine    = totalBf  > 0 ? `<div style="font-size:0.8rem;color:#a08a5a;">เติม OrderId ย้อนหลัง ${totalBf} แถว</div>` : '';
     Swal.fire({
       title: totalParseSkipped > 0 ? 'สำเร็จ (มีคำเตือน)' : 'สำเร็จ',
       html: `<div style="text-align:left;line-height:1.8;">
-        <div>✅ อัปโหลดสำเร็จ <strong>${totalCount}</strong> รายการ จาก <strong>${results.length}</strong> ไฟล์</div>
+        <div>✅ <strong>เขียนเข้า Sheet จริง: ${totalCount} รายการ</strong></div>
+        <div style="font-size:0.85rem;color:#7a6440;">จากที่อ่านได้ทั้งหมด ${totalSent} รายการ ใน ${results.length} ไฟล์</div>
         ${dupLine}${bfLine}
         <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e0d8c0;">${resultPerFile}</div>
       </div>`,
