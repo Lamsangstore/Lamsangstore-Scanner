@@ -449,13 +449,18 @@ function saveMarketplaceData(body) {
 
     const logSheet = getOrCreateSheet("UploadLog", ["Timestamp","FileName","Marketplace","Count"]);
 
-    const existingData = sheet.getDataRange().getValues();
+    // ✅ อ่านเฉพาะคอลัมน์ C-G (tracking, sku, qty, remark, orderId) — เร็วกว่าอ่านทุกคอลัมน์
+    // เดิม: getDataRange().getValues() อ่าน 7 คอลัมน์ รวม timestamp ที่ไม่ใช้ → เสียเวลา serialize
     const existingKeys = new Set();
-    for (let i = 1; i < existingData.length; i++) {
-      const t   = numToStr(existingData[i][2]).toUpperCase();
-      const sku = numToStr(existingData[i][3]).toUpperCase();
-      const oid = numToStr(existingData[i][6]);
-      existingKeys.add(t + '|' + sku + '|' + oid);
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const slice = sheet.getRange(2, 3, lastRow - 1, 5).getValues(); // C..G
+      for (let i = 0; i < slice.length; i++) {
+        const t = numToStr(slice[i][0]).toUpperCase(); // col C
+        const s = numToStr(slice[i][1]).toUpperCase(); // col D
+        const o = numToStr(slice[i][4]);               // col G
+        existingKeys.add(t + '|' + s + '|' + o);
+      }
     }
 
     let newRows = [];
@@ -504,9 +509,8 @@ function saveMarketplaceData(body) {
     return { success: false, error: e.toString() };
   } finally {
     try { lock.releaseLock(); } catch(_) {}
-    // ✅ cleanup ย้ายมารันหลัง release lock แล้ว — ถ้า cleanup fail จะไม่กระทบรายการที่เพิ่งเขียน
-    // เพราะ saveMarketplaceData ปิด transaction ไปเรียบร้อยแล้ว
-    try { _maybeCleanUpOldMarketplaceData(); } catch(_) {}
+    // ⚠️ ไม่เรียก cleanup ใน hot path แล้ว — รัน synchronous จะหน่วง response 5-20s
+    // cleanup ย้ายไปเป็น scheduled trigger (03:00 รายวัน) ดูใน setupDailyCleanupTrigger
   }
 }
 
@@ -920,36 +924,37 @@ function cleanUpOldOrders() {
 }
 
 // ============================================================
-// setupDailyCleanupTrigger — ตั้ง trigger ทั้ง backup + cleanup
-//   01:00 น. → backupOrdersDaily  (สำรอง Orders เก็บย้อนหลัง 30 วัน)
-//   02:00 น. → cleanUpOldOrders  (ลบ Orders ที่เก่ากว่า 90 วัน)
+// setupDailyCleanupTrigger — ตั้ง triggers ทั้งหมด
+//   01:00 น. → backupOrdersDaily         (สำรอง Orders เก็บย้อนหลัง 30 วัน)
+//   02:00 น. → cleanUpOldOrders          (ลบ Orders ที่เก่ากว่า 90 วัน)
+//   03:00 น. → cleanUpOldMarketplaceData (ลบ MarketplaceData ที่เก่ากว่า 2 วัน)
 // รันฟังก์ชันนี้ครั้งเดียวใน Apps Script editor หลัง deploy
 // ============================================================
 function setupDailyCleanupTrigger() {
-  // ลบ trigger เดิมของทั้ง 2 ฟังก์ชัน (กันซ้ำซ้อนถ้ารันหลายรอบ)
+  // ลบ trigger เดิม (กันซ้ำซ้อนถ้ารันหลายรอบ)
+  const HANDLERS = ["cleanUpOldOrders", "backupOrdersDaily", "cleanUpOldMarketplaceData"];
   ScriptApp.getProjectTriggers().forEach(t => {
-    const fn = t.getHandlerFunction();
-    if (fn === "cleanUpOldOrders" || fn === "backupOrdersDaily") {
+    if (HANDLERS.indexOf(t.getHandlerFunction()) !== -1) {
       ScriptApp.deleteTrigger(t);
     }
   });
 
   // Backup ก่อน cleanup 1 ชั่วโมง — backup ล่าสุดจะเป็น snapshot ก่อนถูกตัด
   ScriptApp.newTrigger("backupOrdersDaily")
-    .timeBased()
-    .everyDays(1)
-    .atHour(1)
-    .create();
+    .timeBased().everyDays(1).atHour(1).create();
 
   ScriptApp.newTrigger("cleanUpOldOrders")
-    .timeBased()
-    .everyDays(1)
-    .atHour(2)
-    .create();
+    .timeBased().everyDays(1).atHour(2).create();
+
+  // ✅ Marketplace cleanup ย้ายมาเป็น scheduled trigger
+  // (เดิมรันใน finally ของ saveMarketplaceData → ทำให้ upload หน่วง)
+  ScriptApp.newTrigger("cleanUpOldMarketplaceData")
+    .timeBased().everyDays(1).atHour(3).create();
 
   Logger.log("✅ Daily triggers set:");
   Logger.log("   01:00 น. → backupOrdersDaily (เก็บ " + ORDERS_BACKUP_KEEP_DAYS + " วัน)");
   Logger.log("   02:00 น. → cleanUpOldOrders (เก็บ " + CLEANUP_ORDERS_RETENTION_DAYS + " วัน)");
+  Logger.log("   03:00 น. → cleanUpOldMarketplaceData (เก็บ 2 วัน)");
 }
 
 // ============================================================
