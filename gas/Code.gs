@@ -432,9 +432,9 @@ function saveMarketplaceData(body) {
   // ไม่มี lock = 2 requests อ่าน lastRow ค่าเดียวกัน → เขียนทับกัน → ข้อมูลหาย
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(20000); // รอ lock สูงสุด 20 วินาที
+    lock.waitLock(45000); // รอ lock สูงสุด 45 วินาที — เผื่อ cleanup/parallel uploads
   } catch(e) {
-    Logger.log("[saveMarketplaceData] ไม่ได้ lock ภายใน 20s: " + e.message);
+    Logger.log("[saveMarketplaceData] ไม่ได้ lock ภายใน 45s: " + e.message);
     return { success: false, error: "Server busy, please retry" };
   }
 
@@ -665,10 +665,8 @@ function _maybeCleanUpOldMarketplaceData() {
   }
 }
 
-// ✅ เก็บข้อมูล MarketplaceData ย้อนหลัง 2 วัน (เปลี่ยนจาก 3 วัน)
-// ใช้ LockService + deleteRows (ไม่ใช้ clearContents + setValues)
-// เหตุผล: ถ้า setValues fail หลัง clearContents → ชีตจะว่างเปล่า ข้อมูลหายหมด
-// deleteRows ทำงานทีละช่วง — ถ้า fail กลางทาง ส่วนที่เหลือยังอยู่
+// ✅ เก็บข้อมูล MarketplaceData ย้อนหลัง 2 วัน
+// ใช้ LockService + deleteRows + CSV backup ก่อนลบ
 function cleanUpOldMarketplaceData() {
   const lock = LockService.getScriptLock();
   try {
@@ -679,24 +677,30 @@ function cleanUpOldMarketplaceData() {
   }
   try {
     const sheet = setupMarketplaceSheet();
-    const data  = sheet.getDataRange().getValues();
-    if (data.length <= 1) return;
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return;
+
+    // อ่านเฉพาะคอลัมน์ A (timestamp)
+    const tsValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
 
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 2);
 
-    // หา row indices ที่ต้องลบ (1-indexed ฝั่ง sheet)
     const rowsToDelete = [];
-    for (let i = 1; i < data.length; i++) {
-      const ts = data[i][0];
-      if (ts && new Date(ts) < cutoff) {
-        rowsToDelete.push(i + 1); // sheet rows เริ่มที่ 1
-      }
+    for (let i = 0; i < tsValues.length; i++) {
+      const ts = tsValues[i][0];
+      if (!ts) continue; // ⚠️ ข้ามแถวที่ timestamp ว่าง
+      const d = ts instanceof Date ? ts : new Date(ts);
+      if (isNaN(d.getTime())) continue;
+      if (d < cutoff) rowsToDelete.push(i + 2);
     }
     if (rowsToDelete.length === 0) return;
 
-    // จัดกลุ่ม contiguous ranges แล้วลบจากล่างขึ้นบน (กัน index shift)
+    // ⚠️ ไม่ backup MarketplaceData — เป็น snapshot ที่ re-upload ได้
+    // ถ้า backup จะถือ lock นานเกินไป ทำให้ saveMarketplaceData ขนาน timeout
+
     rowsToDelete.sort((a, b) => b - a);
+    let deleted = 0;
     let i = 0;
     while (i < rowsToDelete.length) {
       const top = rowsToDelete[i];
@@ -706,10 +710,17 @@ function cleanUpOldMarketplaceData() {
         i++;
       }
       const start = top - count + 1;
-      sheet.deleteRows(start, count);
+      try {
+        sheet.deleteRows(start, count);
+        deleted += count;
+      } catch(e) {
+        Logger.log("[cleanUpOldMarketplaceData] deleteRows fail ที่แถว " + start + ": " + e.message);
+        break;
+      }
       i++;
     }
     SpreadsheetApp.flush();
+    Logger.log("[cleanUpOldMarketplaceData] ลบเสร็จ " + deleted + " แถว");
   } catch (e) {
     Logger.log("Error cleaning up marketplace: " + e.message);
   } finally {
@@ -718,10 +729,98 @@ function cleanUpOldMarketplaceData() {
 }
 
 // ============================================================
-// cleanUpOldOrders
+// _backupSheetToCsv — สำรองชีตเป็น CSV ลง Drive
+// คืนค่า fileId ถ้าสำเร็จ, null ถ้าล้มเหลว
+// keepCount = จำนวนไฟล์ที่จะเก็บ (rolling) — ถ้าเกิน จะลบของเก่าทิ้ง
 // ============================================================
+function _backupSheetToCsv(sheetName, keepCount) {
+  if (!keepCount || keepCount < 1) keepCount = 14;
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return null;
+    const data = sheet.getDataRange().getValues();
+    if (data.length === 0) return null;
+
+    const tz = Session.getScriptTimeZone();
+    const csv = data.map(row => row.map(cell => {
+      if (cell instanceof Date) return Utilities.formatDate(cell, tz, "yyyy-MM-dd HH:mm:ss");
+      const s = String(cell == null ? "" : cell);
+      return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(",")).join("\n");
+
+    const folder = DriveApp.getFolderById(TARGET_FOLDER_ID);
+    let backupFolder;
+    const sub = folder.getFoldersByName("backups");
+    backupFolder = sub.hasNext() ? sub.next() : folder.createFolder("backups");
+
+    const stamp = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd_HH-mm-ss");
+    const name  = sheetName + "_" + stamp + ".csv";
+    const file  = backupFolder.createFile(name, csv, MimeType.CSV);
+
+    // rolling cleanup — เก็บแค่ keepCount ไฟล์ล่าสุดของชีตนี้
+    const existing = [];
+    const it = backupFolder.getFiles();
+    while (it.hasNext()) {
+      const f = it.next();
+      if (f.getName().indexOf(sheetName + "_") === 0) existing.push(f);
+    }
+    existing.sort((a, b) => b.getDateCreated().getTime() - a.getDateCreated().getTime());
+    for (let i = keepCount; i < existing.length; i++) {
+      try { existing[i].setTrashed(true); } catch(_) {}
+    }
+
+    Logger.log("[_backupSheetToCsv] backup เสร็จ: " + name + " (" + data.length + " แถว, keep=" + keepCount + ")");
+    return file.getId();
+  } catch(e) {
+    Logger.log("[_backupSheetToCsv] error: " + e.message);
+    return null;
+  }
+}
+
+// ============================================================
+// backupOrdersDaily — รันโดย trigger ทุกวัน 01:00 น.
+// สำรอง Orders sheet เก็บย้อนหลัง 30 วัน (= 30 ไฟล์)
+// ============================================================
+const ORDERS_BACKUP_KEEP_DAYS = 30;
+
+function backupOrdersDaily() {
+  try {
+    const id = _backupSheetToCsv(SHEET_ORDERS, ORDERS_BACKUP_KEEP_DAYS);
+    if (!id) {
+      Logger.log("[backupOrdersDaily] backup ล้มเหลว");
+      _alertOwner("Orders daily backup failed", "ไม่สามารถสำรอง Orders sheet เป็น CSV ได้ — ตรวจสอบ Drive permission/quota");
+    }
+  } catch(e) {
+    Logger.log("[backupOrdersDaily] error: " + e.message);
+    _alertOwner("Orders daily backup error", e.toString());
+  }
+}
+
+// ============================================================
+// _alertOwner — ส่งอีเมลแจ้งเจ้าของ script (best-effort)
+// ============================================================
+function _alertOwner(subject, body) {
+  try {
+    const email = Session.getEffectiveUser().getEmail();
+    if (!email) return;
+    MailApp.sendEmail(email, "[Scanner PRO] " + subject, body);
+  } catch(e) {
+    Logger.log("[_alertOwner] error: " + e.message);
+  }
+}
+
+// ============================================================
+// cleanUpOldOrders — ลบรายการเก่ากว่า 90 วันใน Orders sheet
+// ✅ ใช้ deleteRows() แบบ contiguous ranges (ไม่ใช่ clearContents+setValues)
+//    ถ้า fail กลางทาง ส่วนที่เหลือยังอยู่ครบ
+// ✅ Sanity guard — ถ้าจะลบเกิน 20% ของแถวทั้งหมด → abort + แจ้งเตือน
+// ✅ CSV backup ลง Drive ก่อนลบทุกครั้ง
+// ============================================================
+const CLEANUP_ORDERS_RETENTION_DAYS = 90;
+const CLEANUP_MAX_DELETE_RATIO = 0.20; // ห้ามลบเกิน 20% ในการรันครั้งเดียว
+
 function cleanUpOldOrders() {
-  // ✅ LockService — กัน saveData ที่กำลังเขียนช่วงตี 2 ถูก clearContents+setValues ทับ
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000);
@@ -737,52 +836,120 @@ function cleanUpOldOrders() {
       return;
     }
 
-    const data = sheet.getDataRange().getValues();
-    if (data.length <= 1) return;
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+      Logger.log("[cleanUpOldOrders] ไม่มีข้อมูล");
+      return;
+    }
+
+    // อ่านเฉพาะคอลัมน์ A (timestamp) — เร็วและกินเมโมรี่น้อยกว่า getDataRange ทั้งชีต
+    const tsValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
 
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 90);
+    cutoff.setDate(cutoff.getDate() - CLEANUP_ORDERS_RETENTION_DAYS);
     cutoff.setHours(0, 0, 0, 0);
 
-    const newData  = [data[0]];
-    const colCount = data[0].length;
+    // หา sheet row ที่เก่ากว่า cutoff (1-indexed)
+    const rowsToDelete = [];
+    for (let i = 0; i < tsValues.length; i++) {
+      const ts = tsValues[i][0];
+      if (!ts) continue; // ⚠️ ข้ามแถวที่ timestamp ว่าง — ไม่ลบ (กัน false positive)
+      const d = ts instanceof Date ? ts : new Date(ts);
+      if (isNaN(d.getTime())) continue; // ⚠️ ข้ามแถวที่ parse ไม่ได้ — ไม่ลบ
+      if (d < cutoff) rowsToDelete.push(i + 2); // sheet row = tsValues index + 2
+    }
 
-    for (let i = 1; i < data.length; i++) {
-      const rowDate = new Date(data[i][0]);
-      if (!isNaN(rowDate.getTime()) && rowDate >= cutoff) {
-        const row = data[i];
-        while (row.length < colCount) row.push("");
-        newData.push(row);
+    if (rowsToDelete.length === 0) {
+      Logger.log("[cleanUpOldOrders] ไม่พบรายการที่เก่ากว่า " + CLEANUP_ORDERS_RETENTION_DAYS + " วัน");
+      return;
+    }
+
+    // 🛡️ Sanity guard — abort ถ้าจะลบเยอะผิดปกติ
+    const totalDataRows = lastRow - 1;
+    const ratio = rowsToDelete.length / totalDataRows;
+    if (ratio > CLEANUP_MAX_DELETE_RATIO) {
+      const msg = "ABORT: cleanUpOldOrders จะลบ " + rowsToDelete.length + "/" + totalDataRows +
+                  " แถว (" + (ratio * 100).toFixed(1) + "%) เกินเพดาน " +
+                  (CLEANUP_MAX_DELETE_RATIO * 100) + "% — น่าจะมีอะไรผิดปกติ ตรวจสอบก่อน";
+      Logger.log("[cleanUpOldOrders] " + msg);
+      _alertOwner("Orders cleanup aborted (suspicious)", msg);
+      return;
+    }
+
+    // 💾 Backup ก่อนลบ
+    const backupId = _backupSheetToCsv(SHEET_ORDERS);
+    if (!backupId) {
+      Logger.log("[cleanUpOldOrders] backup ล้มเหลว — abort cleanup เพื่อความปลอดภัย");
+      _alertOwner("Orders cleanup aborted (backup failed)",
+                  "ไม่สามารถสำรองข้อมูล Orders ก่อน cleanup ได้ — ยกเลิกการลบเพื่อความปลอดภัย");
+      return;
+    }
+
+    // จัดกลุ่ม contiguous ranges แล้วลบจากล่างขึ้นบน (กัน index shift)
+    rowsToDelete.sort((a, b) => b - a);
+    let deleted = 0;
+    let i = 0;
+    while (i < rowsToDelete.length) {
+      const top = rowsToDelete[i];
+      let count = 1;
+      while (i + 1 < rowsToDelete.length && rowsToDelete[i + 1] === top - count) {
+        count++;
+        i++;
       }
+      const start = top - count + 1;
+      try {
+        sheet.deleteRows(start, count);
+        deleted += count;
+      } catch(e) {
+        Logger.log("[cleanUpOldOrders] deleteRows fail ที่แถว " + start + " (" + count + " แถว): " + e.message);
+        _alertOwner("Orders cleanup partial failure",
+                    "ลบสำเร็จ " + deleted + "/" + rowsToDelete.length + " แถว แล้วเกิด error: " + e.message +
+                    "\n\nBackup ID: " + backupId);
+        break;
+      }
+      i++;
     }
-
-    if (newData.length !== data.length) {
-      const deletedCount = data.length - newData.length;
-      sheet.clearContents();
-      sheet.getRange(1, 1, newData.length, colCount).setValues(newData);
-      Logger.log("ลบรายการเก่า (เกิน 90 วัน) ออกทั้งหมด " + deletedCount + " รายการ");
-    } else {
-      Logger.log("ไม่พบรายการที่เก่ากว่า 90 วัน");
-    }
+    SpreadsheetApp.flush();
+    Logger.log("[cleanUpOldOrders] ลบเสร็จ " + deleted + " แถว (backup=" + backupId + ")");
   } catch (e) {
     Logger.log("Error in cleanUpOldOrders: " + e.message);
+    _alertOwner("Orders cleanup error", e.toString());
   } finally {
     try { lock.releaseLock(); } catch(_) {}
   }
 }
 
+// ============================================================
+// setupDailyCleanupTrigger — ตั้ง trigger ทั้ง backup + cleanup
+//   01:00 น. → backupOrdersDaily  (สำรอง Orders เก็บย้อนหลัง 30 วัน)
+//   02:00 น. → cleanUpOldOrders  (ลบ Orders ที่เก่ากว่า 90 วัน)
+// รันฟังก์ชันนี้ครั้งเดียวใน Apps Script editor หลัง deploy
+// ============================================================
 function setupDailyCleanupTrigger() {
+  // ลบ trigger เดิมของทั้ง 2 ฟังก์ชัน (กันซ้ำซ้อนถ้ารันหลายรอบ)
   ScriptApp.getProjectTriggers().forEach(t => {
-    if (t.getHandlerFunction() === "cleanUpOldOrders") {
+    const fn = t.getHandlerFunction();
+    if (fn === "cleanUpOldOrders" || fn === "backupOrdersDaily") {
       ScriptApp.deleteTrigger(t);
     }
   });
+
+  // Backup ก่อน cleanup 1 ชั่วโมง — backup ล่าสุดจะเป็น snapshot ก่อนถูกตัด
+  ScriptApp.newTrigger("backupOrdersDaily")
+    .timeBased()
+    .everyDays(1)
+    .atHour(1)
+    .create();
+
   ScriptApp.newTrigger("cleanUpOldOrders")
     .timeBased()
     .everyDays(1)
     .atHour(2)
     .create();
-  Logger.log("✅ Daily cleanup trigger set: cleanUpOldOrders จะรันทุกวันเวลา 02:00 น.");
+
+  Logger.log("✅ Daily triggers set:");
+  Logger.log("   01:00 น. → backupOrdersDaily (เก็บ " + ORDERS_BACKUP_KEEP_DAYS + " วัน)");
+  Logger.log("   02:00 น. → cleanUpOldOrders (เก็บ " + CLEANUP_ORDERS_RETENTION_DAYS + " วัน)");
 }
 
 // ============================================================

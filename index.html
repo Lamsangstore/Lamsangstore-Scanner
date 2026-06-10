@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Permissions-Policy" content="camera=*">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com https://raw.githubusercontent.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com https://raw.githubusercontent.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';">
   <title>Lamsangstore — Scanner</title>
   <!-- PWA -->
   <link rel="manifest" href="manifest.json?v=2">
@@ -3940,7 +3940,8 @@ function _simpleHash(str) {
 async function _fetchOrderCacheBackground(retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const orderRes = await callGAS("getAllPendingOrders").catch(err => ({ error: err.message || 'network error' }));
+      // ⏱️ timeout 30s — MarketplaceData มี rows เยอะ + GAS cold start ใช้เวลา > 15s ค่อนข้างปกติ
+      const orderRes = await callGAS("getAllPendingOrders", {}, 30000).catch(err => ({ error: err.message || 'network error' }));
       if (!orderRes || orderRes.error) {
         console.warn(`[Order Cache] attempt ${attempt + 1}/${retries + 1} fail:`, orderRes?.error || 'no response');
         if (attempt < retries) {
@@ -5649,31 +5650,55 @@ function _splitLinesQuoteAware(text) {
 // คืนค่า { file, marketplace, extractData, remarkMap, orderInfoMap } หรือ throw error
 // ✅ Merge continuation lines — รองรับ CSV/TSV ที่มี newline ในเซลล์ที่ไม่ได้ครอบ quote
 // (Page365 export ที่อยู่ลูกค้ามี newline แต่ไม่ quote → PapaParse แตก row → tracking หาย)
-// Heuristic: บรรทัดที่มี delimiter น้อยกว่าครึ่งหนึ่งของ header → ถือเป็น continuation ของบรรทัดก่อนหน้า
+//
+// 🔧 Heuristic ใหม่: "นับ tab สะสม" แทน "นับ tab ต่อบรรทัด"
+// เหตุผล: ถ้า address มี newline 2 ตัว → 1 row ถูกแตกเป็น 3 บรรทัด
+//   บรรทัด 1: "ต้น row + ต้น address"  → tab น้อย (~10)
+//   บรรทัด 2: "กลาง address"          → tab ~0
+//   บรรทัด 3: "ท้าย address + ที่เหลือของ row"  → tab เยอะ (~90)
+// heuristic เก่า "tab < 50% = continuation" จะจัด บรรทัด 1 = continuation ของ row ก่อนหน้า → ข้อมูลเพี้ยน
+// heuristic ใหม่: ต่อบรรทัดเข้า buffer จนกว่า cumulative tab จะ ≥ 90% ของ header แล้วค่อย push
 function _preprocessMultilineDelimited(text, delim) {
   const lines = _splitLinesQuoteAware(text); // ✅ quote-aware: ไม่ตัด \n ที่อยู่ใน "..."
   if (lines.length < 2) return text;
-  const headerCount = (lines[0].match(new RegExp(delim === '\t' ? '\\t' : ',', 'g')) || []).length;
+  const delimRegex = new RegExp(delim === '\t' ? '\\t' : ',', 'g');
+  const headerCount = (lines[0].match(delimRegex) || []).length;
   if (headerCount < 5) return text; // ไฟล์น้อยคอลัมน์เกินไป — ไม่เสี่ยง preprocess
-  const minDelimsForRealRow = Math.floor(headerCount * 0.5);
+
+  const completeThreshold = Math.floor(headerCount * 0.9); // buffer ครบเมื่อมี delim ≥ 90% ของ header
+  const MAX_MERGE_LINES = 10; // sanity cap — กันกรณีพิเศษ merge ลุกลามผิดมาก
   const out = [lines[0]];
   let buffer = '';
-  let mergedCount = 0;
+  let bufferDelims = 0;
+  let bufferMergeCount = 0;
+  let mergedTotal = 0;
+
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
     if (!line) continue;
-    const delims = (line.match(new RegExp(delim === '\t' ? '\\t' : ',', 'g')) || []).length;
-    if (delims >= minDelimsForRealRow) {
-      if (buffer) out.push(buffer);
+    const delims = (line.match(delimRegex) || []).length;
+
+    if (!buffer) {
+      // เริ่ม row ใหม่
       buffer = line;
+      bufferDelims = delims;
+      bufferMergeCount = 0;
+    } else if (bufferDelims >= completeThreshold || bufferMergeCount >= MAX_MERGE_LINES) {
+      // buffer ครบ (หรือ merge เยอะเกินไป) → push แล้วเริ่ม row ใหม่
+      out.push(buffer);
+      buffer = line;
+      bufferDelims = delims;
+      bufferMergeCount = 0;
     } else {
-      // บรรทัดสั้นกว่าปกติ → continuation
-      buffer = buffer ? buffer + ' ' + line.replace(/^\s+/, '') : line;
-      mergedCount++;
+      // buffer ยังไม่ครบคอลัมน์ → ต่อบรรทัดนี้เข้าไป (น่าจะ continuation จาก newline ใน cell)
+      buffer += ' ' + line.replace(/^\s+/, '');
+      bufferDelims += delims;
+      bufferMergeCount++;
+      mergedTotal++;
     }
   }
   if (buffer) out.push(buffer);
-  if (mergedCount > 0) console.log(`[Preprocess] merged ${mergedCount} continuation lines (header has ${headerCount} ${delim === '\t' ? 'tabs' : 'commas'})`);
+  if (mergedTotal > 0) console.log(`[Preprocess] merged ${mergedTotal} continuation lines (header=${headerCount}, threshold=${completeThreshold})`);
   return out.join('\n');
 }
 
@@ -5895,27 +5920,50 @@ function _updateProgressDialog(label, done, total, currentName) {
 
 // อัปโหลด results เข้า GAS แบบขนาน — return aggregates + failures (พร้อม result object เพื่อ retry)
 // แนบ _serverWritten / _serverDup ลงในแต่ละ result เพื่อใช้รายงานต่อไฟล์ใน popup สำเร็จ
-async function _uploadResultsParallel(items, concurrency = 3) {
+// ✅ Auto-retry "Server busy" — backoff 3s, 6s, 12s (สูงสุด 3 ครั้ง)
+async function _uploadOneWithRetry(r, maxRetries = 3) {
+  let lastError = 'unknown';
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const resp = await callGAS("saveMarketplaceData", { data: r.extractData, fileName: r.file.name, marketplace: r.marketplace }, 90000);
+      if (resp && resp.success) return { ok: true, resp };
+      lastError = resp?.error || 'unknown';
+      // Retry เฉพาะ "Server busy" (lock contention) — error อื่นเช่น verify fail ไม่ควร retry
+      const isBusy = /server busy/i.test(lastError);
+      if (!isBusy) return { ok: false, error: lastError };
+      // backoff: 3s, 6s, 12s
+      if (attempt < maxRetries - 1) {
+        await new Promise(res => setTimeout(res, 3000 * Math.pow(2, attempt)));
+      }
+    } catch (err) {
+      lastError = err.message;
+      // network error — retry ด้วย
+      if (attempt < maxRetries - 1) {
+        await new Promise(res => setTimeout(res, 3000 * Math.pow(2, attempt)));
+      }
+    }
+  }
+  return { ok: false, error: lastError + ' (retried ' + maxRetries + 'x)' };
+}
+
+// ✅ concurrency = 1 — saveMarketplaceData ใช้ lock เดียวกันอยู่แล้ว
+// ขนานหลาย requests ไม่ช่วยอะไร แค่ทำให้ queue ยาว → timeout
+async function _uploadResultsParallel(items, concurrency = 1) {
   const agg = { totalCount: 0, totalDup: 0, totalBf: 0, failures: [] };
   let done = 0;
   _showProgressDialog('กำลังอัปโหลด', items.length);
   await _runWithLimit(items, concurrency, async (r) => {
-    try {
-      // ⏱️ timeout 90s: ไฟล์ใหญ่ + รอ LockService queue ใช้เวลา > 15s ค่อนข้างปกติ
-      const resp = await callGAS("saveMarketplaceData", { data: r.extractData, fileName: r.file.name, marketplace: r.marketplace }, 90000);
-      if (resp && resp.success) {
-        r._serverWritten = resp.count || 0;
-        r._serverDup     = resp.duplicateSkipped || 0;
-        agg.totalCount += resp.count || 0;
-        agg.totalDup   += resp.duplicateSkipped || 0;
-        agg.totalBf    += resp.backfilled || 0;
-        return { ok: true };
-      } else {
-        agg.failures.push({ result: r, reason: resp?.error || 'unknown' });
-        return { ok: false };
-      }
-    } catch (err) {
-      agg.failures.push({ result: r, reason: err.message });
+    const result = await _uploadOneWithRetry(r);
+    if (result.ok) {
+      const resp = result.resp;
+      r._serverWritten = resp.count || 0;
+      r._serverDup     = resp.duplicateSkipped || 0;
+      agg.totalCount += resp.count || 0;
+      agg.totalDup   += resp.duplicateSkipped || 0;
+      agg.totalBf    += resp.backfilled || 0;
+      return { ok: true };
+    } else {
+      agg.failures.push({ result: r, reason: result.error });
       return { ok: false };
     }
   }, (d, total, item) => {
