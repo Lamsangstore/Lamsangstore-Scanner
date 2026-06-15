@@ -3258,6 +3258,53 @@ function saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoB
   } catch(e) { console.error('saveToFailQueue:', e); }
 }
 
+// ✅ "Persist-before-upload" — เรียกก่อน callGAS เพื่อกันข้อมูลหาย
+// ถ้า browser ฆ่า fetch กลางคัน (user ปิดแอป / สลับแอป / หน้าจอดับ)
+// ข้อมูลยังอยู่ใน queue → retryFailedUploads จะมาเอาไปยิงใหม่
+// upsert: ถ้ามี pId อยู่แล้ว → replace (ไม่ skip เหมือน saveToFailQueue)
+// quota-aware: ถ้า localStorage เต็ม → fallback เก็บแบบไม่มี video (อย่างน้อยข้อมูลออเดอร์รอด)
+function _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64, videoMime) {
+  const entry = {
+    pId, itemsArr,
+    remarkNote: remarkNote || '',
+    orderId: orderId || '',
+    marketplace: marketplace || '',
+    videoBase64: videoBase64 || '',
+    videoMime: videoMime || currentVideoMime || 'video/webm',
+    ts: Date.now()
+  };
+  const _write = (e) => {
+    const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
+    const idx = q.findIndex(j => j.pId === pId);
+    if (idx >= 0) q[idx] = e; else q.push(e);
+    localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(q));
+  };
+  try {
+    _write(entry);
+    console.log(`[Queue] persisted ${pId} ก่อน upload (${entry.videoBase64.length} bytes video)`);
+  } catch(quotaErr) {
+    console.warn(`[Queue] localStorage เต็ม — เก็บ ${pId} แบบไม่มี video:`, quotaErr.message);
+    entry.videoBase64 = '';
+    entry.videoMime = '';
+    try {
+      _write(entry);
+    } catch(e2) {
+      console.error(`[Queue] localStorage เต็มจริงๆ — ${pId} อาจหายถ้า upload ล้ม:`, e2.message);
+    }
+  }
+}
+
+function _removeFromFailQueue(pId) {
+  try {
+    const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
+    const filtered = q.filter(j => j.pId !== pId);
+    if (filtered.length !== q.length) {
+      localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(filtered));
+      console.log(`[Queue] removed ${pId} หลัง upload สำเร็จ`);
+    }
+  } catch(e) { console.error('_removeFromFailQueue:', e); }
+}
+
 async function retryFailedUploads() {
   if (!navigator.onLine || _isRetrying) return;
   _isRetrying = true;
@@ -4845,6 +4892,8 @@ async function _doFinishWork(isManual = false) {
 }
 
 async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', orderId = '', marketplace = '') {
+  let videoData = '';
+  let persisted = false;
   try {
     // ✅ ถ้า GAS ยืนยันสำเร็จแล้ว (เช่น อีกเครื่องส่งไปแล้ว) → ข้ามเลย
     if (_isSent(pId)) {
@@ -4861,16 +4910,32 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       }
     } catch(e) { console.warn('[Cache] ล้าง localOrdersCache ไม่ได้:', e.message); }
 
-    const videoData = await convertChunksToBase64(chunks);
+    // แปลงวิดีโอเป็น base64 ก่อนทุกขั้นตอน — ถ้า fail ที่นี่ก็เก็บแบบไม่มีวิดีโอ
+    try {
+      videoData = await convertChunksToBase64(chunks);
+    } catch(convErr) {
+      console.warn(`[Background] convert video fail for ${pId}:`, convErr.message);
+      videoData = '';
+    }
+
+    // ✅ Persist-before-upload — บันทึกลง localStorage queue ก่อน callGAS
+    //   กรณีที่ browser ฆ่า fetch กลางคัน (user ปิดแอป / สลับแอป / หน้าจอดับ บนมือถือ)
+    //   ข้อมูล + วิดีโอจะยังอยู่ใน queue และ retry อัตโนมัติเมื่อเปิดแอปอีกครั้ง
+    _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, currentVideoMime);
+    persisted = true;
+    updateFailQueueBadge();
 
     if (!navigator.onLine) {
-      saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoData, currentVideoMime);
-      updateFailQueueBadge();
+      console.log(`[Background] offline — ${pId} รออัปโหลดเมื่อ online`);
       return;
     }
 
     const res = await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", videoMimeType: currentVideoMime || "video/webm", remark: remarkNote || "", orderId, marketplace });
-    if (!isGasSuccess(res)) throw new Error(res?.error || 'GAS response ไม่สำเร็จ');
+    if (!isGasSuccess(res)) {
+      console.warn(`[Background] ${pId} GAS ไม่สำเร็จ — ยังอยู่ใน queue รอ retry:`, res?.error || 'no response');
+      // ไม่ลบออกจาก queue — retryFailedUploads จะมาเอาไปยิงใหม่
+      return;
+    }
 
     // ⚠️ ถ้า server บอกว่าซ้ำกับ tracking ที่บันทึกไปแล้ว → แจ้ง user ทันที
     //   (เดิม success:true แบบเงียบๆ → user คิดว่าเซฟ แต่ items ใหม่ถูกทิ้ง)
@@ -4893,17 +4958,22 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     }
 
     _markSent(pId);
+    _removeFromFailQueue(pId);
+    updateFailQueueBadge();
     console.log(`[Background] บันทึก ${pId} สำเร็จ${res?.note ? ' (' + res.note + ')' : ''}`);
     // ✅ v2.8: refresh localOrdersCache จาก GAS พื้นหลัง ทันทีหลัง save สำเร็จ
     // ทำให้เครื่องนี้และเครื่องอื่นที่ refresh ครั้งถัดไปจะไม่เห็น order ที่แพ็กแล้ว
     _refreshOrderCacheBackground();
   } catch (err) {
     console.error(`[Background Error] ${pId}:`, err);
-    // แปลง chunks → base64 ก่อนเก็บ ถ้ายังไม่ได้ทำ
-    let videoBase64 = '';
-    try { videoBase64 = await convertChunksToBase64(chunks); } catch(e) {}
-    saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64, currentVideoMime);
-    updateFailQueueBadge();
+    // ✅ ถ้ายังไม่ได้ persist (เช่น throw ก่อนถึง _enqueueForUpload) → enqueue ตอนนี้
+    if (!persisted) {
+      if (!videoData && chunks && chunks.length > 0) {
+        try { videoData = await convertChunksToBase64(chunks); } catch(e) {}
+      }
+      _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, currentVideoMime);
+      updateFailQueueBadge();
+    }
   }
 }
 
