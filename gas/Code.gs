@@ -252,6 +252,108 @@ function _logSaveAttempt(parcelId, marketplace, result, itemsCount, errorMsg) {
 }
 
 // ============================================================
+// Idempotency token tracking — เก็บใน CacheService (TTL 6 ชม.)
+// CacheService ใช้แทน PropertiesService เพราะ:
+//   - PropertiesService มี quota 9KB ต่อ property → token เยอะๆ จะเต็ม
+//   - CacheService quota สูงกว่า, มี TTL auto-expire
+// ============================================================
+const IDEM_TOKEN_TTL_SEC = 6 * 60 * 60; // 6 ชม.
+
+function _isCompletedToken(token) {
+  if (!token) return false;
+  try {
+    return CacheService.getScriptCache().get('idem_' + token) === '1';
+  } catch(e) {
+    return false;
+  }
+}
+
+function _markTokenCompleted(token) {
+  if (!token) return;
+  try {
+    CacheService.getScriptCache().put('idem_' + token, '1', IDEM_TOKEN_TTL_SEC);
+  } catch(e) {
+    Logger.log("[_markTokenCompleted] cache error: " + e.message);
+  }
+}
+
+// ============================================================
+// reconcileSaveLogVsOrders — daily check
+// เปรียบเทียบ "success ใน SaveLog วันนี้" vs "Orders rows วันนี้"
+// ถ้าต่างกัน → email แจ้งเจ้าของ
+// รันตอน 23:00 ทุกวัน (ตั้งใน setupDailyCleanupTrigger)
+// ============================================================
+function reconcileSaveLogVsOrders() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const tz = Session.getScriptTimeZone();
+    const today = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
+
+    // นับ success ใน SaveLog ของวันนี้
+    const logSheet = ss.getSheetByName("SaveLog");
+    let logSuccessCount = 0;
+    const logTrackings = new Set();
+    if (logSheet && logSheet.getLastRow() > 1) {
+      const data = logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 4).getValues();
+      for (let i = 0; i < data.length; i++) {
+        const ts = data[i][0];
+        if (!(ts instanceof Date)) continue;
+        const day = Utilities.formatDate(ts, tz, "yyyy-MM-dd");
+        if (day !== today) continue;
+        const result = String(data[i][3] || "").toLowerCase();
+        if (result === "success") {
+          logSuccessCount++;
+          logTrackings.add(String(data[i][1] || "").toUpperCase());
+        }
+      }
+    }
+
+    // นับแถวใน Orders ของวันนี้
+    const ordSheet = ss.getSheetByName(SHEET_ORDERS);
+    let ordCount = 0;
+    const ordTrackings = new Set();
+    if (ordSheet && ordSheet.getLastRow() > 1) {
+      const lastRow = ordSheet.getLastRow();
+      const data = ordSheet.getRange(2, 1, lastRow - 1, 4).getValues(); // ts + 3 cols → tracking is col 4
+      for (let i = 0; i < data.length; i++) {
+        const ts = data[i][0];
+        if (!(ts instanceof Date)) continue;
+        const day = Utilities.formatDate(ts, tz, "yyyy-MM-dd");
+        if (day !== today) continue;
+        ordCount++;
+        ordTrackings.add(String(data[i][3] || "").toUpperCase());
+      }
+    }
+
+    const diff = logSuccessCount - ordCount;
+    Logger.log("[reconcile] วันนี้ SaveLog success=" + logSuccessCount + " Orders=" + ordCount + " diff=" + diff);
+
+    if (diff === 0) return; // ตรงกัน ไม่ต้องแจ้ง
+
+    // หา tracking ที่อยู่ใน log แต่ไม่อยู่ในชีต (น่าจะเป็นรายการที่ verify ผิดพลาด)
+    const missingInOrders = [];
+    logTrackings.forEach(t => { if (!ordTrackings.has(t)) missingInOrders.push(t); });
+
+    const lines = [
+      "วันที่: " + today,
+      "SaveLog success: " + logSuccessCount + " รายการ",
+      "Orders sheet:    " + ordCount + " รายการ",
+      "ส่วนต่าง:        " + diff + " รายการ",
+      ""
+    ];
+    if (missingInOrders.length > 0) {
+      lines.push("รายการที่ log ว่าสำเร็จแต่ไม่อยู่ในชีต (" + missingInOrders.length + ' รายการ):');
+      missingInOrders.slice(0, 50).forEach(t => lines.push("  - " + t));
+      if (missingInOrders.length > 50) lines.push("  ...อีก " + (missingInOrders.length - 50) + " รายการ");
+    }
+    _alertOwner("Daily reconciliation: ส่วนต่าง " + diff + " รายการ", lines.join("\n"));
+  } catch(e) {
+    Logger.log("[reconcileSaveLogVsOrders] error: " + e.message);
+    _alertOwner("Reconciliation error", e.toString());
+  }
+}
+
+// ============================================================
 // saveData — Dedup + LockService + size limit + input validation + verify + audit log
 // ============================================================
 function saveData(body) {
@@ -288,6 +390,11 @@ function saveData(body) {
   if (!ALLOWED_VIDEO_MIMES[videoMime]) videoMime = 'video/webm';
   const videoExt = ALLOWED_VIDEO_MIMES[videoMime];
 
+  // ✅ Idempotency token — ส่งจาก client (UUID ต่อการ save 1 ครั้ง)
+  //   ใช้แยก "retry ของ save เดิม" (เงียบๆ ถือว่าสำเร็จ) ออกจาก
+  //   "ตั้งใจ rescan ใหม่" (เตือน user)
+  const idemToken = String(body.idemToken || "").slice(0, 64);
+
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -298,6 +405,13 @@ function saveData(body) {
   }
 
   try {
+    // เช็คก่อนว่า token นี้เคย save สำเร็จไปแล้วไหม (retry ของ request เดิม)
+    if (idemToken && _isCompletedToken(idemToken)) {
+      Logger.log("[saveData] Idempotent retry detected — token already completed: " + idemToken);
+      _logSaveAttempt(parcelId, marketplace, "idempotent_retry", itemsArr.length, "token " + idemToken);
+      return { success: true, note: "idempotent_retry" };
+    }
+
     const ss    = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_ORDERS) || ss.insertSheet(SHEET_ORDERS);
 
@@ -371,6 +485,9 @@ function saveData(body) {
     } catch(propErr) {
       Logger.log("[saveData] PropertiesService error: " + propErr.message);
     }
+
+    // ✅ จำ token ไว้ — request ถัดไปที่ใช้ token เดียวกัน = retry → idempotent_retry
+    if (idemToken) _markTokenCompleted(idemToken);
 
     _logSaveAttempt(parcelId, marketplace, "success", itemsArr.length, "row " + startRow);
     return { success: true, row: startRow };
@@ -975,12 +1092,17 @@ function cleanUpOldOrders() {
 // ============================================================
 function setupDailyCleanupTrigger() {
   // ลบ trigger เดิม (กันซ้ำซ้อนถ้ารันหลายรอบ)
-  const HANDLERS = ["cleanUpOldOrders", "backupOrdersDaily", "cleanUpOldMarketplaceData"];
+  const HANDLERS = ["cleanUpOldOrders", "backupOrdersDaily",
+                    "cleanUpOldMarketplaceData", "reconcileSaveLogVsOrders"];
   ScriptApp.getProjectTriggers().forEach(t => {
     if (HANDLERS.indexOf(t.getHandlerFunction()) !== -1) {
       ScriptApp.deleteTrigger(t);
     }
   });
+
+  // ✅ Reconciliation รันก่อน cleanup — เพื่อเห็นยอดวันนี้ก่อนที่ Orders จะถูกลบ
+  ScriptApp.newTrigger("reconcileSaveLogVsOrders")
+    .timeBased().everyDays(1).atHour(23).create();
 
   // Backup ก่อน cleanup 1 ชั่วโมง — backup ล่าสุดจะเป็น snapshot ก่อนถูกตัด
   ScriptApp.newTrigger("backupOrdersDaily")
@@ -995,6 +1117,7 @@ function setupDailyCleanupTrigger() {
     .timeBased().everyDays(1).atHour(3).create();
 
   Logger.log("✅ Daily triggers set:");
+  Logger.log("   23:00 น. → reconcileSaveLogVsOrders (เปรียบเทียบ SaveLog vs Orders)");
   Logger.log("   01:00 น. → backupOrdersDaily (เก็บ " + ORDERS_BACKUP_KEEP_DAYS + " วัน)");
   Logger.log("   02:00 น. → cleanUpOldOrders (เก็บ " + CLEANUP_ORDERS_RETENTION_DAYS + " วัน)");
   Logger.log("   03:00 น. → cleanUpOldMarketplaceData (เก็บ 2 วัน)");

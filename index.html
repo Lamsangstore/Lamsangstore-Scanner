@@ -3101,7 +3101,8 @@ function _flushPendingUploads() {
             videoMimeType: job.videoMime || "video/webm",
             remark: job.remarkNote || "",
             orderId: job.orderId || "",
-            marketplace: job.marketplace || ""
+            marketplace: job.marketplace || "",
+            idemToken: job.idemToken || ""
           }),
           keepalive: true
         }).catch(() => {});
@@ -3130,7 +3131,8 @@ function _flushWithBeacon() {
         videoMimeType: job.videoMime || "video/webm",
         remark: job.remarkNote || "",
         orderId: job.orderId || "",
-        marketplace: job.marketplace || ""
+        marketplace: job.marketplace || "",
+        idemToken: job.idemToken || ""
       });
       const sent = navigator.sendBeacon(GAS_URL, new Blob([payload], { type: 'text/plain' }));
       console.log(`[Beacon] ${job.pId}: ${sent ? 'queued' : 'failed'}`);
@@ -3263,7 +3265,7 @@ function saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoB
 // ข้อมูลยังอยู่ใน queue → retryFailedUploads จะมาเอาไปยิงใหม่
 // upsert: ถ้ามี pId อยู่แล้ว → replace (ไม่ skip เหมือน saveToFailQueue)
 // quota-aware: ถ้า localStorage เต็ม → fallback เก็บแบบไม่มี video (อย่างน้อยข้อมูลออเดอร์รอด)
-function _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64, videoMime) {
+function _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64, videoMime, idemToken) {
   const entry = {
     pId, itemsArr,
     remarkNote: remarkNote || '',
@@ -3271,6 +3273,7 @@ function _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, vide
     marketplace: marketplace || '',
     videoBase64: videoBase64 || '',
     videoMime: videoMime || currentVideoMime || 'video/webm',
+    idemToken: idemToken || '',
     ts: Date.now()
   };
   const _write = (e) => {
@@ -3332,7 +3335,8 @@ async function retryFailedUploads() {
           videoMimeType: job.videoMime || "video/webm",
           remark: job.remarkNote || "",
           orderId: job.orderId || "",
-          marketplace: job.marketplace || ""
+          marketplace: job.marketplace || "",
+          idemToken: job.idemToken || ""
         });
         if (isGasSuccess(res)) {
           console.log(`[FailQueue] retry ${job.pId} สำเร็จ`);
@@ -4867,7 +4871,35 @@ async function _doFinishWork(isManual = false) {
       if (info) { snapshotOrderId = info.orderId || ''; snapshotMarketplace = info.marketplace || ''; }
     } catch(e) {}
 
-    // Reset UI ทันที ไม่รอ upload
+    // ✅ Idempotency token — UUID ต่อการ save 1 ครั้ง
+    //   ส่งไป GAS เพื่อแยก "retry ของ save เดิม" จาก "ตั้งใจ rescan ใหม่"
+    const idemToken = (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : (Date.now() + '-' + Math.random().toString(36).slice(2));
+
+    // ✅ เริ่ม upload เลย (ไม่ await) — ให้ persist-to-queue ทำงานก่อนเปลี่ยน UI
+    const uploadPromise = processBackgroundUpload(
+      snapshotParcelId, snapshotItems, videoChunks,
+      snapshotRemark, snapshotOrderId, snapshotMarketplace, idemToken
+    );
+    // ✅ ปล่อย memory ทันที — snapshot ถูกส่งให้ background แล้ว ไม่ต้องเก็บใน global
+    recordedChunks = [];
+
+    // ✅ UI confirmation hold — รอ upload สูงสุด 2.5s ก่อน reset
+    //   ถ้าเสร็จเร็ว → user เห็น "✓ บันทึกแล้ว" ทันที (UX ดี)
+    //   ถ้าช้ากว่านั้น → reset แล้ว upload ต่อ background (UX เหมือนเดิม)
+    //   ผลข้างเคียง: ลด race condition กรณี user สแกนใบถัดไปเร็วเกินไป
+    const UI_HOLD_MS = 2500;
+    setStatus("💾 กำลังบันทึก...", "primary");
+    const raceResult = await Promise.race([
+      uploadPromise.then(() => 'uploaded').catch(() => 'failed'),
+      new Promise(resolve => setTimeout(() => resolve('timeout'), UI_HOLD_MS))
+    ]);
+    if (raceResult === 'uploaded') {
+      setStatus(_S.ok + "บันทึกสำเร็จ", "success");
+    }
+
+    // Reset UI
     if (isManual) {
       await closeAppCompletely();
     } else {
@@ -4878,11 +4910,6 @@ async function _doFinishWork(isManual = false) {
     clearTimeout(finishSafetyTimer);
     lastScanTime = Date.now();
     speak(summaryMsg + (isManual ? "" : " สแกนพัสดุใบถัดไปได้เลยค่ะ"), false);
-
-    // Upload เบื้องหลัง ไม่ await
-    processBackgroundUpload(snapshotParcelId, snapshotItems, videoChunks, snapshotRemark, snapshotOrderId, snapshotMarketplace);
-    // ✅ ปล่อย memory ทันที — snapshot ถูกส่งให้ background แล้ว ไม่ต้องเก็บใน global
-    recordedChunks = [];
   } catch (err) {
     console.error('[finishWork error]', err);
     isFinishing = false;
@@ -4891,7 +4918,7 @@ async function _doFinishWork(isManual = false) {
   }
 }
 
-async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', orderId = '', marketplace = '') {
+async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', orderId = '', marketplace = '', idemToken = '') {
   let videoData = '';
   let persisted = false;
   try {
@@ -4921,7 +4948,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     // ✅ Persist-before-upload — บันทึกลง localStorage queue ก่อน callGAS
     //   กรณีที่ browser ฆ่า fetch กลางคัน (user ปิดแอป / สลับแอป / หน้าจอดับ บนมือถือ)
     //   ข้อมูล + วิดีโอจะยังอยู่ใน queue และ retry อัตโนมัติเมื่อเปิดแอปอีกครั้ง
-    _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, currentVideoMime);
+    _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, currentVideoMime, idemToken);
     persisted = true;
     updateFailQueueBadge();
 
@@ -4930,15 +4957,17 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       return;
     }
 
-    const res = await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", videoMimeType: currentVideoMime || "video/webm", remark: remarkNote || "", orderId, marketplace });
+    const res = await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", videoMimeType: currentVideoMime || "video/webm", remark: remarkNote || "", orderId, marketplace, idemToken });
     if (!isGasSuccess(res)) {
       console.warn(`[Background] ${pId} GAS ไม่สำเร็จ — ยังอยู่ใน queue รอ retry:`, res?.error || 'no response');
       // ไม่ลบออกจาก queue — retryFailedUploads จะมาเอาไปยิงใหม่
       return;
     }
 
-    // ⚠️ ถ้า server บอกว่าซ้ำกับ tracking ที่บันทึกไปแล้ว → แจ้ง user ทันที
-    //   (เดิม success:true แบบเงียบๆ → user คิดว่าเซฟ แต่ items ใหม่ถูกทิ้ง)
+    // ✅ idempotent_retry = retry ของ save เดิมที่ server เคยเก็บไปแล้ว → ไม่ต้องเตือน
+    //    (token เดิม = client เดียวกัน, ตั้งใจเดียวกัน — ไม่ใช่ rescan ใหม่)
+    // ⚠️ ถ้า server บอกว่าซ้ำกับ tracking ที่บันทึกไปแล้ว (แต่ token ต่าง) → แจ้ง user
+    //   (user ตั้งใจ rescan หรือมีการ scan ซ้ำจากอีกเครื่อง)
     if (res && res.note === 'duplicate_skipped') {
       console.warn(`[Background] ⚠ ${pId} duplicate_skipped — รายการใหม่ไม่ถูกบันทึก`);
       try {
@@ -4971,7 +5000,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       if (!videoData && chunks && chunks.length > 0) {
         try { videoData = await convertChunksToBase64(chunks); } catch(e) {}
       }
-      _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, currentVideoMime);
+      _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, currentVideoMime, idemToken);
       updateFailQueueBadge();
     }
   }
