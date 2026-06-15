@@ -237,20 +237,48 @@ function getProductData() {
 }
 
 // ============================================================
-// saveData — Dedup + LockService + size limit + input validation
+// _logSaveAttempt — บันทึกทุก call ของ saveData ลง SaveLog sheet
+// ใช้ตรวจสอบย้อนหลังว่ามีอะไรเข้ามาบ้าง สำเร็จ/dup/error
+// ============================================================
+function _logSaveAttempt(parcelId, marketplace, result, itemsCount, errorMsg) {
+  try {
+    const sheet = getOrCreateSheet("SaveLog",
+      ["Timestamp", "ParcelId", "Marketplace", "Result", "ItemsCount", "Error"]);
+    sheet.appendRow([new Date(), parcelId || "", marketplace || "", result || "",
+                     Number(itemsCount) || 0, String(errorMsg || "").slice(0, 500)]);
+  } catch(e) {
+    Logger.log("[_logSaveAttempt] error: " + e.message);
+  }
+}
+
+// ============================================================
+// saveData — Dedup + LockService + size limit + input validation + verify + audit log
 // ============================================================
 function saveData(body) {
   // --- validate input ---
-  const parcelId = String(body.parcelId || "").trim();
-  if (!parcelId) return { success: false, error: "parcelId ว่าง" };
-  if (parcelId.length > 64) return { success: false, error: "parcelId ยาวเกินไป" };
+  const parcelId    = String(body.parcelId || "").trim();
+  const orderId     = String(body.orderId || "").slice(0, 128);
+  const marketplace = String(body.marketplace || "").slice(0, 32);
+  const remark      = String(body.remark || "").slice(0, 500);
+  const itemsArr    = Array.isArray(body.items) ? body.items : [];
 
-  const items = Array.isArray(body.items) ? body.items : [];
-  if (items.length > 500) return { success: false, error: "items มากเกินไป" };
+  if (!parcelId) {
+    _logSaveAttempt(parcelId, marketplace, "invalid", itemsArr.length, "parcelId ว่าง");
+    return { success: false, error: "parcelId ว่าง" };
+  }
+  if (parcelId.length > 64) {
+    _logSaveAttempt(parcelId, marketplace, "invalid", itemsArr.length, "parcelId ยาวเกินไป");
+    return { success: false, error: "parcelId ยาวเกินไป" };
+  }
+  if (itemsArr.length > 500) {
+    _logSaveAttempt(parcelId, marketplace, "invalid", itemsArr.length, "items มากเกินไป");
+    return { success: false, error: "items มากเกินไป" };
+  }
 
   const videoBase64 = String(body.videoEvidence || "");
   if (videoBase64.length > MAX_VIDEO_BASE64_LEN) {
     Logger.log("[saveData] video too large: " + videoBase64.length + " bytes");
+    _logSaveAttempt(parcelId, marketplace, "invalid", itemsArr.length, "video too large");
     return { success: false, error: "Video too large" };
   }
 
@@ -260,15 +288,12 @@ function saveData(body) {
   if (!ALLOWED_VIDEO_MIMES[videoMime]) videoMime = 'video/webm';
   const videoExt = ALLOWED_VIDEO_MIMES[videoMime];
 
-  const orderId     = String(body.orderId || "").slice(0, 128);
-  const marketplace = String(body.marketplace || "").slice(0, 32);
-  const remark      = String(body.remark || "").slice(0, 500);
-
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
   } catch(e) {
     Logger.log("[saveData] ไม่ได้ lock ภายใน 10s: " + e.message);
+    _logSaveAttempt(parcelId, marketplace, "lock_timeout", itemsArr.length, e.message);
     return { success: false, error: "Server busy, please retry" };
   }
 
@@ -286,6 +311,7 @@ function saveData(body) {
           if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
             _tryUpdateVideoUrl(sheet, i + 2, parcelId, videoBase64, videoMime, videoExt);
           }
+          _logSaveAttempt(parcelId, marketplace, "duplicate_skipped", itemsArr.length, "row " + (i + 2));
           return { success: true, note: "duplicate_skipped" };
         }
       }
@@ -309,9 +335,24 @@ function saveData(body) {
     }
 
     const timestamp = new Date();
-    const row = [timestamp, orderId, marketplace, parcelId, videoUrl, remark, items.length, ...items.slice(0, 500).map(String)];
-    sheet.appendRow(row);
-    Logger.log("[saveData] บันทึก: " + parcelId + " | video: " + videoUrl.substring(0, 40));
+    const row = [timestamp, orderId, marketplace, parcelId, videoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
+
+    // ✅ เขียนด้วย setValues (กำหนด startRow ชัดเจน) แทน appendRow
+    //    → verify ได้แม่นยำกว่าใน lock เดียวกัน
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, 1, row.length).setValues([row]);
+    SpreadsheetApp.flush(); // ✅ บังคับ commit ทันที — กัน partial write
+
+    // ✅ Verify — อ่านกลับมาเช็คว่า tracking ตรงกับที่เพิ่งเขียน
+    const verifyTracking = numToStr(sheet.getRange(startRow, 4).getValue()).toUpperCase();
+    if (verifyTracking !== parcelId.toUpperCase()) {
+      Logger.log("[saveData] verify FAIL: expected " + parcelId + " got '" + verifyTracking + "' at row " + startRow);
+      _logSaveAttempt(parcelId, marketplace, "verify_failed", itemsArr.length,
+                      "expected " + parcelId + " got '" + verifyTracking + "' at row " + startRow);
+      return { success: false, error: "Write verification failed — please retry" };
+    }
+
+    Logger.log("[saveData] บันทึก: " + parcelId + " | row=" + startRow + " | video: " + videoUrl.substring(0, 40));
 
     try {
       const props = PropertiesService.getScriptProperties();
@@ -331,9 +372,11 @@ function saveData(body) {
       Logger.log("[saveData] PropertiesService error: " + propErr.message);
     }
 
-    return { success: true };
+    _logSaveAttempt(parcelId, marketplace, "success", itemsArr.length, "row " + startRow);
+    return { success: true, row: startRow };
   } catch (e) {
     Logger.log("Error in saveData: " + e.message);
+    _logSaveAttempt(parcelId, marketplace, "exception", itemsArr.length, e.toString());
     return { success: false, error: e.toString() };
   } finally {
     lock.releaseLock();

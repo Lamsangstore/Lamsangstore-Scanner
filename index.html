@@ -4871,8 +4871,29 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
 
     const res = await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", videoMimeType: currentVideoMime || "video/webm", remark: remarkNote || "", orderId, marketplace });
     if (!isGasSuccess(res)) throw new Error(res?.error || 'GAS response ไม่สำเร็จ');
+
+    // ⚠️ ถ้า server บอกว่าซ้ำกับ tracking ที่บันทึกไปแล้ว → แจ้ง user ทันที
+    //   (เดิม success:true แบบเงียบๆ → user คิดว่าเซฟ แต่ items ใหม่ถูกทิ้ง)
+    if (res && res.note === 'duplicate_skipped') {
+      console.warn(`[Background] ⚠ ${pId} duplicate_skipped — รายการใหม่ไม่ถูกบันทึก`);
+      try {
+        Swal.fire({
+          icon: 'warning',
+          title: 'พัสดุนี้บันทึกซ้ำ',
+          html: `<div style="font-size:0.95rem; line-height:1.6;">` +
+                `<strong>${escHtml(pId)}</strong> เคยถูกบันทึกไปแล้ว<br>` +
+                `<span style="color:#a00;">รายการที่เพิ่งสแกนรอบนี้ <u>ไม่ถูกบันทึกลงในชีต</u></span><br>` +
+                `<span style="font-size:0.85rem; color:#666;">รายการของเดิมยังอยู่ — ถ้าต้องการแก้ไข ติดต่อแอดมินให้แก้ในชีตโดยตรง</span>` +
+                `</div>`,
+          confirmButtonText: 'รับทราบ',
+          timer: 8000,
+          timerProgressBar: true,
+        });
+      } catch(e) { console.warn('[Background] swal error:', e); }
+    }
+
     _markSent(pId);
-    console.log(`[Background] บันทึก ${pId} สำเร็จ`);
+    console.log(`[Background] บันทึก ${pId} สำเร็จ${res?.note ? ' (' + res.note + ')' : ''}`);
     // ✅ v2.8: refresh localOrdersCache จาก GAS พื้นหลัง ทันทีหลัง save สำเร็จ
     // ทำให้เครื่องนี้และเครื่องอื่นที่ refresh ครั้งถัดไปจะไม่เห็น order ที่แพ็กแล้ว
     _refreshOrderCacheBackground();
