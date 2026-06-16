@@ -5143,7 +5143,19 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       }
     } catch(e) { console.warn('[Cache] ล้าง localOrdersCache ไม่ได้:', e.message); }
 
-    // ✅ แปลงวิดีโอเป็น base64 — ไม่เก็บใน IDB อีกแล้ว, ส่งรวมกับ saveData เลย
+    // 1️⃣ persist order ลง queue ก่อน (ยังไม่มีวิดีโอ — เล็ก เขียนเร็ว durable)
+    _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, '', videoMimeForUpload, idemToken);
+    persisted = true;
+    updateFailQueueBadge();
+    _searchCacheAddOptimistic(pId, itemsArr, orderId, marketplace, remarkNote); // 🔍 search เจอทันที
+
+    // 2️⃣ 🔥 FIREBASE FIRST — push ออเดอร์ขึ้น Firebase ทันที (ก่อนแปลงวิดีโอ = ส่วนช้า)
+    //   เร็ว ~100ms → fbPushed=true → ออเดอร์ปลอดภัย (drain จะส่งต่อให้ชีต) → badge เคลียร์
+    const fbDone = _ensureFirebasePush({ pId, itemsArr, remarkNote, orderId, marketplace, idemToken, ts: Date.now(), fbPushed: false })
+      .then(() => updateFailQueueBadge())
+      .catch(() => {});
+
+    // 3️⃣ แปลงวิดีโอเป็น base64 (ช้า) — ทำหลัง Firebase รับออเดอร์แล้ว
     if (chunks && chunks.length > 0) {
       try {
         videoData = await convertChunksToBase64(chunks);
@@ -5152,25 +5164,21 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
         videoData = '';
       }
     }
-
-    // ✅ Persist-before-upload — บันทึก order + video ลง queue ก่อนยิง GAS
-    //   browser ฆ่า fetch กลางคัน → ออเดอร์ไม่หาย, scheduler retry ให้เอง
-    _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, videoMimeForUpload, idemToken);
-    persisted = true;
-    updateFailQueueBadge();
-    _searchCacheAddOptimistic(pId, itemsArr, orderId, marketplace, remarkNote); // 🔍 search เจอทันที
-
-    // 🔥 Mirror ลง Firebase ทันที (durable ฝั่ง server — กันออเดอร์หายแม้เครื่องหาย)
-    //   ทำคู่ขนาน ไม่ block GAS call
-    _ensureFirebasePush({ pId, itemsArr, remarkNote, orderId, marketplace, idemToken, ts: Date.now(), fbPushed: false });
+    // เก็บวิดีโอลง queue entry เพื่อ retry (ถ้า direct call ล้ม)
+    if (videoData) {
+      _updateQueueItem(pId, (cur) => { cur.videoBase64 = videoData; cur.videoMime = videoMimeForUpload; return cur; });
+    }
 
     if (!navigator.onLine) {
       console.log(`[Background] offline — ${pId} รออัปโหลดเมื่อ online`);
+      await fbDone;
       _scheduleRetry();
       return;
     }
 
-    // 🚀 ส่ง order + video รวมกันในคำขอเดียว — GAS ไม่มี Lock แล้ว, appendRow atomic
+    // 🚀 ส่งต่อชีต + วิดีโอ (เบื้องหลัง) — ชีตขึ้นทันที + วิดีโอขึ้น Drive
+    //   ถ้าช้า/ล้ม ก็ไม่กระทบความรู้สึก "เสร็จ" เพราะ badge เคลียร์จาก Firebase แล้ว
+    //   (และถ้า direct call ล้ม drain จะส่งต่อให้ชีตเองจาก Firebase)
     const res = await callGAS("saveData", {
       parcelId: pId, items: itemsArr,
       videoEvidence: videoData || "no_video",
@@ -5178,6 +5186,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       remark: remarkNote || "",
       orderId, marketplace, idemToken
     }, 90000); // ⏱️ 90s timeout — video upload + Drive ใช้เวลาได้
+    await fbDone; // ให้ fbPushed ถูกบันทึกก่อนตัดสินใจลบ entry
 
     if (!isGasSuccess(res)) {
       console.warn(`[Background] ${pId} GAS ไม่สำเร็จ — ค้างใน queue รอ retry:`, res?.error || 'no response');
