@@ -5237,8 +5237,8 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     //   ถ้าล้ม → video ยังอยู่ใน IDB → retry รอบถัดไป (ทุก 60s, on visible, on online)
     if (videoSavedToIDB) {
       _auditPack(pId, 'video', 'attempt', 'phase2 start');
-      _uploadPendingVideo(pId).then(ok => {
-        _auditPack(pId, 'video', ok ? 'sent' : 'error', ok ? 'uploaded' : 'sweep retry');
+      _uploadPendingVideo(pId).then(r => {
+        _auditPack(pId, 'video', r.ok ? 'sent' : 'error', r.ok ? (r.note || 'uploaded') : r.reason);
       }).catch(e => {
         _auditPack(pId, 'video', 'error', e.message);
         console.warn(`[VideoUpload] ${pId} fail:`, e.message);
@@ -5263,20 +5263,21 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
 //   - โหลด blob จาก IDB → encode base64 → callGAS("uploadVideoForParcel")
 //   - success → ลบ blob ออกจาก IDB
 //   - fail → blob ยังอยู่ → retry รอบหน้า
+//   คืนค่า: { ok: true } หรือ { ok: false, reason: "..." }
 async function _uploadPendingVideo(pId) {
-  if (!navigator.onLine) return false;
+  if (!navigator.onLine) return { ok: false, reason: 'offline' };
   let rec;
   try {
     rec = await _getVideoBlob(pId);
-  } catch(e) { return false; }
-  if (!rec || !rec.blob) return false; // ไม่มี blob = upload เสร็จไปแล้ว / ไม่เคยมี
+  } catch(e) { return { ok: false, reason: 'idb_read_fail: ' + e.message }; }
+  if (!rec || !rec.blob) return { ok: false, reason: 'no_blob_in_idb' };
 
   let base64;
   try {
     base64 = await _blobToBase64(rec.blob);
   } catch(e) {
     console.warn(`[VideoUpload] encode fail ${pId}:`, e.message);
-    return false;
+    return { ok: false, reason: 'encode_fail: ' + e.message };
   }
 
   let res;
@@ -5288,18 +5289,19 @@ async function _uploadPendingVideo(pId) {
     }, 90000); // ⏱️ timeout 90s — video upload + Drive ใช้เวลานานได้
   } catch(e) {
     console.warn(`[VideoUpload] network fail ${pId}:`, e.message);
-    return false;
+    return { ok: false, reason: 'network: ' + e.message };
   }
 
   if (res && res.success) {
     await _deleteVideoBlob(pId);
     console.log(`[VideoUpload] ${pId} → Drive สำเร็จ${res.note ? ' (' + res.note + ')' : ''} videoUrl=${(res.videoUrl||'').substring(0,40)}`);
-    return true;
+    return { ok: true, note: res.note, videoUrl: res.videoUrl };
   }
 
   // case พิเศษ: row ยังไม่อยู่ในชีต (saveData ยังไม่เสร็จ) → ปล่อย blob ไว้รอ retry
-  console.warn(`[VideoUpload] ${pId} fail:`, res?.error || 'unknown');
-  return false;
+  const reason = res?.error || 'unknown';
+  console.warn(`[VideoUpload] ${pId} fail:`, reason);
+  return { ok: false, reason };
 }
 
 // ✅ Sweep — สแกน IDB หา video ค้าง แล้วลองอัปโหลดที่ละใบ
@@ -5316,8 +5318,8 @@ async function _sweepPendingVideos() {
     let count = 0;
     for (const pId of keys) {
       if (!sent[pId]) continue;
-      const ok = await _uploadPendingVideo(pId);
-      if (ok) count++;
+      const r = await _uploadPendingVideo(pId);
+      if (r.ok) count++;
     }
     if (count > 0) console.log(`[VideoSweep] อัปโหลด ${count} video สำเร็จ`);
     // อัปเดต badge ตามจำนวนที่ยังเหลือ
@@ -5458,8 +5460,8 @@ async function _uploadOneVideoUI(pId) {
 
   try {
     if (statusEl) statusEl.innerHTML = '<span style="color:#9b72cf;">📤 กำลังส่งขึ้น Drive...</span>';
-    const ok = await _uploadPendingVideo(pId);
-    if (ok) {
+    const r = await _uploadPendingVideo(pId);
+    if (r.ok) {
       if (statusEl) statusEl.innerHTML = '<span style="color:#52b788;">✅ สำเร็จ — ลบจากเครื่องแล้ว</span>';
       // fade out + ลบ row ออก
       if (rowEl) {
@@ -5471,13 +5473,29 @@ async function _uploadOneVideoUI(pId) {
         }, 600);
       }
     } else {
-      if (statusEl) statusEl.innerHTML = '<span style="color:#e07a5f;">❌ อัปไม่สำเร็จ — ลองใหม่</span>';
+      const hint = _hintForVideoError(r.reason);
+      if (statusEl) statusEl.innerHTML = `<span style="color:#e07a5f;">❌ ${escHtml(r.reason || 'fail')}${hint ? ' — ' + hint : ''}</span>`;
       if (btn) { btn.disabled = false; btn.textContent = '☁️ อัป'; btn.style.background = '#ffb4a2'; }
     }
   } catch(e) {
     if (statusEl) statusEl.innerHTML = `<span style="color:#e07a5f;">❌ error: ${escHtml(e.message)}</span>`;
     if (btn) { btn.disabled = false; btn.textContent = '☁️ อัป'; btn.style.background = '#ffb4a2'; }
   }
+}
+
+// ✅ แปล error เป็นคำแนะนำสั้นๆ ให้ user เข้าใจ
+function _hintForVideoError(reason) {
+  if (!reason) return '';
+  const r = String(reason).toLowerCase();
+  if (r.includes('unknown action'))    return 'ยังไม่ deploy GAS ใหม่!';
+  if (r.includes('row ไม่พบ') || r.includes('not yet') || r.includes('saveData ยังไม่')) return 'รอ order เข้าชีตก่อน';
+  if (r.includes('server busy') || r.includes('lock'))   return 'server ติด lock รออีกซักครู่';
+  if (r.includes('unauthorized')) return 'API key ผิด';
+  if (r.includes('rate limit'))   return 'ส่งเร็วเกินไป รอ 1 นาที';
+  if (r.includes('too large'))    return 'video ใหญ่เกิน';
+  if (r.includes('offline'))      return 'ออฟไลน์';
+  if (r.includes('timeout') || r.includes('network')) return 'network ช้า';
+  return '';
 }
 
 // อัปทั้งหมดในรอบเดียว
@@ -5500,31 +5518,46 @@ async function uploadAllPendingVideos() {
     }
 
     let ok = 0, fail = 0;
+    const reasonCounts = {}; // นับสาเหตุการล้ม
     for (let i = 0; i < uploadable.length; i++) {
       const pId = uploadable[i];
       if (allBtn) allBtn.textContent = `⏳ ${i + 1}/${uploadable.length}`;
-      const success = await _uploadPendingVideo(pId);
-      if (success) ok++; else fail++;
+      const r = await _uploadPendingVideo(pId);
+      if (r.ok) ok++; else { fail++; const k = r.reason || 'unknown'; reasonCounts[k] = (reasonCounts[k] || 0) + 1; }
       // อัปเดต UI แบบ live
       const rowEl = document.getElementById('syncvid-row-' + pId);
       const statusEl = document.getElementById('syncvid-status-' + pId);
-      if (success) {
+      if (r.ok) {
         if (statusEl) statusEl.innerHTML = '<span style="color:#52b788;">✅ สำเร็จ</span>';
         if (rowEl) {
           rowEl.style.transition = 'opacity 0.4s';
           rowEl.style.opacity = '0.4';
         }
       } else {
-        if (statusEl) statusEl.innerHTML = '<span style="color:#e07a5f;">❌ ล้ม</span>';
+        const hint = _hintForVideoError(r.reason);
+        if (statusEl) statusEl.innerHTML = `<span style="color:#e07a5f;">❌ ${escHtml(r.reason || 'fail')}${hint ? ' — ' + hint : ''}</span>`;
       }
+    }
+
+    // สรุปสาเหตุการล้ม
+    let reasonHtml = '';
+    if (fail > 0) {
+      const sortedReasons = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1]);
+      reasonHtml = '<div style="margin-top:10px; padding:8px; background:#fff3cd; border-radius:8px; text-align:left; font-size:0.82rem;">' +
+        '<strong>สาเหตุล้ม:</strong><br>' +
+        sortedReasons.map(([reason, count]) => {
+          const hint = _hintForVideoError(reason);
+          return `• ${count}× <code style="font-size:0.75rem;">${escHtml(reason).slice(0, 60)}</code>${hint ? `<br>&nbsp;&nbsp;<em style="color:#a08a5a;">→ ${hint}</em>` : ''}`;
+        }).join('<br>') +
+        '</div>';
     }
 
     Swal.fire({
       icon: ok > 0 ? 'success' : 'warning',
       title: 'sync เสร็จ',
-      html: `อัปสำเร็จ <strong>${ok}</strong> รายการ${fail > 0 ? `<br>ล้มเหลว <strong style="color:#e07a5f;">${fail}</strong> รายการ` : ''}`,
-      timer: 4000,
-      timerProgressBar: true
+      html: `อัปสำเร็จ <strong>${ok}</strong> รายการ${fail > 0 ? `<br>ล้มเหลว <strong style="color:#e07a5f;">${fail}</strong> รายการ` : ''}${reasonHtml}`,
+      timer: fail > 0 ? 0 : 4000,
+      timerProgressBar: fail === 0
     });
     renderSyncVideoList();
   } catch(e) {
