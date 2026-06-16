@@ -1310,32 +1310,24 @@ function reconcileVideoUrls(body) {
                " toFix=" + updates.length + " noDriveMatch=" + noDriveMatch +
                " skippedHadVideo=" + skippedHadVideo + " skippedDateRange=" + skippedDateRange);
 
-    // ใช้ lock สั้นๆ ตอน setValue เพื่อกัน race กับ saveData
-    const lock = LockService.getScriptLock();
-    try { lock.waitLock(30000); }
-    catch(e) {
-      return { success: false, error: "lock_timeout — server busy, retry", scanned, found: updates.length };
-    }
-    try {
-      let written = 0;
-      for (const u of updates) {
-        try {
-          // re-check ใน lock — กันกรณีอีก request เพิ่ง update
-          const current = String(sheet.getRange(u.row, 5).getValue()).trim();
-          if (current.indexOf('drive.google.com') !== -1) continue;
-          sheet.getRange(u.row, 5).setValue(u.url);
-          written++;
-        } catch(e) {
-          Logger.log("[reconcileVideoUrls] setValue fail row=" + u.row + ": " + e.message);
-        }
+    // ✅ ไม่ใช้ script lock — แค่เติม URL ลง cell ที่ no_video (re-check ก่อนเขียน)
+    //    ถ้า saveData เขียน cell เดียวกันพร้อมกัน → ทั้งคู่เป็น Drive URL ที่ valid (ไม่เสียหาย)
+    //    (เดิมใช้ waitLock(30000) → ติด lock_timeout ตอนมีคนแพคอยู่ → เอาออก)
+    let written = 0;
+    for (const u of updates) {
+      try {
+        const current = String(sheet.getRange(u.row, 5).getValue()).trim();
+        if (current.indexOf('drive.google.com') !== -1) continue; // มี url แล้ว (เพิ่งถูกเติม) → ข้าม
+        sheet.getRange(u.row, 5).setValue(u.url);
+        written++;
+      } catch(e) {
+        Logger.log("[reconcileVideoUrls] setValue fail row=" + u.row + ": " + e.message);
       }
-      if (written > 0) SpreadsheetApp.flush();
-      Logger.log("[reconcileVideoUrls] fixed " + written + " rows");
-      _logSaveAttempt("", "", "reconcile_done", written, "scanned=" + scanned + " sinceDays=" + sinceDays);
-      return { success: true, fixed: written, scanned, found: updates.length, driveFiles: driveCount, sinceDays };
-    } finally {
-      lock.releaseLock();
     }
+    if (written > 0) SpreadsheetApp.flush();
+    Logger.log("[reconcileVideoUrls] fixed " + written + " rows");
+    _logSaveAttempt("", "", "reconcile_done", written, "scanned=" + scanned + " sinceDays=" + sinceDays);
+    return { success: true, fixed: written, scanned, found: updates.length, driveFiles: driveCount, sinceDays };
   } catch(e) {
     Logger.log("[reconcileVideoUrls] error: " + e.message);
     return { success: false, error: e.toString() };
