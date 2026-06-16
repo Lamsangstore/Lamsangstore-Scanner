@@ -2828,8 +2828,15 @@ async function _firebasePushOrder(job) {
       signal: ctrl.signal
     });
     clearTimeout(timer);
+    if (!res.ok) {
+      // ❌ เขียน /inbox ไม่ได้ — มักเป็น Rules ยังไม่เปิด write หรือ key ไม่ตรง
+      let why = res.status;
+      try { const t = await res.text(); why += ' ' + t.slice(0, 120); } catch(e) {}
+      console.warn(`[Firebase] เขียน /inbox ไม่ได้ (${why}) — เช็ค Rules /inbox write + key`);
+    }
     return res.ok;
   } catch(e) {
+    console.warn('[Firebase] push /inbox error:', e.message);
     return false;
   }
 }
