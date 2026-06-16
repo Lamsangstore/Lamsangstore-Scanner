@@ -5313,11 +5313,9 @@ async function _sweepPendingVideos() {
   try {
     const keys = await _listVideoKeys();
     if (!keys.length) { updateSyncVideoBadge(0); return; }
-    const sent = JSON.parse(localStorage.getItem(SENT_KEY) || '{}');
-    // upload เฉพาะ pId ที่ order ลงชีตแล้ว — ถ้ายังไม่ sent → รอ saveData ก่อน
+    // ✅ พยายามอัปทุกใบ — GAS สร้าง placeholder ให้ถ้า order ยังไม่ลงชีต
     let count = 0;
     for (const pId of keys) {
-      if (!sent[pId]) continue;
       const r = await _uploadPendingVideo(pId);
       if (r.ok) count++;
     }
@@ -5405,9 +5403,8 @@ async function renderSyncVideoList() {
     }
     items.sort((a, b) => b.ts - a.ts); // ใหม่ขึ้นก่อน
 
-    sumEl.innerHTML = `📦 มี <strong>${items.length}</strong> วิดีโอค้าง (รวม <strong>${_formatVideoSize(totalSize)}</strong>) — ` +
-      `<span style="color:#52b788;">${items.filter(i => i.orderSent).length} พร้อมอัป</span>, ` +
-      `<span style="color:#e07a5f;">${items.filter(i => !i.orderSent).length} รอ order เข้าชีตก่อน</span>`;
+    sumEl.innerHTML = `📦 มี <strong>${items.length}</strong> วิดีโอค้าง (รวม <strong>${_formatVideoSize(totalSize)}</strong>) — ทุกรายการอัปได้เลย ` +
+      `<span style="font-size:0.78rem; color:#a08a5a;">(ถ้า order ยังไม่ลงชีตจะสร้าง placeholder ให้)</span>`;
 
     listEl.innerHTML = items.map(it => `
       <div id="syncvid-row-${it.pId}" style="background:#fff8f0; border:1px solid #ffd5c2; border-radius:10px; padding:10px; display:flex; align-items:center; gap:10px;">
@@ -5416,14 +5413,13 @@ async function renderSyncVideoList() {
           <div style="font-size:0.72rem; color:#a08a5a; margin-top:2px;">
             📁 ${_formatVideoSize(it.size)} · ⏱ ${_formatAge(it.ts)} · ${it.orderSent
               ? '<span style="color:#52b788;">✓ order ลงชีตแล้ว</span>'
-              : '<span style="color:#e07a5f;">⏳ รอ order</span>'
+              : '<span style="color:#9b72cf;">📝 order ยังไม่ลงชีต (อัปได้ — จะสร้าง placeholder)</span>'
             }
           </div>
           <div id="syncvid-status-${it.pId}" style="font-size:0.7rem; color:#9b72cf; margin-top:3px; min-height:0.9em;"></div>
         </div>
         <button id="syncvid-btn-${it.pId}" onclick="_uploadOneVideoUI('${escHtml(it.pId).replace(/'/g, "\\'")}')"
-          ${it.orderSent ? '' : 'disabled'}
-          style="background:${it.orderSent ? '#ffb4a2' : '#ddd'}; color:white; border:none; border-radius:8px; padding:6px 10px; font-size:0.75rem; font-weight:600; cursor:${it.orderSent ? 'pointer' : 'not-allowed'}; white-space:nowrap;">
+          style="background:#ffb4a2; color:white; border:none; border-radius:8px; padding:6px 10px; font-size:0.75rem; font-weight:600; cursor:pointer; white-space:nowrap;">
           ☁️ อัป
         </button>
       </div>
@@ -5448,13 +5444,7 @@ async function _uploadOneVideoUI(pId) {
     return;
   }
 
-  // เช็คว่า order ลงชีตแล้วยัง
-  const sent = JSON.parse(localStorage.getItem(SENT_KEY) || '{}');
-  if (!sent[pId]) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:#e07a5f;">⚠ order ยังไม่ลงชีต — รอ saveData ก่อน</span>';
-    return;
-  }
-
+  // ✅ ไม่เช็ค sent[pId] แล้ว — GAS จะสร้าง placeholder row ให้ถ้า order ยังไม่ลงชีต
   if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังอัป...'; btn.style.background = '#ccc'; }
   if (statusEl) statusEl.innerHTML = '<span style="color:#9b72cf;">📤 กำลังโหลด blob...</span>';
 
@@ -5488,13 +5478,13 @@ function _hintForVideoError(reason) {
   if (!reason) return '';
   const r = String(reason).toLowerCase();
   if (r.includes('unknown action'))    return 'ยังไม่ deploy GAS ใหม่!';
-  if (r.includes('row ไม่พบ') || r.includes('not yet') || r.includes('saveData ยังไม่')) return 'รอ order เข้าชีตก่อน';
   if (r.includes('server busy') || r.includes('lock'))   return 'server ติด lock รออีกซักครู่';
   if (r.includes('unauthorized')) return 'API key ผิด';
   if (r.includes('rate limit'))   return 'ส่งเร็วเกินไป รอ 1 นาที';
   if (r.includes('too large'))    return 'video ใหญ่เกิน';
   if (r.includes('offline'))      return 'ออฟไลน์';
   if (r.includes('timeout') || r.includes('network')) return 'network ช้า';
+  if (r.includes('drive upload fail')) return 'อัป Drive ไม่ผ่าน';
   return '';
 }
 
@@ -5508,12 +5498,10 @@ async function uploadAllPendingVideos() {
   if (allBtn) { allBtn.disabled = true; allBtn.textContent = '⏳ กำลังอัป...'; }
 
   try {
-    const keys = await _listVideoKeys();
-    const sent = JSON.parse(localStorage.getItem(SENT_KEY) || '{}');
-    const uploadable = keys.filter(k => sent[k]);
-
+    const uploadable = await _listVideoKeys();
+    // ✅ อัปได้ทุกใบ — ถ้า order ยังไม่ลงชีต GAS จะสร้าง placeholder ให้
     if (uploadable.length === 0) {
-      Swal.fire('ไม่มีอะไรอัป', 'ไม่มีวิดีโอที่พร้อมอัป (order ทุกใบยังไม่ลงชีต)', 'info');
+      Swal.fire('ไม่มีอะไรอัป', 'ไม่มีวิดีโอค้างใน IDB', 'info');
       return;
     }
 
