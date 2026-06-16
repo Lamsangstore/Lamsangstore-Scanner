@@ -70,9 +70,11 @@ function _clearCachedParcelRow(parcelId) {
   } catch(e) {}
 }
 
-// ✅ หา row ของ parcelId แบบ "เร็ว" — cache ก่อน, fallback scan แค่ 2000 แถวล่าสุด
+// ✅ หา row ของ parcelId — cache ก่อน, fallback scan
+//    fullScan=true → scan ทั้งชีต (ช้ากว่าแต่หาเจอเสมอ — ใช้ใน uploadVideoForParcel)
+//    fullScan=false → scan แค่ 2000 แถวล่าสุด (เร็ว — ใช้ใน saveData hot path)
 //    return: { rowIndex, isPlaceholder } หรือ null
-function _findParcelRow(sheet, parcelId) {
+function _findParcelRow(sheet, parcelId, fullScan) {
   // Fast path: cache
   const cached = _getCachedParcelRow(parcelId);
   if (cached) {
@@ -90,10 +92,10 @@ function _findParcelRow(sheet, parcelId) {
     } catch(e) {}
   }
 
-  // Fallback: scan แค่ 2000 แถวล่าสุด (ไม่ใช่ทั้งชีต)
+  // Fallback: scan ตามขอบเขตที่กำหนด
   const lastRow = sheet.getLastRow();
   if (lastRow <= 1) return null;
-  const startScan = Math.max(2, lastRow - FALLBACK_SCAN_RECENT_ROWS + 1);
+  const startScan = fullScan ? 2 : Math.max(2, lastRow - FALLBACK_SCAN_RECENT_ROWS + 1);
   const numScan = lastRow - startScan + 1;
   const data = sheet.getRange(startScan, 4, numScan, 3).getValues(); // col D (tracking), E (video), F (remark)
   const target = parcelId.toUpperCase();
@@ -120,6 +122,7 @@ const RATE_LIMITS = {
   getSpreadsheetUrl: 30,
   getMarketplaceVersionUrl: 30,
   uploadVideoForParcel: 120,
+  reconcileVideoUrls: 6,
   _default: 120
 };
 
@@ -127,7 +130,7 @@ const ALLOWED_ACTIONS = new Set([
   "getProductData", "saveData", "searchData", "saveMarketplaceData",
   "getExpectedOrderDetails", "getReportData", "getAllPendingOrders",
   "getSpreadsheetUrl", "getMarketplaceVersionUrl",
-  "uploadVideoForParcel"
+  "uploadVideoForParcel", "reconcileVideoUrls"
 ]);
 
 // ============================================================
@@ -246,6 +249,7 @@ function doPost(e) {
     else if (action === "getSpreadsheetUrl")          result = getSpreadsheetUrl();
     else if (action === "getMarketplaceVersionUrl")   result = getMarketplaceVersionUrl();
     else if (action === "uploadVideoForParcel")       result = uploadVideoForParcel(body);
+    else if (action === "reconcileVideoUrls")         result = reconcileVideoUrls(body);
 
     return _json(result);
 
@@ -680,6 +684,115 @@ function _tryUpdateVideoUrl(sheet, rowIndex, parcelId, videoBase64, videoMime, v
 //   3. อัปโหลด video ไป Drive (นอก lock — slow operation)
 //   4. ถือ lock แค่ตอน setValue → ปล่อย lock เร็ว
 // ============================================================
+// ============================================================
+// reconcileVideoUrls — patch up rows that show "no_video" but have a
+// matching file in Drive (filename = parcelId.webm / parcelId.mp4)
+// สาเหตุที่ row หาย videoUrl ทั้งที่ Drive มีไฟล์:
+//   - cache cold + fallback scan 2000 rows ไม่เจอ row เก่า
+//   - uploadVideoForParcel เลย "สร้าง placeholder ใหม่" แทนที่จะ update row เดิม
+//   - row เดิมยังคงแสดง no_video, placeholder มี Drive URL แยกอยู่
+// reconcile วิ่งดู Drive แล้ว map กลับมา fix ทุก row ที่ยัง no_video
+// ============================================================
+function reconcileVideoUrls(body) {
+  body = body || {};
+  const sinceDays = Math.max(1, Math.min(90, Number(body.sinceDays) || 7));
+
+  try {
+    const folder = DriveApp.getFolderById(TARGET_FOLDER_ID);
+    const driveMap = {};
+    const files = folder.getFiles();
+    let driveCount = 0;
+    while (files.hasNext()) {
+      const f = files.next();
+      const name = f.getName();
+      const m = name.match(/^(.+?)(?:_retry)?\.(webm|mp4)$/i);
+      if (!m) continue;
+      const parcelId = m[1].toUpperCase();
+      // เก็บไฟล์ใหม่สุดถ้ามีหลายไฟล์ (orphan retries)
+      const ts = f.getDateCreated().getTime();
+      if (!driveMap[parcelId] || driveMap[parcelId].ts < ts) {
+        driveMap[parcelId] = { url: f.getUrl(), ts };
+      }
+      driveCount++;
+    }
+    Logger.log("[reconcileVideoUrls] อ่าน Drive: " + driveCount + " ไฟล์, unique parcels: " + Object.keys(driveMap).length);
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_ORDERS);
+    if (!sheet) return { success: false, error: "Orders sheet ไม่พบ" };
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: true, fixed: 0, scanned: 0 };
+
+    // อ่าน cols A (ts), D (tracking), E (videoUrl) เพื่อ filter เฉพาะแถวที่ no_video และอยู่ในช่วง sinceDays
+    const data = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+    const cutoff = Date.now() - (sinceDays * 24 * 60 * 60 * 1000);
+
+    const updates = []; // { row, url, parcelId }
+    let scanned = 0;
+    let skippedDateRange = 0;
+    let skippedHadVideo = 0;
+    let noDriveMatch = 0;
+
+    for (let i = 0; i < data.length; i++) {
+      const ts = data[i][0];
+      const tracking = String(data[i][3] || "").trim().toUpperCase();
+      const videoUrl = String(data[i][4] || "").trim();
+      if (!tracking) continue;
+      scanned++;
+
+      // skip ถ้าเก่ากว่า sinceDays
+      if (ts instanceof Date && ts.getTime() < cutoff) {
+        skippedDateRange++;
+        continue;
+      }
+      // skip ถ้ามี Drive URL อยู่แล้ว
+      if (videoUrl.indexOf('drive.google.com') !== -1) {
+        skippedHadVideo++;
+        continue;
+      }
+
+      const driveEntry = driveMap[tracking];
+      if (!driveEntry) { noDriveMatch++; continue; }
+
+      updates.push({ row: i + 2, url: driveEntry.url, parcelId: tracking });
+    }
+
+    Logger.log("[reconcileVideoUrls] scanned=" + scanned + " toFix=" + updates.length +
+               " skippedHadVideo=" + skippedHadVideo + " noDriveMatch=" + noDriveMatch +
+               " skippedDateRange=" + skippedDateRange);
+
+    // ใช้ lock สั้นๆ ตอน setValue เพื่อกัน race กับ saveData
+    const lock = LockService.getScriptLock();
+    try { lock.waitLock(30000); }
+    catch(e) {
+      return { success: false, error: "lock_timeout — server busy, retry", scanned, found: updates.length };
+    }
+    try {
+      let written = 0;
+      for (const u of updates) {
+        try {
+          // re-check ใน lock — กันกรณีอีก request เพิ่ง update
+          const current = String(sheet.getRange(u.row, 5).getValue()).trim();
+          if (current.indexOf('drive.google.com') !== -1) continue;
+          sheet.getRange(u.row, 5).setValue(u.url);
+          written++;
+        } catch(e) {
+          Logger.log("[reconcileVideoUrls] setValue fail row=" + u.row + ": " + e.message);
+        }
+      }
+      if (written > 0) SpreadsheetApp.flush();
+      Logger.log("[reconcileVideoUrls] fixed " + written + " rows");
+      _logSaveAttempt("", "", "reconcile_done", written, "scanned=" + scanned + " sinceDays=" + sinceDays);
+      return { success: true, fixed: written, scanned, found: updates.length, driveFiles: driveCount, sinceDays };
+    } finally {
+      lock.releaseLock();
+    }
+  } catch(e) {
+    Logger.log("[reconcileVideoUrls] error: " + e.message);
+    return { success: false, error: e.toString() };
+  }
+}
+
 function uploadVideoForParcel(body) {
   const parcelId    = String(body.parcelId || "").trim();
   const videoBase64 = String(body.videoEvidence || "");
@@ -711,7 +824,8 @@ function uploadVideoForParcel(body) {
     const sheet = ss.getSheetByName(SHEET_ORDERS) || ss.insertSheet(SHEET_ORDERS);
 
     // ⚡ Fast lookup ด้วย cache (10ms) แทน scan tracking column
-    const foundExisting = _findParcelRow(sheet, parcelId);
+    // ใช้ fullScan=true — Phase 2 ไม่ต้องเร็วมาก, ต้องหา row เก่าเจอเสมอ
+    const foundExisting = _findParcelRow(sheet, parcelId, true);
     let rowIndex = foundExisting ? foundExisting.rowIndex : -1;
 
     // ถ้า row มี Drive URL อยู่แล้ว → skip (retry ที่ส่งเกินมา)
@@ -751,7 +865,7 @@ function uploadVideoForParcel(body) {
     }
     try {
       // re-check ใน lock ด้วย cache (fast) — กัน race condition
-      const foundInLock = _findParcelRow(sheet, parcelId);
+      const foundInLock = _findParcelRow(sheet, parcelId, true);
       let r2 = foundInLock ? foundInLock.rowIndex : -1;
 
       // ✅ ไม่พบ row → สร้าง placeholder row (saveData จะมา upgrade ทีหลัง)
