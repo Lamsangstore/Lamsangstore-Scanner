@@ -97,14 +97,13 @@ function _firebaseCfg() {
   };
 }
 
-// ✅ cron — ดูด /inbox เข้า sheet แล้วลบ doc ที่สำเร็จ
-//   reuse saveData() เต็มรูปแบบ → ได้ dedup + idempotency + cache ฟรี
+// ✅ cron — ดูด /inbox เข้า sheet แบบ BATCH (เร็ว) แล้วลบ doc ทีเดียว
+//   เดิม: เรียก saveData ทีละ doc → scan ชีต 2000 แถว + log + lock ทุก doc → ช้ามาก
+//   ใหม่: อ่าน tracking ในชีตครั้งเดียว → append รวด (lock เดียว) → ลบ doc ทีเดียว
 function drainFirebaseInbox() {
   const cfg = _firebaseCfg();
   if (!cfg.url || !cfg.secret) { Logger.log("[drainFirebase] ยังไม่ได้ setupFirebase()"); return; }
 
-  // กันรันซ้อน — ใช้ DocumentLock (คนละตัวกับ ScriptLock ที่ saveData ใช้)
-  //   ❗ ห้ามใช้ ScriptLock ที่นี่ เพราะ drain เรียก saveData() ที่ขอ ScriptLock → deadlock
   const lock = LockService.getDocumentLock();
   try { if (!lock.tryLock(5000)) { Logger.log("[drainFirebase] ตัวก่อนยังรันอยู่ ข้าม"); return; } }
   catch(e) { return; }
@@ -117,59 +116,89 @@ function drainFirebaseInbox() {
       return;
     }
     const body = resp.getContentText();
-    if (!body || body === "null") return; // inbox ว่าง
+    if (!body || body === "null") return;
     let docs;
     try { docs = JSON.parse(body); } catch(e) { Logger.log("[drainFirebase] bad json"); return; }
-
     const keys = Object.keys(docs || {});
     if (keys.length === 0) return;
-    Logger.log("[drainFirebase] พบ " + keys.length + " docs ใน inbox");
+    Logger.log("[drainFirebase] พบ " + keys.length + " docs");
 
-    let drained = 0, failed = 0;
-    // จำกัดต่อรอบ กัน execution timeout (6 นาที) — ที่เหลือรอบหน้า
-    const MAX_PER_RUN = 200;
-    for (let i = 0; i < keys.length && i < MAX_PER_RUN; i++) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_ORDERS) || ss.insertSheet(SHEET_ORDERS);
+
+    // อ่าน tracking ที่อยู่ในชีตแล้ว "ครั้งเดียว" (ไม่ scan ซ้ำทุก doc)
+    const existing = new Set();
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const colD = sheet.getRange(2, 4, lastRow - 1, 1).getValues();
+      colD.forEach(r => { const t = numToStr(r[0]).toUpperCase(); if (t) existing.add(t); });
+    }
+
+    const MAX_PER_RUN = 500;
+    const delKeys = {};              // doc ที่ process แล้ว → ลบทีเดียว
+    const newRows = [];              // row ใหม่ที่จะ append
+    const newTokens = [];            // token ที่ต้อง mark completed
+    const seenInBatch = new Set();
+    let processed = 0;
+
+    for (let i = 0; i < keys.length && processed < MAX_PER_RUN; i++) {
       const key = keys[i];
       const d = docs[key] || {};
-      // validate
       const parcelId = String(d.parcelId || "").trim();
-      if (!parcelId || parcelId.length > 64 || parcelId === "__DIAGTEST__") {
-        // junk / doc ทดสอบจากปุ่มตรวจสอบ → ลบทิ้ง ไม่สร้าง row
-        _firebaseDelete(cfg, key);
-        continue;
+      processed++;
+
+      if (!parcelId || parcelId.length > 64 || parcelId === "__DIAGTEST__") { delKeys[key] = null; continue; }
+      const tk = parcelId.toUpperCase();
+
+      // มีในชีตแล้ว / token เสร็จแล้ว / ซ้ำใน batch → แค่ลบ doc (ไม่ append)
+      if (existing.has(tk) || seenInBatch.has(tk) || (d.idemToken && _isCompletedToken(d.idemToken))) {
+        delKeys[key] = null; continue;
       }
-      // ✅ RTDB อาจคืน array เป็น object {"0":..,"1":..} หรือมี null คั่น → normalize เป็น array เสมอ
-      //   กัน items หาย (เคยเขียน array แต่ดึงกลับเป็น object → Array.isArray=false → items=[])
+
+      // normalize items (RTDB คืน array เป็น object ได้)
       let itemsArr;
       if (Array.isArray(d.items)) itemsArr = d.items.filter(x => x != null);
       else if (d.items && typeof d.items === 'object') itemsArr = Object.values(d.items).filter(x => x != null);
       else itemsArr = [];
-      try {
-        const res = saveData({
-          parcelId: parcelId,
-          items: itemsArr,
-          orderId: d.orderId || "",
-          marketplace: d.marketplace || "",
-          remark: d.remark || "",
-          idemToken: d.idemToken || "",
-          videoEvidence: "no_video",          // video มาทาง direct GAS call เท่านั้น
-          videoMimeType: "video/webm"
-        });
-        if (res && res.success) {
-          _firebaseDelete(cfg, key); // เข้า sheet แล้ว → ลบ doc
-          drained++;
-        } else {
-          failed++;
-        }
-      } catch(e) {
-        Logger.log("[drainFirebase] saveData error " + parcelId + ": " + e.message);
-        failed++;
+
+      seenInBatch.add(tk);
+      newRows.push([new Date(), String(d.orderId || ""), String(d.marketplace || ""), parcelId,
+                    "no_video", String(d.remark || ""), itemsArr.length, ...itemsArr.slice(0, 500).map(String)]);
+      if (d.idemToken) newTokens.push({ token: d.idemToken, parcelId: parcelId });
+      delKeys[key] = null;
+    }
+
+    // เขียน row ใหม่ทั้งหมด "ใต้ lock เดียว" (appendRow auto-extend)
+    if (newRows.length > 0) {
+      const slock = LockService.getScriptLock();
+      try { slock.waitLock(30000); } catch(e) {
+        Logger.log("[drainFirebase] ไม่ได้ script lock — ข้ามรอบนี้"); return;
       }
+      try {
+        for (let r = 0; r < newRows.length; r++) {
+          sheet.appendRow(newRows[r]);
+          const nr = sheet.getLastRow();
+          const t = newTokens.find(x => x.parcelId === newRows[r][3]);
+          _setCachedParcelRow(newRows[r][3], nr, false);
+        }
+        SpreadsheetApp.flush();
+        newTokens.forEach(x => _markTokenCompleted(x.token));
+      } finally { try { slock.releaseLock(); } catch(_) {} }
     }
-    if (drained > 0 || failed > 0) {
-      Logger.log("[drainFirebase] drained=" + drained + " failed=" + failed);
-      _logSaveAttempt("", "", "firebase_drain", drained, "drained=" + drained + " failed=" + failed);
+
+    // ลบ doc ที่ process แล้วทั้งหมด "ทีเดียว" (multi-path PATCH = null)
+    const delCount = Object.keys(delKeys).length;
+    if (delCount > 0) {
+      try {
+        UrlFetchApp.fetch(cfg.url + "/inbox.json?auth=" + encodeURIComponent(cfg.secret), {
+          method: "patch", contentType: "application/json",
+          payload: JSON.stringify(delKeys), muteHttpExceptions: true
+        });
+      } catch(e) { Logger.log("[drainFirebase] batch delete error: " + e.message); }
     }
+
+    Logger.log("[drainFirebase] เขียนใหม่ " + newRows.length + " | ลบ doc " + delCount);
+    if (newRows.length > 0) _logSaveAttempt("", "", "firebase_drain", newRows.length, "drained=" + newRows.length + " deleted=" + delCount);
   } catch(e) {
     Logger.log("[drainFirebase] error: " + e.message);
   } finally {
