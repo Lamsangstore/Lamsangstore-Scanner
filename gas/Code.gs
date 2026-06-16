@@ -504,9 +504,13 @@ function saveData(body) {
   const videoExt = ALLOWED_VIDEO_MIMES[videoMime];
 
   const idemToken = String(body.idemToken || "").slice(0, 64);
+  const hasVideo = !!(videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large");
 
   // ⚡ Fast path: token เคย complete → retry เงียบๆ
-  if (idemToken && _isCompletedToken(idemToken)) {
+  //   ❗ ยกเว้นถ้า request นี้ "มี video" — เพราะ flush ตอนปิดแอปส่ง order-only (no_video)
+  //      ก่อน แล้ว complete token ไปแล้ว → ปล่อยให้ตัวที่มี video ผ่าน เพื่อไป attach
+  //      วิดีโอใส่ row เดิม (ผ่าน duplicate path)
+  if (idemToken && _isCompletedToken(idemToken) && !hasVideo) {
     Logger.log("[saveData] Idempotent retry: " + idemToken);
     _logSaveAttempt(parcelId, marketplace, "idempotent_retry", itemsArr.length, "token " + idemToken);
     return { success: true, note: "idempotent_retry" };

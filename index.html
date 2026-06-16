@@ -3063,8 +3063,8 @@ document.addEventListener('visibilitychange', () => {
       if (scanner) { try { scanner.resume(); } catch(e) {} }
       if (!isRecording) startCameraRecording(false).catch(() => {}); // ✅ ต่อ chunks เดิม ไม่ reset
     }
-    // กลับมาแล้ว → retry queue ที่อาจ flush ไม่ทัน
-    setTimeout(() => retryFailedUploads(), 1000);
+    // กลับมาแล้ว → retry queue ทันที (force ข้าม backoff)
+    setTimeout(() => retryFailedUploads(true), 1000);
   }
 });
 
@@ -3080,71 +3080,42 @@ window.addEventListener('pagehide', (e) => {
 
 // ===== FLUSH PENDING UPLOADS (ส่งข้อมูลก่อนปิดแอป) =====
 // ใช้ 3 กลยุทธ์ซ้อนกัน เพื่อให้แน่ใจว่าข้อมูลถูกส่งออกไปก่อนปิดหน้าจอ:
-// 1. visibilitychange=hidden → flush ด้วย fetch (keepalive)
-// 2. pagehide → flush ด้วย navigator.sendBeacon (เชื่อถือได้ที่สุด)
-// 3. beforeunload → flush สุดท้าย (fallback)
-
-function _flushPendingUploads() {
+// ✅ flush ตอนปิดแอป — ส่ง "order อย่างเดียว" (ไม่มี video)
+//    เพราะ beacon/keepalive จำกัด ~64KB → video base64 (~10MB) จะล้มเงียบ
+//    order เล็ก ส่งผ่านได้ → ลงชีตทันแม้ปิดแอป
+//    video ยังอยู่ใน queue → retry รอบเปิดแอปครั้งหน้า (idemToken กันซ้ำ)
+//    ❗ ไม่ลบรายการออกจาก queue — รอ retryFailedUploads ยืนยัน _isSent ก่อนลบ
+function _flushOrderOnly(useBeacon) {
   try {
     const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
     if (q.length === 0) return;
-    console.log(`[Flush] พยายามส่ง ${q.length} รายการก่อนปิดแอป...`);
     for (const job of q) {
-      if (_flushedIds.has(job.pId) || _isSent(job.pId)) continue;
-      _flushedIds.add(job.pId);
-      try {
-        fetch(GAS_URL, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify({
-            action: "saveData",
-            apiKey: GAS_API_KEY,
-            parcelId: job.pId,
-            items: job.itemsArr,
-            videoEvidence: job.videoBase64 || "no_video",
-            videoMimeType: job.videoMime || "video/webm",
-            remark: job.remarkNote || "",
-            orderId: job.orderId || "",
-            marketplace: job.marketplace || "",
-            idemToken: job.idemToken || ""
-          }),
-          keepalive: true
-        }).catch(() => {});
-        console.log(`[Flush] ส่ง ${job.pId} ด้วย fetch+keepalive`);
-      } catch(e) {}
-    }
-    // ✅ ไม่ล้าง queue ตรงนี้ — retryFailedUploads จะ mark sent แล้วลบออก
-  } catch(e) { console.error('[Flush]', e); }
-}
-
-function _flushWithBeacon() {
-  try {
-    const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
-    if (q.length === 0) return;
-    const remaining = [];
-    for (const job of q) {
-      if (_isSent(job.pId)) continue; // ✅ GAS ยืนยันแล้ว ไม่ส่งซ้ำ
-      if (_flushedIds.has(job.pId)) { remaining.push(job); continue; }
+      if (_isSent(job.pId) || _flushedIds.has(job.pId)) continue;
       _flushedIds.add(job.pId);
       const payload = JSON.stringify({
         action: "saveData",
         apiKey: GAS_API_KEY,
         parcelId: job.pId,
         items: job.itemsArr,
-        videoEvidence: job.videoBase64 || "no_video",
+        videoEvidence: "no_video",        // ส่ง order only — video ตามรอบ retry
         videoMimeType: job.videoMime || "video/webm",
         remark: job.remarkNote || "",
         orderId: job.orderId || "",
         marketplace: job.marketplace || "",
         idemToken: job.idemToken || ""
       });
-      const sent = navigator.sendBeacon(GAS_URL, new Blob([payload], { type: 'text/plain' }));
-      console.log(`[Beacon] ${job.pId}: ${sent ? 'queued' : 'failed'}`);
-      if (!sent) remaining.push(job);
+      try {
+        if (useBeacon && navigator.sendBeacon) {
+          navigator.sendBeacon(GAS_URL, new Blob([payload], { type: 'text/plain' }));
+        } else {
+          fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, body: payload, keepalive: true }).catch(() => {});
+        }
+      } catch(e) {}
     }
-    localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(remaining));
-  } catch(e) { console.error('[Beacon]', e); }
+  } catch(e) { console.error('[Flush]', e); }
 }
+function _flushPendingUploads() { _flushOrderOnly(false); }
+function _flushWithBeacon()     { _flushOrderOnly(true); }
 
 // ป้องกันปิด tab / refresh โดยไม่ตั้งใจระหว่างแพ็กสินค้า + flush ข้อมูล
 window.addEventListener('beforeunload', (e) => {
@@ -3166,7 +3137,7 @@ function updateNetworkBadge() {
     badge.style.color = 'var(--success)';
     badge.innerHTML = '<svg viewBox="0 0 10 10" fill="none" style="width:0.75em;height:0.75em;display:inline-block;vertical-align:0.05em;margin-right:2px"><circle cx="5" cy="5" r="4" fill="#52b788"/><circle cx="5" cy="5" r="2.2" fill="#b5ead7"/></svg> ออนไลน์';
     if (banner) banner.style.display = 'none';
-    retryFailedUploads();
+    retryFailedUploads(true); // เน็ตกลับมา → force retry ทันที
   } else {
     badge.style.color = 'var(--danger)';
     badge.innerHTML = '<svg viewBox="0 0 10 10" fill="none" style="width:0.75em;height:0.75em;display:inline-block;vertical-align:0.05em;margin-right:2px"><circle cx="5" cy="5" r="4" fill="#e07a3a"/><line x1="3" y1="3" x2="7" y2="7" stroke="white" stroke-width="1.3" stroke-linecap="round"/><line x1="7" y1="3" x2="3" y2="7" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg> ออฟไลน์';
@@ -3184,34 +3155,26 @@ window.addEventListener('online',  updateNetworkBadge);
 window.addEventListener('offline', updateNetworkBadge);
 updateNetworkBadge();
 
-// ล้าง failedUploadQueue ที่เก่าเกิน 7 วัน อัตโนมัติตอนเปิดแอป
-(function purgeOldFailQueue() {
-  try {
-    const FKEY = 'failedUploadQueue';
-    const q = JSON.parse(localStorage.getItem(FKEY) || '[]');
-    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    const fresh = q.filter(job => job.ts && job.ts > cutoff);
-    if (fresh.length !== q.length) {
-      localStorage.setItem(FKEY, JSON.stringify(fresh));
-      console.log(`[FailQueue] ลบรายการเก่า ${q.length - fresh.length} รายการ`);
-    }
-    if (fresh.length > 0) {
-      setTimeout(() => {
-        updateFailQueueBadge();
-        retryFailedUploads(); // retry ทันทีตอนเปิดแอปถ้ามี queue ค้าง
-      }, 1500);
-    }
-  } catch(e) {}
-})();
+// ✅ ขอ persistent storage — กัน iOS/Android evict localStorage queue ตอนพื้นที่เต็ม
+//    ทำให้ queue ออเดอร์ที่รอ sync อยู่รอดแม้เครื่องพื้นที่น้อย
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persisted().then(p => {
+    if (!p) navigator.storage.persist().then(granted => {
+      console.log('[Storage] persistent =', granted);
+    }).catch(() => {});
+  }).catch(() => {});
+}
 
-// ✅ Recovery ตอน app เปิด — เคลียร์ video orphan ใน IDB + ลบของเก่าเกิน 7 วัน
+// ✅ ตอนเปิดแอป — retry queue ที่ค้างทันที + เริ่ม adaptive scheduler
+//    (ไม่ลบออเดอร์ทิ้ง — ดู _pruneQueueSafely / retryFailedUploads)
 setTimeout(() => {
-  _cleanSentVideoBlobs().catch(() => {});
-  _purgeOldVideoBlobs().catch(() => {});
-}, 3000);
-
-// retry อัตโนมัติทุก 60 วินาที
-setInterval(() => retryFailedUploads(), 60000);
+  try {
+    _pruneQueueSafely();
+    updateFailQueueBadge();
+    retryFailedUploads(true); // เปิดแอป → force retry ทันที (จะ _scheduleRetry ต่อให้)
+    _scheduleRetry();         // เผื่อ queue ว่าง retry ไม่ทำงาน → start scheduler
+  } catch(e) {}
+}, 1200);
 
 // ============================================================
 // 4. LAST SYNC TIME
@@ -3230,136 +3193,7 @@ setInterval(updateSyncTimeBadge, 30000);
 updateSyncTimeBadge();
 
 // ============================================================
-// 5. VIDEO STORAGE (IndexedDB) — เก็บ Blob ในเครื่อง, sync เมื่อ online
-// ============================================================
-// ทำไมต้อง IndexedDB?
-//   - localStorage iOS Safari ~5MB → เก็บ video 1 ใบไม่ได้ด้วยซ้ำ
-//   - IndexedDB iOS ~50MB-1GB+ / Android Chrome หลาย GB
-//   - รองรับ Blob โดยตรง ไม่ต้องแปลง base64 (ประหยัดเมโมรี่)
-//   - Sync ต่อหลัง app close แล้วเปิดใหม่ได้
-const VIDEO_DB_NAME = 'LamsangVideoDB';
-const VIDEO_DB_VERSION = 1;
-const VIDEO_STORE = 'videos';
-let _videoDBPromise = null;
-
-function _openVideoDB() {
-  if (_videoDBPromise) return _videoDBPromise;
-  _videoDBPromise = new Promise((resolve, reject) => {
-    if (!window.indexedDB) { reject(new Error('IndexedDB ไม่รองรับ')); return; }
-    const req = indexedDB.open(VIDEO_DB_NAME, VIDEO_DB_VERSION);
-    req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(VIDEO_STORE)) {
-        db.createObjectStore(VIDEO_STORE, { keyPath: 'parcelId' });
-      }
-    };
-    req.onsuccess = (e) => resolve(e.target.result);
-    req.onerror = (e) => { _videoDBPromise = null; reject(e.target.error); };
-  });
-  return _videoDBPromise;
-}
-
-async function _saveVideoBlob(parcelId, blob, mimeType) {
-  const db = await _openVideoDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(VIDEO_STORE, 'readwrite');
-    const store = tx.objectStore(VIDEO_STORE);
-    const req = store.put({ parcelId, blob, mimeType: mimeType || 'video/webm', size: blob.size, ts: Date.now() });
-    req.onsuccess = () => resolve(true);
-    req.onerror = (e) => reject(e.target.error);
-  });
-}
-
-async function _getVideoBlob(parcelId) {
-  try {
-    const db = await _openVideoDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(VIDEO_STORE, 'readonly');
-      const store = tx.objectStore(VIDEO_STORE);
-      const req = store.get(parcelId);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = (e) => reject(e.target.error);
-    });
-  } catch(e) { return null; }
-}
-
-async function _deleteVideoBlob(parcelId) {
-  try {
-    const db = await _openVideoDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(VIDEO_STORE, 'readwrite');
-      const store = tx.objectStore(VIDEO_STORE);
-      const req = store.delete(parcelId);
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => resolve(false);
-    });
-  } catch(e) { return false; }
-}
-
-async function _listVideoKeys() {
-  try {
-    const db = await _openVideoDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(VIDEO_STORE, 'readonly');
-      const store = tx.objectStore(VIDEO_STORE);
-      const req = store.getAllKeys();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => resolve([]);
-    });
-  } catch(e) { return []; }
-}
-
-// แปลง Blob → base64 (เฉพาะตอนจะส่งไป GAS — ไม่เก็บ base64 ใน memory นาน)
-function _blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onloadend = () => {
-      const result = String(fr.result || '');
-      const comma = result.indexOf(',');
-      resolve(comma >= 0 ? result.slice(comma + 1) : result);
-    };
-    fr.onerror = () => reject(fr.error);
-    fr.readAsDataURL(blob);
-  });
-}
-
-// ลบ video ที่ค้างใน IDB เกินอายุ (เผื่อ orphan)
-async function _purgeOldVideoBlobs(maxAgeMs = 7 * 24 * 60 * 60 * 1000) {
-  try {
-    const db = await _openVideoDB();
-    const cutoff = Date.now() - maxAgeMs;
-    return new Promise((resolve) => {
-      const tx = db.transaction(VIDEO_STORE, 'readwrite');
-      const store = tx.objectStore(VIDEO_STORE);
-      let deleted = 0;
-      const cursorReq = store.openCursor();
-      cursorReq.onsuccess = (e) => {
-        const cursor = e.target.result;
-        if (!cursor) { if (deleted > 0) console.log(`[VideoDB] purged ${deleted} expired blobs`); resolve(deleted); return; }
-        if ((cursor.value.ts || 0) < cutoff) { cursor.delete(); deleted++; }
-        cursor.continue();
-      };
-      cursorReq.onerror = () => resolve(0);
-    });
-  } catch(e) { return 0; }
-}
-
-// recovery: ตอน app เปิด — ลบ video ใน IDB ที่ pId เป็น sent แล้ว (orphan จากการที่ลบไม่สำเร็จ)
-async function _cleanSentVideoBlobs() {
-  try {
-    const keys = await _listVideoKeys();
-    if (!keys.length) return;
-    const sent = JSON.parse(localStorage.getItem(SENT_KEY) || '{}');
-    let removed = 0;
-    for (const pId of keys) {
-      if (sent[pId]) { await _deleteVideoBlob(pId); removed++; }
-    }
-    if (removed > 0) console.log(`[VideoDB] cleaned ${removed} already-sent videos`);
-  } catch(e) {}
-}
-
-// ============================================================
-// 5b. FAILED UPLOAD QUEUE — retry เมื่อออนไลน์
+// 5. FAILED UPLOAD QUEUE — retry เมื่อออนไลน์ (auto, durable)
 // ============================================================
 const SENT_KEY = 'sentParcels'; // ✅ dedup guard: pId ที่ GAS ยืนยันสำเร็จแล้ว
 
@@ -3381,30 +3215,22 @@ function _isSent(pId) {
   } catch(e) { return false; }
 }
 
-function saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64, videoMime) {
-  try {
-    if (_isSent(pId)) {
-      console.log(`[FailQueue] ข้าม ${pId} — ส่ง GAS สำเร็จแล้ว`);
-      return;
-    }
-    const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
-    // ป้องกัน pId ซ้ำใน queue
-    if (q.some(j => j.pId === pId)) {
-      console.log(`[FailQueue] ${pId} มีใน queue อยู่แล้ว ไม่เพิ่มซ้ำ`);
-      return;
-    }
-    q.push({ pId, itemsArr, remarkNote, orderId: orderId || '', marketplace: marketplace || '', videoBase64: videoBase64 || '', videoMime: videoMime || currentVideoMime || 'video/webm', ts: Date.now() });
-    localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(q));
-    console.warn(`[FailQueue] บันทึก ${pId} ไว้รอ retry`);
-  } catch(e) { console.error('saveToFailQueue:', e); }
+// ============================================================
+// DURABLE UPLOAD QUEUE — ออเดอร์ไม่หาย, retry อัตโนมัติจนสำเร็จ
+//   หลักการ:
+//     1. enqueue ก่อน callGAS เสมอ → browser ฆ่า fetch ก็ไม่หาย
+//     2. ไม่ลบ "ออเดอร์ที่ยังไม่สำเร็จ" ทิ้งโดยเด็ดขาด (ไม่มี hard expiry)
+//     3. quota เต็ม → ตัด "วิดีโอ" ของรายการเก่าสุดทิ้งก่อน (ออเดอร์รอด 100%)
+//     4. retry แบบ exponential backoff ต่อรายการ — ไม่ถล่ม server
+// ============================================================
+const QUEUE_BACKOFF_MS = [0, 5000, 15000, 30000, 60000, 120000, 300000, 600000]; // 0,5s,15s,30s,1m,2m,5m,10m(cap)
+function _backoffFor(attempts) {
+  return QUEUE_BACKOFF_MS[Math.min(attempts, QUEUE_BACKOFF_MS.length - 1)];
 }
 
-// ✅ "Persist-before-upload" — เรียกก่อน callGAS เพื่อกันข้อมูลหาย
-// ถ้า browser ฆ่า fetch กลางคัน (user ปิดแอป / สลับแอป / หน้าจอดับ)
-// ข้อมูลยังอยู่ใน queue → retryFailedUploads จะมาเอาไปยิงใหม่
-// upsert: ถ้ามี pId อยู่แล้ว → replace (ไม่ skip เหมือน saveToFailQueue)
-// quota-aware: ถ้า localStorage เต็ม → fallback เก็บแบบไม่มี video (อย่างน้อยข้อมูลออเดอร์รอด)
-function _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64, videoMime, idemToken, videoInIDB) {
+// ✅ persist รายการก่อน upload (upsert ตาม pId)
+//    quota-aware: ถ้าเต็ม → ตัดวิดีโอรายการเก่าทิ้งก่อน แล้วลองใหม่ — ออเดอร์ต้องรอด
+function _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64, videoMime, idemToken) {
   const entry = {
     pId, itemsArr,
     remarkNote: remarkNote || '',
@@ -3413,26 +3239,38 @@ function _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, vide
     videoBase64: videoBase64 || '',
     videoMime: videoMime || currentVideoMime || 'video/webm',
     idemToken: idemToken || '',
-    videoInIDB: !!videoInIDB, // ✅ true = วิดีโออยู่ใน IndexedDB, false = inline base64 หรือไม่มี
-    ts: Date.now()
+    ts: Date.now(),
+    attempts: 0,
+    nextAt: 0
   };
-  const _write = (e) => {
-    const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
-    const idx = q.findIndex(j => j.pId === pId);
-    if (idx >= 0) q[idx] = e; else q.push(e);
-    localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(q));
-  };
-  try {
-    _write(entry);
-    console.log(`[Queue] persisted ${pId} ก่อน upload (${entry.videoBase64.length} bytes video)`);
-  } catch(quotaErr) {
-    console.warn(`[Queue] localStorage เต็ม — เก็บ ${pId} แบบไม่มี video:`, quotaErr.message);
-    entry.videoBase64 = '';
-    entry.videoMime = '';
+  const _writeQueue = (q) => localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(q));
+  const _loadQueue = () => { try { return JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]'); } catch(e) { return []; } };
+
+  let q = _loadQueue();
+  const idx = q.findIndex(j => j.pId === pId);
+  if (idx >= 0) { entry.attempts = q[idx].attempts || 0; q[idx] = entry; } else { q.push(entry); }
+
+  // พยายามเขียน — ถ้า quota เต็ม ตัดวิดีโอรายการเก่าสุดทีละตัวจนเขียนได้
+  for (let guard = 0; guard < 200; guard++) {
     try {
-      _write(entry);
-    } catch(e2) {
-      console.error(`[Queue] localStorage เต็มจริงๆ — ${pId} อาจหายถ้า upload ล้ม:`, e2.message);
+      _writeQueue(q);
+      console.log(`[Queue] persisted ${pId} (video ${(entry.videoBase64.length/1024|0)}KB, q=${q.length})`);
+      return;
+    } catch(quotaErr) {
+      // หา entry ที่ยังมีวิดีโอ + เก่าสุด (ที่ไม่ใช่ตัวเราเอง) → ตัดวิดีโอออก
+      let victim = -1, oldest = Infinity;
+      for (let i = 0; i < q.length; i++) {
+        if (q[i].videoBase64 && q[i].pId !== pId && q[i].ts < oldest) { oldest = q[i].ts; victim = i; }
+      }
+      if (victim === -1) {
+        // ไม่เหลือวิดีโออื่นให้ตัด → ตัดวิดีโอของตัวเอง (ออเดอร์สำคัญกว่า)
+        if (entry.videoBase64) { entry.videoBase64 = ''; entry.videoMime = ''; q[idx >= 0 ? idx : q.length - 1] = entry; continue; }
+        console.error(`[Queue] localStorage เต็มจริงๆ — บันทึก ${pId} ไม่ได้`);
+        return;
+      }
+      console.warn(`[Queue] quota เต็ม → ตัดวิดีโอ ${q[victim].pId} ทิ้ง (ออเดอร์ยังอยู่)`);
+      q[victim].videoBase64 = '';
+      q[victim].videoMime = '';
     }
   }
 }
@@ -3441,39 +3279,61 @@ function _removeFromFailQueue(pId) {
   try {
     const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
     const filtered = q.filter(j => j.pId !== pId);
-    if (filtered.length !== q.length) {
-      localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(filtered));
-      console.log(`[Queue] removed ${pId} หลัง upload สำเร็จ`);
-    }
+    if (filtered.length !== q.length) localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(filtered));
   } catch(e) { console.error('_removeFromFailQueue:', e); }
 }
 
-async function retryFailedUploads() {
-  if (!navigator.onLine || _isRetrying) return;
-  _isRetrying = true;
+// ✅ prune ปลอดภัย — ลบเฉพาะรายการที่ "ยืนยันสำเร็จแล้ว" + dedupe ตาม pId
+//    ไม่ลบออเดอร์ที่ยังไม่สำเร็จเด็ดขาด (ต่อให้เก่าแค่ไหน)
+function _pruneQueueSafely() {
   try {
     const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
-    if (q.length === 0) {
-      _isRetrying = false;
-      _flushedIds.clear();
-      return; // video sync มี scheduler ของตัวเอง — ไม่ต้องเรียก _sweep ที่นี่
-    }
-    console.log(`[FailQueue] กำลัง retry ${q.length} รายการ...`);
-    const QUEUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // ✅ 7 วัน — หมดอายุอัตโนมัติ
-    const remaining = [];
+    const seen = new Set();
+    const out = [];
     for (const job of q) {
-      // ✅ ถ้า GAS ยืนยันแล้ว → ลบออกจาก queue ทันที
-      if (_isSent(job.pId)) {
-        console.log(`[FailQueue] ข้าม ${job.pId} — sent แล้ว`);
-        continue;
-      }
-      // ✅ หมดอายุ 7 วัน → ทิ้งออก ไม่ retry ต่อ
-      if (job.ts && (Date.now() - job.ts) > QUEUE_MAX_AGE_MS) {
-        console.warn(`[FailQueue] หมดอายุ ${job.pId} (${Math.round((Date.now()-job.ts)/86400000)} วัน) — ลบออก`);
-        continue;
-      }
+      if (!job || !job.pId) continue;
+      if (_isSent(job.pId)) continue;          // สำเร็จแล้ว → เอาออก
+      if (seen.has(job.pId)) continue;          // ซ้ำ → เก็บตัวเดียว
+      seen.add(job.pId);
+      out.push(job);
+    }
+    if (out.length !== q.length) localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(out));
+    // เตือนถ้ามีออเดอร์ค้างนานผิดปกติ (ไม่ลบ — แค่เตือน)
+    const stuck = out.filter(j => j.ts && (Date.now() - j.ts) > 24 * 3600 * 1000);
+    if (stuck.length > 0) console.warn(`[Queue] ⚠ มีออเดอร์ค้างเกิน 24 ชม. ${stuck.length} รายการ — ระบบยัง retry ต่อ`);
+  } catch(e) {}
+}
+
+// ✅ อัปเดต 1 รายการใน queue (read-modify-write) — กัน mutation หายตอนเขียนกลับ
+//    fn(job) → คืน entry ใหม่ หรือ null เพื่อลบรายการนั้น
+function _updateQueueItem(pId, fn) {
+  try {
+    const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
+    const idx = q.findIndex(j => j.pId === pId);
+    if (idx < 0) return;
+    const next = fn(q[idx]);
+    if (next === null) q.splice(idx, 1); else q[idx] = next;
+    localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(q));
+  } catch(e) {}
+}
+
+// ✅ retry ทุกรายการที่ถึงเวลา — auto, ไม่ต้องกดเอง
+//    force=true → ข้าม backoff (ใช้ตอนเน็ตกลับมา / เปิดแอป / กด sync เอง)
+async function retryFailedUploads(force) {
+  if (!navigator.onLine || _isRetrying) { _scheduleRetry(); return; } // ยังคงตั้งรอบถัดไป
+  _isRetrying = true;
+  try {
+    _pruneQueueSafely();
+    const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
+    if (q.length === 0) { _isRetrying = false; _flushedIds.clear(); return; }
+
+    const now = Date.now();
+    let synced = 0;
+    for (const job of q) {
+      if (_isSent(job.pId)) continue;
+      if (!force && job.nextAt && now < job.nextAt) continue; // ยังไม่ถึงเวลา (ยกเว้น force)
+      let ok = false;
       try {
-        // ✅ ส่ง order + video รวมกัน — single-phase save
         const res = await callGAS("saveData", {
           parcelId: job.pId, items: job.itemsArr,
           videoEvidence: job.videoBase64 || "no_video",
@@ -3483,19 +3343,37 @@ async function retryFailedUploads() {
           marketplace: job.marketplace || "",
           idemToken: job.idemToken || ""
         }, 90000);
-        if (isGasSuccess(res)) {
-          console.log(`[FailQueue] retry ${job.pId} สำเร็จ`);
-          _markSent(job.pId);
-          _flushedIds.delete(job.pId);
-        } else { remaining.push(job); }
-      } catch(e) { remaining.push(job); }
+        ok = isGasSuccess(res);
+      } catch(e) { ok = false; }
+
+      if (ok) {
+        _markSent(job.pId);
+        _flushedIds.delete(job.pId);
+        _updateQueueItem(job.pId, () => null); // ลบออกจาก queue
+        synced++;
+      } else {
+        // ล้มเหลว → เพิ่ม backoff ต่อรายการ (เขียนกลับแบบ read-modify-write)
+        _updateQueueItem(job.pId, (cur) => {
+          cur.attempts = (cur.attempts || 0) + 1;
+          cur.nextAt = Date.now() + _backoffFor(cur.attempts);
+          return cur;
+        });
+      }
     }
-    localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(remaining));
-    const synced = q.length - remaining.length;
     if (synced > 0) showSyncToast(`sync สำเร็จ ${synced} รายการ`);
     updateFailQueueBadge();
   } catch(e) { console.error('retryFailedUploads:', e); }
   _isRetrying = false;
+  _scheduleRetry(); // ตั้งรอบถัดไปแบบ adaptive
+}
+
+// ✅ Adaptive scheduler — มีคิวค้าง check ทุก 15s, ว่างแล้ว 60s
+let _retryTimer = null;
+function _scheduleRetry() {
+  if (_retryTimer) clearTimeout(_retryTimer);
+  let pending = 0;
+  try { pending = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]').length; } catch(e) {}
+  _retryTimer = setTimeout(() => retryFailedUploads(), pending > 0 ? 15000 : 60000);
 }
 
 // เช็ก response จาก GAS ว่าสำเร็จหรือไม่ (รองรับทุกรูปแบบ)
@@ -3582,7 +3460,7 @@ function closeQueueModal() {
 async function syncAllNow() {
   const btn = document.querySelector('#queueModal button');
   if (btn) { btn.textContent = '⏳ กำลัง sync...'; btn.disabled = true; }
-  await retryFailedUploads();
+  await retryFailedUploads(true); // กดเอง → force
   closeQueueModal();
   updateFailQueueBadge();
   if (btn) { btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:4px"><path d="M16.5 10 A6.5 6.5 0 1 1 13 4.2" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/><polyline points="13,1.5 13,4.8 16.3,4.8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Sync ทันที'; btn.disabled = false; }
@@ -5144,15 +5022,15 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       }
     }
 
-    // ✅ Persist-before-upload — บันทึก order + video (base64) ลง localStorage queue
-    //   ถ้า browser ฆ่า fetch กลางคัน → retry ได้
-    //   หมายเหตุ: video base64 ~10MB อาจล้น localStorage iOS — fallback เก็บไม่มี video
-    _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, videoMimeForUpload, idemToken, false);
+    // ✅ Persist-before-upload — บันทึก order + video ลง queue ก่อนยิง GAS
+    //   browser ฆ่า fetch กลางคัน → ออเดอร์ไม่หาย, scheduler retry ให้เอง
+    _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, videoMimeForUpload, idemToken);
     persisted = true;
     updateFailQueueBadge();
 
     if (!navigator.onLine) {
       console.log(`[Background] offline — ${pId} รออัปโหลดเมื่อ online`);
+      _scheduleRetry();
       return;
     }
 
@@ -5168,6 +5046,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     if (!isGasSuccess(res)) {
       console.warn(`[Background] ${pId} GAS ไม่สำเร็จ — ค้างใน queue รอ retry:`, res?.error || 'no response');
       _auditPack(pId, 'order', 'error', res?.error || 'no response');
+      _scheduleRetry(); // ให้ scheduler มาลองใหม่
       return;
     }
 
@@ -5203,422 +5082,10 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       if (!videoData && chunks && chunks.length > 0) {
         try { videoData = await convertChunksToBase64(chunks); } catch(e) {}
       }
-      _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, videoMimeForUpload, idemToken, false);
+      _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, videoMimeForUpload, idemToken);
       updateFailQueueBadge();
     }
-  }
-}
-
-// ⚡ Phase 2 helper — อัปโหลด video ใน IDB ขึ้น Drive + update row ใน Sheet
-//   - โหลด blob จาก IDB → encode base64 → callGAS("uploadVideoForParcel")
-//   - success → ลบ blob ออกจาก IDB
-//   - fail → blob ยังอยู่ → retry รอบหน้า
-//   คืนค่า: { ok: true } หรือ { ok: false, reason: "..." }
-async function _uploadPendingVideo(pId) {
-  if (!navigator.onLine) return { ok: false, reason: 'offline' };
-  let rec;
-  try {
-    rec = await _getVideoBlob(pId);
-  } catch(e) { return { ok: false, reason: 'idb_read_fail: ' + e.message }; }
-  if (!rec || !rec.blob) return { ok: false, reason: 'no_blob_in_idb' };
-
-  let base64;
-  try {
-    base64 = await _blobToBase64(rec.blob);
-  } catch(e) {
-    console.warn(`[VideoUpload] encode fail ${pId}:`, e.message);
-    return { ok: false, reason: 'encode_fail: ' + e.message };
-  }
-
-  let res;
-  try {
-    res = await callGAS("uploadVideoForParcel", {
-      parcelId: pId,
-      videoEvidence: base64,
-      videoMimeType: rec.mimeType || 'video/webm'
-    }, 90000); // ⏱️ timeout 90s — video upload + Drive ใช้เวลานานได้
-  } catch(e) {
-    console.warn(`[VideoUpload] network fail ${pId}:`, e.message);
-    return { ok: false, reason: 'network: ' + e.message };
-  }
-
-  if (res && res.success) {
-    await _deleteVideoBlob(pId);
-    console.log(`[VideoUpload] ${pId} → Drive สำเร็จ${res.note ? ' (' + res.note + ')' : ''} videoUrl=${(res.videoUrl||'').substring(0,40)}`);
-    return { ok: true, note: res.note, videoUrl: res.videoUrl };
-  }
-
-  // case พิเศษ: row ยังไม่อยู่ในชีต (saveData ยังไม่เสร็จ) → ปล่อย blob ไว้รอ retry
-  const reason = res?.error || 'unknown';
-  console.warn(`[VideoUpload] ${pId} fail:`, reason);
-  return { ok: false, reason };
-}
-
-// ✅ Continuous video upload — adaptive scheduler
-//   มี video ค้าง → upload เป็น batch ต่อเนื่อง (parallel 2 ใบ ทุก 8 วินาที)
-//   ไม่มี video ค้าง → fall back เป็น health check ทุก 60 วินาที
-let _isSweepingVideos = false;
-let _videoSyncTimer = null;
-const VIDEO_SYNC_ACTIVE_MS  = 8000;   // 8s ระหว่างรอบ ตอนยัง catch-up
-const VIDEO_SYNC_IDLE_MS    = 60000;  // 60s ตอน queue ว่าง — เผื่อมี video ใหม่เพิ่ม
-const VIDEO_SYNC_PARALLEL   = 2;       // upload 2 ใบพร้อมกัน
-const VIDEO_SYNC_BATCH_MAX  = 6;       // ต่อ tick — กัน Drive API quota
-async function _sweepPendingVideos() {
-  if (_isSweepingVideos) return { uploaded: 0, remaining: -1 };
-  if (!navigator.onLine) return { uploaded: 0, remaining: -1 };
-  _isSweepingVideos = true;
-  let uploaded = 0;
-  let remaining = 0;
-  try {
-    const keys = await _listVideoKeys();
-    if (!keys.length) { updateSyncVideoBadge(0); _setVideoBadgeActive(false); return { uploaded: 0, remaining: 0 }; }
-
-    _setVideoBadgeActive(true); // badge pulse → user เห็นว่ากำลังทำงาน
-
-    // upload เป็น batch — ทุก ๆ tick ส่ง VIDEO_SYNC_BATCH_MAX ใบ
-    // แต่ละ batch ส่ง VIDEO_SYNC_PARALLEL ใบขนานกัน → เร็วขึ้น 2x
-    const batchKeys = keys.slice(0, VIDEO_SYNC_BATCH_MAX);
-    for (let i = 0; i < batchKeys.length; i += VIDEO_SYNC_PARALLEL) {
-      const parallel = batchKeys.slice(i, i + VIDEO_SYNC_PARALLEL);
-      const results = await Promise.all(parallel.map(pId =>
-        _uploadPendingVideo(pId).catch(e => ({ ok: false, reason: e.message }))
-      ));
-      uploaded += results.filter(r => r && r.ok).length;
-      // ระหว่าง batch ดู badge สด — user เห็น progress
-      const liveCount = await _listVideoKeys();
-      updateSyncVideoBadge(liveCount.length);
-    }
-
-    remaining = (await _listVideoKeys()).length;
-    if (uploaded > 0) console.log(`[VideoSweep] อัปโหลด ${uploaded} ใบ — เหลือ ${remaining} ใบ`);
-    if (remaining === 0) _setVideoBadgeActive(false);
-  } catch(e) { console.warn('[VideoSweep] error:', e.message); }
-  finally { _isSweepingVideos = false; }
-  return { uploaded, remaining };
-}
-
-// ✅ Adaptive scheduler — กำหนดเวลา tick ถัดไปตามสถานะ
-function _scheduleVideoSync(ms) {
-  if (_videoSyncTimer) clearTimeout(_videoSyncTimer);
-  _videoSyncTimer = setTimeout(_videoSyncTick, ms);
-}
-
-async function _videoSyncTick() {
-  if (!navigator.onLine) {
-    // offline → tick ช้า ๆ รอ online
-    _scheduleVideoSync(VIDEO_SYNC_IDLE_MS);
-    return;
-  }
-  const { remaining } = await _sweepPendingVideos();
-  // ⚡ ยังเหลือ → tick ถัดไปเร็ว 8s — continuous catch-up
-  // 💤 ว่างแล้ว → tick ถัดไปช้า 60s — เผื่อมี video ใหม่
-  _scheduleVideoSync(remaining > 0 ? VIDEO_SYNC_ACTIVE_MS : VIDEO_SYNC_IDLE_MS);
-}
-
-// ✅ Badge pulse animation ระหว่างกำลัง sync
-function _setVideoBadgeActive(active) {
-  const badge = document.getElementById('syncVideoBadge');
-  if (!badge) return;
-  if (active) {
-    badge.style.animation = 'syncPulse 1.5s ease-in-out infinite';
-    badge.style.boxShadow = '0 0 8px rgba(224,122,95,0.8)';
-  } else {
-    badge.style.animation = '';
-    badge.style.boxShadow = '';
-  }
-}
-
-// ✅ เริ่ม tick ครั้งแรกหลัง app boot 4 วินาที (รอ IDB + service worker settle)
-setTimeout(_videoSyncTick, 4000);
-
-// ============================================================
-// 🎬 SYNC VIDEO TAB — แสดงรายการ video ใน IDB + ปุ่มอัป
-// ============================================================
-function updateSyncVideoBadge(count) {
-  try {
-    const badge = document.getElementById('syncVideoBadge');
-    if (!badge) return;
-    if (count > 0) {
-      badge.textContent = count > 99 ? '99+' : String(count);
-      badge.style.display = 'flex';
-    } else {
-      badge.style.display = 'none';
-    }
-  } catch(e) {}
-}
-
-// อัปเดต badge ตอน app เริ่ม + ทุก 60 วินาที
-async function _refreshSyncVideoBadge() {
-  try {
-    const keys = await _listVideoKeys();
-    updateSyncVideoBadge(keys.length);
-  } catch(e) {}
-}
-setTimeout(_refreshSyncVideoBadge, 4000);
-setInterval(_refreshSyncVideoBadge, 60000);
-
-function _formatVideoSize(bytes) {
-  if (!bytes) return '?';
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / 1024 / 1024).toFixed(2) + ' MB';
-}
-
-function _formatAge(ts) {
-  if (!ts) return '?';
-  const sec = Math.floor((Date.now() - ts) / 1000);
-  if (sec < 60) return sec + ' วินาทีที่แล้ว';
-  if (sec < 3600) return Math.floor(sec / 60) + ' นาทีที่แล้ว';
-  if (sec < 86400) return Math.floor(sec / 3600) + ' ชั่วโมงที่แล้ว';
-  return Math.floor(sec / 86400) + ' วันที่แล้ว';
-}
-
-async function renderSyncVideoList() {
-  const listEl = document.getElementById('syncVideoList');
-  const sumEl  = document.getElementById('syncVideoSummary');
-  if (!listEl) return;
-
-  listEl.innerHTML = '<div style="text-align:center; color:#a08a5a; padding:20px;">⏳ กำลังโหลด...</div>';
-
-  try {
-    const keys = await _listVideoKeys();
-    if (keys.length === 0) {
-      sumEl.innerHTML = '<span style="color:#52b788; font-weight:600;">✅ ไม่มีวิดีโอค้าง — sync ครบแล้ว</span>';
-      listEl.innerHTML = '<div style="text-align:center; color:#a08a5a; padding:30px; background:#f0fff0; border-radius:10px;">🎉 ทุกอย่างเรียบร้อย</div>';
-      updateSyncVideoBadge(0);
-      return;
-    }
-
-    // โหลดรายละเอียดทุก video พร้อมเช็คสถานะ sent
-    const sent = JSON.parse(localStorage.getItem(SENT_KEY) || '{}');
-    const items = [];
-    let totalSize = 0;
-    for (const pId of keys) {
-      const rec = await _getVideoBlob(pId);
-      if (!rec) continue;
-      items.push({
-        pId,
-        size: rec.size || (rec.blob && rec.blob.size) || 0,
-        mimeType: rec.mimeType || 'video/webm',
-        ts: rec.ts || 0,
-        orderSent: !!sent[pId]
-      });
-      totalSize += rec.size || 0;
-    }
-    items.sort((a, b) => b.ts - a.ts); // ใหม่ขึ้นก่อน
-
-    sumEl.innerHTML = `📦 มี <strong>${items.length}</strong> วิดีโอค้าง (รวม <strong>${_formatVideoSize(totalSize)}</strong>) — ทุกรายการอัปได้เลย ` +
-      `<span style="font-size:0.78rem; color:#a08a5a;">(ถ้า order ยังไม่ลงชีตจะสร้าง placeholder ให้)</span>`;
-
-    listEl.innerHTML = items.map(it => `
-      <div id="syncvid-row-${it.pId}" style="background:#fff8f0; border:1px solid #ffd5c2; border-radius:10px; padding:10px; display:flex; align-items:center; gap:10px;">
-        <div style="flex:1; min-width:0;">
-          <div style="font-family:monospace; font-size:0.85rem; font-weight:600; color:#7a4a2a; word-break:break-all;">${escHtml(it.pId)}</div>
-          <div style="font-size:0.72rem; color:#a08a5a; margin-top:2px;">
-            📁 ${_formatVideoSize(it.size)} · ⏱ ${_formatAge(it.ts)} · ${it.orderSent
-              ? '<span style="color:#52b788;">✓ order ลงชีตแล้ว</span>'
-              : '<span style="color:#9b72cf;">📝 order ยังไม่ลงชีต (อัปได้ — จะสร้าง placeholder)</span>'
-            }
-          </div>
-          <div id="syncvid-status-${it.pId}" style="font-size:0.7rem; color:#9b72cf; margin-top:3px; min-height:0.9em;"></div>
-        </div>
-        <button id="syncvid-btn-${it.pId}" onclick="_uploadOneVideoUI('${escHtml(it.pId).replace(/'/g, "\\'")}')"
-          style="background:#ffb4a2; color:white; border:none; border-radius:8px; padding:6px 10px; font-size:0.75rem; font-weight:600; cursor:pointer; white-space:nowrap;">
-          ☁️ อัป
-        </button>
-      </div>
-    `).join('');
-
-    updateSyncVideoBadge(items.length);
-  } catch(e) {
-    console.error('[renderSyncVideoList]', e);
-    sumEl.textContent = 'เกิดข้อผิดพลาด: ' + e.message;
-    listEl.innerHTML = '';
-  }
-}
-
-// อัปทีละใบ จาก UI
-async function _uploadOneVideoUI(pId) {
-  const btn = document.getElementById('syncvid-btn-' + pId);
-  const statusEl = document.getElementById('syncvid-status-' + pId);
-  const rowEl = document.getElementById('syncvid-row-' + pId);
-
-  if (!navigator.onLine) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:#e07a5f;">⚠ ออฟไลน์ — ลองใหม่เมื่อต่อเน็ตแล้ว</span>';
-    return;
-  }
-
-  // ✅ ไม่เช็ค sent[pId] แล้ว — GAS จะสร้าง placeholder row ให้ถ้า order ยังไม่ลงชีต
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังอัป...'; btn.style.background = '#ccc'; }
-  if (statusEl) statusEl.innerHTML = '<span style="color:#9b72cf;">📤 กำลังโหลด blob...</span>';
-
-  try {
-    if (statusEl) statusEl.innerHTML = '<span style="color:#9b72cf;">📤 กำลังส่งขึ้น Drive...</span>';
-    const r = await _uploadPendingVideo(pId);
-    if (r.ok) {
-      if (statusEl) statusEl.innerHTML = '<span style="color:#52b788;">✅ สำเร็จ — ลบจากเครื่องแล้ว</span>';
-      // fade out + ลบ row ออก
-      if (rowEl) {
-        rowEl.style.transition = 'opacity 0.6s, max-height 0.6s';
-        rowEl.style.opacity = '0';
-        setTimeout(() => {
-          if (rowEl.parentNode) rowEl.parentNode.removeChild(rowEl);
-          renderSyncVideoList(); // รีเฟรช summary
-        }, 600);
-      }
-    } else {
-      const hint = _hintForVideoError(r.reason);
-      if (statusEl) statusEl.innerHTML = `<span style="color:#e07a5f;">❌ ${escHtml(r.reason || 'fail')}${hint ? ' — ' + hint : ''}</span>`;
-      if (btn) { btn.disabled = false; btn.textContent = '☁️ อัป'; btn.style.background = '#ffb4a2'; }
-    }
-  } catch(e) {
-    if (statusEl) statusEl.innerHTML = `<span style="color:#e07a5f;">❌ error: ${escHtml(e.message)}</span>`;
-    if (btn) { btn.disabled = false; btn.textContent = '☁️ อัป'; btn.style.background = '#ffb4a2'; }
-  }
-}
-
-// ✅ แปล error เป็นคำแนะนำสั้นๆ ให้ user เข้าใจ
-function _hintForVideoError(reason) {
-  if (!reason) return '';
-  const r = String(reason).toLowerCase();
-  if (r.includes('unknown action'))    return 'ยังไม่ deploy GAS ใหม่!';
-  if (r.includes('server busy') || r.includes('lock'))   return 'server ติด lock รออีกซักครู่';
-  if (r.includes('unauthorized')) return 'API key ผิด';
-  if (r.includes('rate limit'))   return 'ส่งเร็วเกินไป รอ 1 นาที';
-  if (r.includes('too large'))    return 'video ใหญ่เกิน';
-  if (r.includes('offline'))      return 'ออฟไลน์';
-  if (r.includes('timeout') || r.includes('network')) return 'network ช้า';
-  if (r.includes('drive upload fail')) return 'อัป Drive ไม่ผ่าน';
-  return '';
-}
-
-// ✅ Reconcile — ให้ GAS match Drive files กับ rows ที่ no_video
-//   ใช้แก้กรณี: video อยู่ใน Drive แล้ว (filename = parcelId.webm/.mp4)
-//   แต่ row ในชีตยัง no_video เพราะ race condition / fallback scan miss
-async function reconcileVideoUrlsUI() {
-  if (!navigator.onLine) {
-    Swal.fire('ออฟไลน์', 'กรุณาเชื่อมต่ออินเทอร์เน็ตก่อน', 'warning');
-    return;
-  }
-  const ask = await Swal.fire({
-    icon: 'question',
-    title: 'Reconcile videos',
-    html: `<div style="text-align:left; font-size:0.9rem; line-height:1.6;">` +
-          `ระบบจะ:<br>` +
-          `1. อ่านไฟล์ทั้งหมดในโฟลเดอร์ Drive<br>` +
-          `2. หา row ในชีตที่ <code>videoUrl=no_video</code><br>` +
-          `3. ถ้า parcelId ตรงกับชื่อไฟล์ใน Drive → ใส่ URL ให้<br><br>` +
-          `<strong>ย้อนหลังกี่วัน?</strong>` +
-          `</div>`,
-    input: 'select',
-    inputOptions: { '1': '1 วัน', '3': '3 วัน', '7': '7 วัน', '30': '30 วัน', '90': '90 วัน' },
-    inputValue: '7',
-    showCancelButton: true,
-    confirmButtonText: 'เริ่ม Reconcile',
-    cancelButtonText: 'ยกเลิก'
-  });
-  if (!ask.isConfirmed) return;
-  const sinceDays = parseInt(ask.value || '7', 10);
-
-  const btn = document.getElementById('reconcileBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลัง reconcile... (อาจใช้เวลาหลายนาที)'; }
-  Swal.fire({
-    title: 'กำลัง reconcile...',
-    html: 'อาจใช้เวลา 30-90 วินาทีถ้า Drive มีไฟล์เยอะ',
-    didOpen: () => Swal.showLoading(),
-    allowOutsideClick: false
-  });
-
-  try {
-    const res = await callGAS("reconcileVideoUrls", { sinceDays }, 120000);
-    Swal.close();
-    if (res && res.success) {
-      Swal.fire({
-        icon: 'success',
-        title: '✅ Reconcile เสร็จ',
-        html: `<div style="text-align:left; font-size:0.9rem; line-height:1.7;">` +
-              `🔗 <strong>${res.fixed}</strong> rows ได้รับ videoUrl<br>` +
-              `📦 พบ <strong>${res.found}</strong> rows ที่ match Drive<br>` +
-              `📊 สแกน <strong>${res.scanned}</strong> rows<br>` +
-              `📁 อ่านจาก Drive <strong>${res.driveFiles}</strong> ไฟล์<br>` +
-              `📅 ช่วง: <strong>${res.sinceDays}</strong> วัน` +
-              `</div>`
-      });
-    } else {
-      Swal.fire('Error', res?.error || 'ไม่สำเร็จ', 'error');
-    }
-  } catch(e) {
-    Swal.close();
-    Swal.fire('Error', e.message, 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '🔗 Reconcile — match Drive files กับ rows ที่ no_video (ย้อนหลัง 7 วัน)'; }
-  }
-}
-
-// อัปทั้งหมดในรอบเดียว
-async function uploadAllPendingVideos() {
-  const allBtn = document.getElementById('syncAllBtn');
-  if (!navigator.onLine) {
-    Swal.fire('ออฟไลน์', 'กรุณาเชื่อมต่ออินเทอร์เน็ตก่อน', 'warning');
-    return;
-  }
-  if (allBtn) { allBtn.disabled = true; allBtn.textContent = '⏳ กำลังอัป...'; }
-
-  try {
-    const uploadable = await _listVideoKeys();
-    // ✅ อัปได้ทุกใบ — ถ้า order ยังไม่ลงชีต GAS จะสร้าง placeholder ให้
-    if (uploadable.length === 0) {
-      Swal.fire('ไม่มีอะไรอัป', 'ไม่มีวิดีโอค้างใน IDB', 'info');
-      return;
-    }
-
-    let ok = 0, fail = 0;
-    const reasonCounts = {}; // นับสาเหตุการล้ม
-    for (let i = 0; i < uploadable.length; i++) {
-      const pId = uploadable[i];
-      if (allBtn) allBtn.textContent = `⏳ ${i + 1}/${uploadable.length}`;
-      const r = await _uploadPendingVideo(pId);
-      if (r.ok) ok++; else { fail++; const k = r.reason || 'unknown'; reasonCounts[k] = (reasonCounts[k] || 0) + 1; }
-      // อัปเดต UI แบบ live
-      const rowEl = document.getElementById('syncvid-row-' + pId);
-      const statusEl = document.getElementById('syncvid-status-' + pId);
-      if (r.ok) {
-        if (statusEl) statusEl.innerHTML = '<span style="color:#52b788;">✅ สำเร็จ</span>';
-        if (rowEl) {
-          rowEl.style.transition = 'opacity 0.4s';
-          rowEl.style.opacity = '0.4';
-        }
-      } else {
-        const hint = _hintForVideoError(r.reason);
-        if (statusEl) statusEl.innerHTML = `<span style="color:#e07a5f;">❌ ${escHtml(r.reason || 'fail')}${hint ? ' — ' + hint : ''}</span>`;
-      }
-    }
-
-    // สรุปสาเหตุการล้ม
-    let reasonHtml = '';
-    if (fail > 0) {
-      const sortedReasons = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1]);
-      reasonHtml = '<div style="margin-top:10px; padding:8px; background:#fff3cd; border-radius:8px; text-align:left; font-size:0.82rem;">' +
-        '<strong>สาเหตุล้ม:</strong><br>' +
-        sortedReasons.map(([reason, count]) => {
-          const hint = _hintForVideoError(reason);
-          return `• ${count}× <code style="font-size:0.75rem;">${escHtml(reason).slice(0, 60)}</code>${hint ? `<br>&nbsp;&nbsp;<em style="color:#a08a5a;">→ ${hint}</em>` : ''}`;
-        }).join('<br>') +
-        '</div>';
-    }
-
-    Swal.fire({
-      icon: ok > 0 ? 'success' : 'warning',
-      title: 'sync เสร็จ',
-      html: `อัปสำเร็จ <strong>${ok}</strong> รายการ${fail > 0 ? `<br>ล้มเหลว <strong style="color:#e07a5f;">${fail}</strong> รายการ` : ''}${reasonHtml}`,
-      timer: fail > 0 ? 0 : 4000,
-      timerProgressBar: fail === 0
-    });
-    renderSyncVideoList();
-  } catch(e) {
-    Swal.fire('Error', e.message, 'error');
-  } finally {
-    if (allBtn) { allBtn.disabled = false; allBtn.textContent = '☁️ อัปทั้งหมด'; }
+    _scheduleRetry();
   }
 }
 
