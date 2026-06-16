@@ -121,30 +121,38 @@ function numToStr(val) {
 function doPost(e) {
   try {
     if (!e || !e.postData || !e.postData.contents) {
+      _logRequestRejected("", "", "empty_body", "");
       return _json({ error: "Empty body" });
     }
     let body;
     try {
       body = JSON.parse(e.postData.contents);
     } catch (parseErr) {
+      _logRequestRejected("", "", "bad_json", parseErr.message);
       return _json({ error: "Bad JSON" });
     }
 
     if (!body || typeof body !== 'object') {
+      _logRequestRejected("", "", "bad_body", "");
       return _json({ error: "Bad body" });
     }
 
+    const action = String(body.action || "");
+    const parcelId = String(body.parcelId || "");
+
     if (!_checkApiKey(body)) {
       Utilities.sleep(500); // slow down brute force a bit
+      _logRequestRejected(parcelId, action, "unauthorized", "");
       return _json({ error: "Unauthorized" });
     }
 
-    const action = String(body.action || "");
     if (!ALLOWED_ACTIONS.has(action)) {
+      _logRequestRejected(parcelId, action, "unknown_action", "");
       return _json({ error: "Unknown action" });
     }
 
     if (!_checkRateLimit(action)) {
+      _logRequestRejected(parcelId, action, "rate_limit", "");
       return _json({ error: "Rate limit exceeded" });
     }
 
@@ -164,7 +172,21 @@ function doPost(e) {
 
   } catch (err) {
     Logger.log("[doPost] error: " + err.toString());
+    try { _logRequestRejected("", "", "doPost_error", err.toString()); } catch(_) {}
     return _json({ error: "Server error" }); // ไม่คืน stack ให้ client เห็น
+  }
+}
+
+// ✅ บันทึก request ที่ถูกปฏิเสธก่อนถึงฟังก์ชัน — เห็นภาพรวมของ traffic ที่หายไป
+//    จำกัด log เฉพาะ action ที่เกี่ยวกับ saveData (กัน SaveLog บวมจาก getProductData ฯลฯ)
+function _logRequestRejected(parcelId, action, reason, detail) {
+  try {
+    // log เฉพาะ action ที่ใช้บันทึกข้อมูล — ไม่ log getProductData, searchData ฯลฯ
+    const WRITE_ACTIONS = new Set(["saveData", "uploadVideoForParcel", "saveMarketplaceData", ""]);
+    if (action && !WRITE_ACTIONS.has(action)) return;
+    _logSaveAttempt(parcelId, "", reason, 0, action + " | " + (detail || ""));
+  } catch(e) {
+    Logger.log("[_logRequestRejected] error: " + e.message);
   }
 }
 
@@ -560,12 +582,22 @@ function uploadVideoForParcel(body) {
   const videoBase64 = String(body.videoEvidence || "");
   const videoMimeIn = String(body.videoMimeType || "video/webm").toLowerCase().split(';')[0].trim();
 
-  if (!parcelId)            return { success: false, error: "parcelId ว่าง" };
-  if (parcelId.length > 64) return { success: false, error: "parcelId ยาวเกินไป" };
-  if (!videoBase64 || videoBase64 === "no_video")
+  if (!parcelId) {
+    _logSaveAttempt("", "", "video_invalid", 0, "parcelId ว่าง");
+    return { success: false, error: "parcelId ว่าง" };
+  }
+  if (parcelId.length > 64) {
+    _logSaveAttempt(parcelId, "", "video_invalid", 0, "parcelId ยาวเกินไป");
+    return { success: false, error: "parcelId ยาวเกินไป" };
+  }
+  if (!videoBase64 || videoBase64 === "no_video") {
+    _logSaveAttempt(parcelId, "", "video_invalid", 0, "ไม่มี video");
     return { success: false, error: "ไม่มี video" };
-  if (videoBase64.length > MAX_VIDEO_BASE64_LEN)
+  }
+  if (videoBase64.length > MAX_VIDEO_BASE64_LEN) {
+    _logSaveAttempt(parcelId, "", "video_invalid", 0, "video too large: " + videoBase64.length);
     return { success: false, error: "Video too large" };
+  }
 
   const ALLOWED_VIDEO_MIMES = { 'video/mp4': 'mp4', 'video/webm': 'webm' };
   const videoMime = ALLOWED_VIDEO_MIMES[videoMimeIn] ? videoMimeIn : 'video/webm';
@@ -590,6 +622,7 @@ function uploadVideoForParcel(body) {
     }
     if (rowIndex === -1) {
       Logger.log("[uploadVideoForParcel] row ไม่พบ — saveData อาจยังไม่เสร็จ: " + parcelId);
+      _logSaveAttempt(parcelId, "", "video_row_not_found", 0, "");
       return { success: false, error: "row ไม่พบ — saveData ยังไม่เสร็จ" };
     }
 
@@ -597,6 +630,7 @@ function uploadVideoForParcel(body) {
     const currentVideoUrl = String(sheet.getRange(rowIndex, 5).getValue()).trim();
     if (currentVideoUrl && currentVideoUrl.indexOf('drive.google.com') !== -1) {
       Logger.log("[uploadVideoForParcel] " + parcelId + " มี video แล้ว skip");
+      _logSaveAttempt(parcelId, "", "video_already_uploaded", 0, "row " + rowIndex);
       return { success: true, note: "already_has_video", videoUrl: currentVideoUrl };
     }
 
@@ -642,6 +676,7 @@ function uploadVideoForParcel(body) {
       sheet.getRange(r2, 5).setValue(videoUrl);
       SpreadsheetApp.flush();
       Logger.log("[uploadVideoForParcel] " + parcelId + " row=" + r2 + " video=" + videoUrl.substring(0, 40));
+      _logSaveAttempt(parcelId, "", "video_uploaded", 0, "row " + r2);
       return { success: true, videoUrl, row: r2 };
     } finally {
       lock.releaseLock();

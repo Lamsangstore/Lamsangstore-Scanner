@@ -5064,14 +5064,67 @@ async function _doFinishWork(isManual = false) {
   }
 }
 
+// ✅ Local audit log — บันทึกทุก processBackgroundUpload ลง localStorage
+//   ใช้ตรวจสอบย้อนหลังว่าเครื่องนี้ "เคยพยายามส่ง" อะไรไปบ้าง
+//   เปรียบเทียบกับ SaveLog ฝั่ง GAS → เห็นทันทีว่า request ไหนไม่ถึง server
+const PACK_AUDIT_KEY = 'packAuditLog';
+const PACK_AUDIT_MAX = 500; // เก็บ 500 รายการล่าสุด
+function _auditPack(pId, phase, result, detail) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(PACK_AUDIT_KEY) || '[]');
+    arr.push({
+      ts: Date.now(),
+      pId: String(pId || ''),
+      phase: phase || '', // 'order' | 'video'
+      result: result || '', // 'attempt' | 'sent' | 'queued' | 'error' | 'skip_sent'
+      detail: String(detail || '').slice(0, 200)
+    });
+    // เก็บแค่ 500 ล่าสุด
+    if (arr.length > PACK_AUDIT_MAX) arr.splice(0, arr.length - PACK_AUDIT_MAX);
+    localStorage.setItem(PACK_AUDIT_KEY, JSON.stringify(arr));
+  } catch(e) {
+    // ถ้า quota เต็ม — ลบครึ่งล่าสุดทิ้ง
+    try {
+      const arr = JSON.parse(localStorage.getItem(PACK_AUDIT_KEY) || '[]');
+      arr.splice(0, Math.floor(arr.length / 2));
+      localStorage.setItem(PACK_AUDIT_KEY, JSON.stringify(arr));
+    } catch(_) {}
+  }
+}
+
+// ดู audit log → เปิด console พิมพ์ exportPackAudit() เพื่อดาวน์โหลด CSV
+window.exportPackAudit = function() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(PACK_AUDIT_KEY) || '[]');
+    const rows = [['Timestamp', 'ParcelId', 'Phase', 'Result', 'Detail']];
+    arr.forEach(r => {
+      rows.push([
+        new Date(r.ts).toLocaleString('th-TH'),
+        r.pId, r.phase, r.result, r.detail
+      ]);
+    });
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'pack-audit-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    console.log(`[Audit] exported ${arr.length} records`);
+  } catch(e) { console.error('exportPackAudit:', e); }
+};
+
 async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', orderId = '', marketplace = '', idemToken = '') {
   let persisted = false;
   let videoMimeForUpload = currentVideoMime || 'video/webm';
   let videoSavedToIDB = false; // ต้องอยู่ scope นอก try เพราะ catch block ใช้
+  _auditPack(pId, 'order', 'attempt', `items=${itemsArr.length} token=${idemToken.slice(0,8)}`);
   try {
     // ✅ ถ้า GAS ยืนยันสำเร็จแล้ว (เช่น อีกเครื่องส่งไปแล้ว) → ข้ามเลย
     if (_isSent(pId)) {
       console.log(`[Background] ข้าม ${pId} — sent แล้ว`);
+      _auditPack(pId, 'order', 'skip_sent', 'already in sent set');
       return;
     }
 
@@ -5114,6 +5167,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     const res = await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: "no_video", videoMimeType: videoMimeForUpload, remark: remarkNote || "", orderId, marketplace, idemToken });
     if (!isGasSuccess(res)) {
       console.warn(`[Background] ${pId} GAS ไม่สำเร็จ — ยังอยู่ใน queue รอ retry:`, res?.error || 'no response');
+      _auditPack(pId, 'order', 'error', res?.error || 'no response');
       // ไม่ลบออกจาก queue — retryFailedUploads จะมาเอาไปยิงใหม่
       return;
     }
@@ -5143,12 +5197,19 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     _markSent(pId);
     _removeFromFailQueue(pId);
     updateFailQueueBadge();
+    _auditPack(pId, 'order', 'sent', res?.note || 'row ' + (res?.row || '?'));
     console.log(`[Background] order ${pId} ลงชีตสำเร็จ${res?.note ? ' (' + res.note + ')' : ''}`);
 
     // ⚡ Phase 2: upload video แยก (async — ไม่ block) → ลง Drive + update row
     //   ถ้าล้ม → video ยังอยู่ใน IDB → retry รอบถัดไป (ทุก 60s, on visible, on online)
     if (videoSavedToIDB) {
-      _uploadPendingVideo(pId).catch(e => console.warn(`[VideoUpload] ${pId} fail:`, e.message));
+      _auditPack(pId, 'video', 'attempt', 'phase2 start');
+      _uploadPendingVideo(pId).then(ok => {
+        _auditPack(pId, 'video', ok ? 'sent' : 'error', ok ? 'uploaded' : 'sweep retry');
+      }).catch(e => {
+        _auditPack(pId, 'video', 'error', e.message);
+        console.warn(`[VideoUpload] ${pId} fail:`, e.message);
+      });
     }
 
     // ✅ v2.8: refresh localOrdersCache จาก GAS พื้นหลัง ทันทีหลัง save สำเร็จ
@@ -5156,6 +5217,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     _refreshOrderCacheBackground();
   } catch (err) {
     console.error(`[Background Error] ${pId}:`, err);
+    _auditPack(pId, 'order', persisted ? 'queued' : 'error', err.message + (persisted ? ' (already persisted)' : ''));
     // ✅ ถ้ายังไม่ได้ persist (เช่น throw ก่อนถึง _enqueueForUpload) → enqueue ตอนนี้
     if (!persisted) {
       _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, '', currentVideoMime, idemToken, videoSavedToIDB);
