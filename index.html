@@ -2823,7 +2823,9 @@ async function _firebasePushOrder(job) {
         remark: job.remarkNote || "",
         idemToken: job.idemToken,
         device: DEVICE_ID,
-        ts: job.ts || Date.now()
+        ts: job.ts || Date.now(),
+        hadVideo: !!job.hadVideo,        // drain ใช้ตัดสินใจ "รอ videoUrl" (grace) ก่อนเขียน row
+        videoUrl: job.videoUrl || ""     // ว่างตอน push แรก → PATCH เติมทีหลังเมื่ออัป Drive เสร็จ
       }),
       signal: ctrl.signal
     });
@@ -2850,6 +2852,44 @@ async function _ensureFirebasePush(job) {
     try { _updateQueueItem(job.pId, (cur) => { cur.fbPushed = true; return cur; }); } catch(e) {}
     job.fbPushed = true;
   }
+}
+
+// ✅ เติม videoUrl เข้า /inbox doc เดิม (หลังอัปวิดีโอขึ้น Drive เสร็จ) → drain เขียน row พร้อม link
+//   PATCH merge — field อื่น (order) คงเดิม; ส่ง k ไปด้วยให้ผ่าน Firebase rules
+async function _firebasePatchVideoUrl(idemToken, videoUrl) {
+  if (!FIREBASE_ENABLED() || !idemToken) return false;
+  try {
+    const url = `${FIREBASE_DB_URL}/inbox/${encodeURIComponent(idemToken)}.json`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ k: FIREBASE_WRITE_KEY, videoUrl: videoUrl || "" }),
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    return res.ok;
+  } catch(e) { console.warn('[Firebase] patch videoUrl error:', e.message); return false; }
+}
+
+// ✅ อัปวิดีโอขึ้น Drive (uploadVideoOnly) แล้ว PATCH url เข้า Firebase doc + อัปเดต queue
+//   คืน url (string) ถ้าสำเร็จ, null ถ้าล้ม (ให้ retry)
+async function _uploadVideoAndPatch(pId, idemToken, videoData, videoMime) {
+  _auditPack(pId, 'video', 'attempt', 'uploadVideoOnly');
+  const vres = await callGAS("uploadVideoOnly", {
+    parcelId: pId, videoEvidence: _videoForSave(videoData), videoMimeType: videoMime || 'video/webm'
+  }, 120000).catch(e => ({ success: false, error: e.message }));
+  if (vres && vres.success) {
+    const vurl = vres.videoUrl || "";
+    if (idemToken) await _firebasePatchVideoUrl(idemToken, vurl);
+    _updateQueueItem(pId, (c) => { c.videoSent = true; c.videoUrl = vurl; c.videoBase64 = ''; c.videoMime = ''; return c; });
+    _auditPack(pId, 'video', 'sent', vurl ? 'url patched' : '(too_large/none)');
+    return vurl;
+  }
+  _updateQueueItem(pId, (c) => { c.videoAttempts = (c.videoAttempts || 0) + 1; return c; });
+  _auditPack(pId, 'video', 'error', vres?.error || 'fail');
+  return null;
 }
 
 // --- Hash Routing ---
@@ -3171,6 +3211,9 @@ function _flushOrderOnly(useBeacon) {
     if (q.length === 0) return;
     for (const job of q) {
       if (_isSent(job.pId) || _flushedIds.has(job.pId)) continue;
+      // ✅ ออเดอร์ที่ขึ้น Firebase แล้ว = ปลอดภัย (drain เขียน row พร้อม link ให้)
+      //   ห้าม saveData no_video ทับ → จะทำให้ video URL หาย; flush เฉพาะตัวที่ยังไม่ขึ้น Firebase
+      if (job.fbPushed) continue;
       _flushedIds.add(job.pId);
       const payload = JSON.stringify({
         action: "saveData",
@@ -3476,12 +3519,19 @@ async function retryFailedUploads(force) {
       if (_isSent(job.pId)) continue;
       if (!force && job.nextAt && now < job.nextAt) continue;
 
-      // 🔥 mirror Firebase ก่อน (order ปลอดภัยแม้ GAS ยังไม่ผ่าน)
+      // 🔥 push order ขึ้น Firebase /inbox — order ปลอดภัยทันที, drain (single writer) เขียนชีตให้
       await _ensureFirebasePush(job);
 
-      // ⚡ PHASE A: order — ส่ง video base64 ไปด้วย → saveData อัปวิดีโอ + เขียน row พร้อม link
-      //   ออเดอร์ที่กู้ผ่าน retry จึงมี link วิดีโอตั้งแต่เขียน row เหมือน fresh path
-      if (!job.orderSent) {
+      // 🎬 วิดีโอ: อัปขึ้น Drive → PATCH videoUrl เข้า /inbox doc → drain เขียน row พร้อม link
+      //   (ไม่ผ่าน saveData → ไม่แตะ append lock → ไม่ติด lock_timeout)
+      if (job.hadVideo && !job.videoSent && (job.videoAttempts || 0) < VIDEO_MAX_ATTEMPTS && job.videoBase64) {
+        const vurl = await _uploadVideoAndPatch(job.pId, job.idemToken, job.videoBase64, job.videoMime || "video/webm");
+        if (vurl !== null) { job.videoSent = true; job.videoBase64 = ''; }
+      }
+
+      // 🆘 fallback เฉพาะ "Firebase ล่ม" — push ไม่ขึ้นเลย ≥3 รอบ → เขียนชีตตรง (saveData) กันออเดอร์หาย
+      //   ปกติไม่เข้า branch นี้ (Firebase ทำงาน → fbPushed=true → drain จัดการ)
+      if (!job.fbPushed && (job.attempts || 0) >= 3) {
         try {
           const ores = await callGAS("saveData", {
             parcelId: job.pId, items: job.itemsArr,
@@ -3500,24 +3550,6 @@ async function retryFailedUploads(force) {
             if (!vPending && job.hadVideo && job.videoBase64) { job.videoSent = true; job.videoBase64 = ''; }
           }
         } catch(e) {}
-      }
-
-      // 🎬 PHASE B: video — เฉพาะ row ที่เขียนไปแล้วแต่ยัง no_video (saveData ก่อนหน้า videoPending)
-      //   attach วิดีโอเข้า row เดิม (ไม่ผ่าน saveData เพื่อเลี่ยงอัปวิดีโอซ้ำ)
-      if (job.hadVideo && !job.videoSent && (job.videoAttempts || 0) < VIDEO_MAX_ATTEMPTS && job.videoBase64) {
-        try {
-          const vres = await callGAS("uploadVideoForParcel", {
-            parcelId: job.pId, videoEvidence: job.videoBase64, videoMimeType: job.videoMime || "video/webm"
-          }, 90000);
-          if (vres && vres.success) {
-            job.videoSent = true;
-            _updateQueueItem(job.pId, (c) => { c.videoSent = true; c.videoBase64 = ''; c.videoMime = ''; return c; });
-          } else {
-            _updateQueueItem(job.pId, (c) => { c.videoAttempts = (c.videoAttempts || 0) + 1; return c; });
-          }
-        } catch(e) {
-          _updateQueueItem(job.pId, (c) => { c.videoAttempts = (c.videoAttempts || 0) + 1; return c; });
-        }
       }
 
       // เสร็จครบ → ลบ; ยังไม่ครบ → backoff
@@ -5291,16 +5323,19 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     updateFailQueueBadge();
     _searchCacheAddOptimistic(pId, itemsArr, orderId, marketplace, remarkNote); // 🔍 search เจอทันที
 
-    // 2️⃣ 🔥 FIREBASE FIRST — push ออเดอร์ขึ้น Firebase ทันที (ก่อนแปลงวิดีโอ = ส่วนช้า)
-    //   เร็ว ~100ms → fbPushed=true → ออเดอร์ปลอดภัย (drain จะส่งต่อให้ชีต) → badge เคลียร์
-    const fbDone = _ensureFirebasePush({ pId, itemsArr, remarkNote, orderId, marketplace, idemToken, ts: Date.now(), fbPushed: false })
+    const hadVideo = !!(chunks && chunks.length > 0);
+
+    // 2️⃣ 🔥 FIREBASE FIRST — เขียน row ไป Firebase /inbox ก่อน (เร็ว ไม่มี GAS lock/timeout)
+    //   นี่คือ "เขียนไป firebase ก่อน แล้วค่อยให้ firebase ส่งต่อชีต"
+    //   ❗ไม่เรียก saveData เขียนชีตตรงๆ อีกแล้ว — drain (server-side) เป็นคนเขียนชีต "คนเดียว"
+    //      → หลายเครื่องแพคพร้อมกันก็ไม่แย่ง append lock = หมดปัญหา lock_timeout
+    //   hadVideo บอก drain ให้ "รอ" videoUrl (grace) ก่อนเขียน row → row มี link ตั้งแต่แรก
+    const fbDone = _ensureFirebasePush({ pId, itemsArr, remarkNote, orderId, marketplace, idemToken, ts: Date.now(), hadVideo, fbPushed: false })
       .then(() => updateFailQueueBadge())
       .catch(() => {});
 
-    // 3️⃣ แปลงวิดีโอเป็น base64 (ช้า) — ทำหลัง Firebase รับออเดอร์แล้ว
-    //   นับ in-flight ระหว่างแปลง → ช่วงนี้วิดีโออยู่ใน memory อย่างเดียว (ยังไม่ลง queue)
-    //   ถ้าปิดแอปตอนนี้จะหายจริง → ให้ beforeunload เตือนด้วย
-    if (chunks && chunks.length > 0) {
+    // 3️⃣ แปลงวิดีโอเป็น base64 (ช้า)
+    if (hadVideo) {
       _videoConvertInFlight++;
       try {
         videoData = await convertChunksToBase64(chunks);
@@ -5311,57 +5346,33 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
         _videoConvertInFlight = Math.max(0, _videoConvertInFlight - 1);
       }
     }
-    // เก็บวิดีโอลง queue entry เพื่อ retry แยก (phase B)
     if (videoData) {
       _updateQueueItem(pId, (cur) => { cur.videoBase64 = videoData; cur.videoMime = videoMimeForUpload; cur.hadVideo = true; return cur; });
     }
 
+    await fbDone; // ให้ /inbox doc มีอยู่ก่อน → PATCH videoUrl ได้
+
     if (!navigator.onLine) {
       console.log(`[Background] offline — ${pId} รออัปโหลดเมื่อ online`);
-      await fbDone;
       _scheduleRetry();
       return;
     }
 
-    // 🎬➡️📄 "วิดีโอก่อน แล้ว row พร้อม link" — saveData call เดียว ส่ง video base64 ไปเลย
-    //   GAS อัปวิดีโอขึ้น Drive (นอก lock) → เขียน row พร้อม URL → ไม่มี no_video ในใบที่แพคปกติ
-    //   วิดีโอใหญ่ → timeout 120s; critical section (appendRow) สั้น → ไม่ค้าง lock
-    //   ❗ถ้าวิดีโออัป Drive ไม่สำเร็จ → ores.videoPending=true → row เป็น no_video ชั่วคราว
-    //      เก็บ video ไว้ retry (attach ทีหลังผ่าน uploadVideoForParcel)
-    if (videoData) _auditPack(pId, 'video', 'attempt', 'with saveData');
-    const ores = await callGAS("saveData", {
-      parcelId: pId, items: itemsArr,
-      videoEvidence: _videoForSave(videoData),
-      videoMimeType: videoMimeForUpload, remark: remarkNote || "",
-      orderId, marketplace, idemToken
-    }, 120000).catch(e => ({ success: false, error: e.message }));
-
-    if (isGasSuccess(ores)) {
-      const videoPending = !!ores.videoPending;
-      _updateQueueItem(pId, (cur) => {
-        cur.orderSent = true;
-        if (!videoPending) { cur.videoSent = true; cur.videoBase64 = ''; cur.videoMime = ''; }
-        return cur;
-      });
-      _auditPack(pId, 'order', 'sent', (ores?.note || 'row ' + (ores?.row || '?')) + (videoData ? (videoPending ? ' (video pending)' : ' +video') : ''));
-      if (!videoPending && videoData) console.log(`[Background] ${pId} เขียน row พร้อม link วิดีโอแล้ว`);
-      if (ores.note === 'duplicate_skipped') {
-        try {
-          Swal.fire({ icon: 'warning', title: 'พัสดุนี้บันทึกซ้ำ',
-            html: `<div style="font-size:0.95rem; line-height:1.6;"><strong>${escHtml(pId)}</strong> เคยถูกบันทึกไปแล้ว<br><span style="color:#a00;">รายการที่เพิ่งสแกนรอบนี้ <u>ไม่ถูกบันทึกลงในชีต</u></span><br><span style="font-size:0.85rem; color:#666;">รายการของเดิมยังอยู่ — ถ้าต้องการแก้ไข ติดต่อแอดมินให้แก้ในชีตโดยตรง</span></div>`,
-            confirmButtonText: 'รับทราบ', timer: 8000, timerProgressBar: true });
-        } catch(e) {}
-      }
-    } else {
-      _auditPack(pId, 'order', 'error', ores?.error || 'no response');
+    // 4️⃣ 🎬 อัปวิดีโอขึ้น Drive → PATCH videoUrl เข้า /inbox doc → drain เขียน row "พร้อม link"
+    //    (ไม่แตะชีต ไม่มี append lock → ไม่ติด lock_timeout เหมือน saveData)
+    if (videoData) {
+      await _uploadVideoAndPatch(pId, idemToken, videoData, videoMimeForUpload);
+    } else if (hadVideo) {
+      // มีวิดีโอแต่แปลง/อ่านไฟล์ไม่ได้ → บอก drain ไม่ต้องรอ (เขียน no_video ได้เลย)
+      await _firebasePatchVideoUrl(idemToken, "no_video");
+      _updateQueueItem(pId, (cur) => { cur.videoSent = true; cur.hadVideo = false; return cur; });
     }
 
-    await fbDone;
-    // ✅ order เขียนเสร็จ (สำเร็จ/ล้ม) → drain /inbox: สำเร็จ=ลบ doc, ล้ม=กู้เป็น backup
+    // 5️⃣ สั่ง drain → เขียน row (พร้อม link ถ้ามี) เข้าชีตทันที ไม่ต้องรอ trigger
     _kickDrain();
     updateFailQueueBadge();
 
-    _finalizeEntry(pId);   // ลบ entry ถ้า order ปลอดภัย + วิดีโอเสร็จ
+    _finalizeEntry(pId);   // ลบ entry ถ้า fbPushed + วิดีโอเสร็จ (Firebase durable แล้ว)
     updateFailQueueBadge();
     _scheduleRetry();
     _refreshOrderCacheBackground();

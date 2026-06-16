@@ -241,10 +241,11 @@ function drainFirebaseInbox(opts) {
         delKeys[key] = null; continue;
       }
 
-      // ⏳ doc ยังใหม่ + ออเดอร์ยังไม่ลงชีต → ข้ามรอบนี้ (ไม่ลบ ไม่ append)
-      //   รอ direct saveData เขียน row พร้อม link วิดีโอก่อน — รอบหน้าถ้าลงแล้วจะ existing.has → ลบ
-      //   ถ้าเกิน grace แล้วยังไม่ลง (direct write ล้ม) → ค่อย fallback เขียน no_video กู้ไว้
-      if (Number(d.ts) && (nowMs - Number(d.ts)) < DRAIN_GRACE_MS) { continue; }
+      // ⏳ doc มีวิดีโอแต่ยังไม่ได้ videoUrl (client กำลังอัป Drive) + ยังใหม่ → รอรอบหน้า
+      //   ให้ client PATCH videoUrl เข้ามาก่อน → drain เขียน row "พร้อม link" ครั้งเดียว
+      //   เกิน grace แล้วยังไม่มี url (อัปวิดีโอล้ม) → เขียน no_video กู้ไว้ (retry/reconcile เก็บตก)
+      const videoUrl = String(d.videoUrl || "");
+      if (d.hadVideo && !videoUrl && Number(d.ts) && (nowMs - Number(d.ts)) < DRAIN_GRACE_MS) { continue; }
 
       // normalize items (RTDB คืน array เป็น object ได้)
       let itemsArr;
@@ -254,7 +255,7 @@ function drainFirebaseInbox(opts) {
 
       seenInBatch.add(tk);
       newRows.push([new Date(), String(d.orderId || ""), String(d.marketplace || ""), parcelId,
-                    "no_video", String(d.remark || ""), itemsArr.length, ...itemsArr.slice(0, 500).map(String)]);
+                    videoUrl || "no_video", String(d.remark || ""), itemsArr.length, ...itemsArr.slice(0, 500).map(String)]);
       if (d.idemToken) newTokens.push({ token: d.idemToken, parcelId: parcelId });
       delKeys[key] = null;
     }
@@ -699,6 +700,7 @@ const RATE_LIMITS = {
   getSpreadsheetUrl: 30,
   getMarketplaceVersionUrl: 30,
   uploadVideoForParcel: 120,
+  uploadVideoOnly: 120,
   reconcileVideoUrls: 6,
   drainInbox: 60,            // on-demand drain — debounce ฝั่ง client คุมอีกชั้น
   _default: 120
@@ -708,7 +710,7 @@ const ALLOWED_ACTIONS = new Set([
   "getProductData", "saveData", "searchData", "saveMarketplaceData",
   "getExpectedOrderDetails", "getReportData", "getAllPendingOrders",
   "getSpreadsheetUrl", "getMarketplaceVersionUrl",
-  "uploadVideoForParcel", "reconcileVideoUrls", "drainInbox"
+  "uploadVideoForParcel", "uploadVideoOnly", "reconcileVideoUrls", "drainInbox"
 ]);
 
 // ============================================================
@@ -827,6 +829,7 @@ function doPost(e) {
     else if (action === "getSpreadsheetUrl")          result = getSpreadsheetUrl();
     else if (action === "getMarketplaceVersionUrl")   result = getMarketplaceVersionUrl();
     else if (action === "uploadVideoForParcel")       result = uploadVideoForParcel(body);
+    else if (action === "uploadVideoOnly")            result = uploadVideoOnly(body);
     else if (action === "reconcileVideoUrls")         result = reconcileVideoUrls(body);
     else if (action === "drainInbox")                 result = drainFirebaseInbox(true);
 
@@ -1224,6 +1227,31 @@ function _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId) {
   }
   Logger.log("[_uploadVideoToDrive] หมด retry: " + lastErr);
   return "upload_failed";
+}
+
+// ✅ uploadVideoOnly — อัปวิดีโอขึ้น Drive แล้วคืน URL "เฉยๆ" ไม่แตะชีต
+//   ใช้ใน flow ใหม่: client อัปวิดีโอก่อน → เอา URL ไปแนบใน Firebase doc → drain เขียน row พร้อม link
+//   ไม่มี appendRow / ไม่มี script lock → ไม่ติด lock_timeout เหมือน saveData
+function uploadVideoOnly(body) {
+  const parcelId = String(body.parcelId || "").trim();
+  if (!parcelId || parcelId.length > 64) return { success: false, error: "parcelId ไม่ถูกต้อง" };
+  const videoBase64 = String(body.videoEvidence || "");
+  if (!videoBase64 || videoBase64 === "no_video") return { success: true, videoUrl: "" };
+  if (videoBase64 === "video_too_large") return { success: true, videoUrl: "video_too_large" };
+  if (videoBase64.length > MAX_VIDEO_BASE64_LEN) {
+    _logSaveAttempt(parcelId, "", "video_invalid", 0, "too large: " + videoBase64.length);
+    return { success: true, videoUrl: "video_too_large" };
+  }
+  const ALLOWED = { 'video/mp4': 'mp4', 'video/webm': 'webm' };
+  let mime = String(body.videoMimeType || '').toLowerCase().split(';')[0].trim();
+  if (!ALLOWED[mime]) mime = 'video/webm';
+  const url = _uploadVideoToDrive(videoBase64, mime, ALLOWED[mime], parcelId);
+  if (url === "upload_failed") {
+    _logSaveAttempt(parcelId, "", "video_drive_fail", 0, "uploadVideoOnly");
+    return { success: false, error: "Drive upload failed" };
+  }
+  _logSaveAttempt(parcelId, "", "video_uploaded", 0, "uploadVideoOnly");
+  return { success: true, videoUrl: url };
 }
 
 function _tryUpdateVideoUrl(sheet, rowIndex, parcelId, videoBase64, videoMime, videoExt) {
