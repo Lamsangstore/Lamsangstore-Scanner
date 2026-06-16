@@ -3449,7 +3449,13 @@ async function retryFailedUploads() {
   _isRetrying = true;
   try {
     const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
-    if (q.length === 0) { _isRetrying = false; _flushedIds.clear(); return; }
+    if (q.length === 0) {
+      _isRetrying = false;
+      _flushedIds.clear();
+      // queue ว่าง แต่อาจมี video ค้างใน IDB → ลอง sweep
+      _sweepPendingVideos().catch(() => {});
+      return;
+    }
     console.log(`[FailQueue] กำลัง retry ${q.length} รายการ...`);
     const QUEUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // ✅ 7 วัน — หมดอายุอัตโนมัติ
     const remaining = [];
@@ -3465,33 +3471,21 @@ async function retryFailedUploads() {
         continue;
       }
       try {
-        // ✅ ถ้า video อยู่ใน IDB → โหลด blob มาแปลง base64 ตอน upload (ไม่เก็บใน memory นาน)
-        let videoData = job.videoBase64 || '';
-        let videoMime = job.videoMime || 'video/webm';
-        if (!videoData && job.videoInIDB) {
-          try {
-            const rec = await _getVideoBlob(job.pId);
-            if (rec && rec.blob) {
-              videoData = await _blobToBase64(rec.blob);
-              videoMime = rec.mimeType || videoMime;
-            }
-          } catch(e) { console.warn(`[VideoDB] โหลด ${job.pId} ไม่ได้:`, e.message); }
-        }
+        // ⚡ Phase 1: ส่ง order data เท่านั้น (video แยกผ่าน _sweepPendingVideos)
+        //   ถ้า queue เก่ามี videoBase64 ติดมา (จากเวอร์ชันก่อน) → ส่งไปเลย (backward compat)
         const res = await callGAS("saveData", {
           parcelId: job.pId, items: job.itemsArr,
-          videoEvidence: videoData || "no_video",
-          videoMimeType: videoMime,
+          videoEvidence: job.videoBase64 || "no_video",
+          videoMimeType: job.videoMime || "video/webm",
           remark: job.remarkNote || "",
           orderId: job.orderId || "",
           marketplace: job.marketplace || "",
           idemToken: job.idemToken || ""
         });
         if (isGasSuccess(res)) {
-          console.log(`[FailQueue] retry ${job.pId} สำเร็จ`);
+          console.log(`[FailQueue] retry ${job.pId} order สำเร็จ`);
           _markSent(job.pId);
           _flushedIds.delete(job.pId);
-          // ✅ ลบ video ใน IDB หลัง sync สำเร็จ
-          if (job.videoInIDB) _deleteVideoBlob(job.pId);
         } else { remaining.push(job); }
       } catch(e) { remaining.push(job); }
     }
@@ -3501,6 +3495,8 @@ async function retryFailedUploads() {
     updateFailQueueBadge();
   } catch(e) { console.error('retryFailedUploads:', e); }
   _isRetrying = false;
+  // ⚡ Phase 2: หลังจัดการ orders เสร็จ → sweep videos ที่ค้าง IDB
+  _sweepPendingVideos().catch(() => {});
 }
 
 // เช็ก response จาก GAS ว่าสำเร็จหรือไม่ (รองรับทุกรูปแบบ)
@@ -5069,9 +5065,9 @@ async function _doFinishWork(isManual = false) {
 }
 
 async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', orderId = '', marketplace = '', idemToken = '') {
-  let videoData = '';
   let persisted = false;
   let videoMimeForUpload = currentVideoMime || 'video/webm';
+  let videoSavedToIDB = false; // ต้องอยู่ scope นอก try เพราะ catch block ใช้
   try {
     // ✅ ถ้า GAS ยืนยันสำเร็จแล้ว (เช่น อีกเครื่องส่งไปแล้ว) → ข้ามเลย
     if (_isSent(pId)) {
@@ -5090,7 +5086,6 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
 
     // ✅ เก็บ Blob ลง IndexedDB (quota ใหญ่ ~50MB-GBs vs localStorage 5MB)
     //   วิดีโอจะอยู่ในเครื่องจนกว่าจะ sync สำเร็จ แล้วลบทิ้งอัตโนมัติ
-    let videoSavedToIDB = false;
     if (chunks && chunks.length > 0) {
       try {
         const blob = new Blob(chunks, { type: videoMimeForUpload });
@@ -5101,15 +5096,12 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
         }
       } catch(idbErr) {
         console.warn(`[VideoDB] เก็บ ${pId} ไม่ได้:`, idbErr.message);
-        // fallback — แปลงเป็น base64 ใส่ queue เลย (เก่า)
-        try { videoData = await convertChunksToBase64(chunks); } catch(_) {}
       }
     }
 
     // ✅ Persist-before-upload — บันทึก order data ลง localStorage queue ก่อน callGAS
     //   ถ้า videoSavedToIDB=true → queue ไม่ต้องมี videoBase64 (โหลดจาก IDB ตอน upload)
-    //   ถ้า fallback → queue มี videoBase64 inline เหมือนเดิม
-    _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, videoMimeForUpload, idemToken, videoSavedToIDB);
+    _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, '', videoMimeForUpload, idemToken, videoSavedToIDB);
     persisted = true;
     updateFailQueueBadge();
 
@@ -5118,18 +5110,8 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       return;
     }
 
-    // โหลด video จาก IDB ตอนจะ upload จริง (ไม่ค้าง base64 ใน memory นาน)
-    if (videoSavedToIDB && !videoData) {
-      try {
-        const rec = await _getVideoBlob(pId);
-        if (rec && rec.blob) {
-          videoData = await _blobToBase64(rec.blob);
-          videoMimeForUpload = rec.mimeType || videoMimeForUpload;
-        }
-      } catch(e) { console.warn(`[VideoDB] อ่าน blob ${pId} ไม่ได้:`, e.message); }
-    }
-
-    const res = await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", videoMimeType: videoMimeForUpload, remark: remarkNote || "", orderId, marketplace, idemToken });
+    // ⚡ Phase 1: ส่ง order data ไป GAS ก่อน (เร็ว, ไม่มี video) → ลงชีต 1-2 วินาที
+    const res = await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: "no_video", videoMimeType: videoMimeForUpload, remark: remarkNote || "", orderId, marketplace, idemToken });
     if (!isGasSuccess(res)) {
       console.warn(`[Background] ${pId} GAS ไม่สำเร็จ — ยังอยู่ใน queue รอ retry:`, res?.error || 'no response');
       // ไม่ลบออกจาก queue — retryFailedUploads จะมาเอาไปยิงใหม่
@@ -5160,12 +5142,15 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
 
     _markSent(pId);
     _removeFromFailQueue(pId);
-    // ✅ Sync เสร็จ → ลบ video ใน IDB อัตโนมัติ
-    _deleteVideoBlob(pId).then(ok => {
-      if (ok) console.log(`[VideoDB] ลบ ${pId} หลัง sync เสร็จ`);
-    });
     updateFailQueueBadge();
-    console.log(`[Background] บันทึก ${pId} สำเร็จ${res?.note ? ' (' + res.note + ')' : ''}`);
+    console.log(`[Background] order ${pId} ลงชีตสำเร็จ${res?.note ? ' (' + res.note + ')' : ''}`);
+
+    // ⚡ Phase 2: upload video แยก (async — ไม่ block) → ลง Drive + update row
+    //   ถ้าล้ม → video ยังอยู่ใน IDB → retry รอบถัดไป (ทุก 60s, on visible, on online)
+    if (videoSavedToIDB) {
+      _uploadPendingVideo(pId).catch(e => console.warn(`[VideoUpload] ${pId} fail:`, e.message));
+    }
+
     // ✅ v2.8: refresh localOrdersCache จาก GAS พื้นหลัง ทันทีหลัง save สำเร็จ
     // ทำให้เครื่องนี้และเครื่องอื่นที่ refresh ครั้งถัดไปจะไม่เห็น order ที่แพ็กแล้ว
     _refreshOrderCacheBackground();
@@ -5173,13 +5158,75 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     console.error(`[Background Error] ${pId}:`, err);
     // ✅ ถ้ายังไม่ได้ persist (เช่น throw ก่อนถึง _enqueueForUpload) → enqueue ตอนนี้
     if (!persisted) {
-      if (!videoData && chunks && chunks.length > 0) {
-        try { videoData = await convertChunksToBase64(chunks); } catch(e) {}
-      }
-      _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, currentVideoMime, idemToken, false);
+      _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, '', currentVideoMime, idemToken, videoSavedToIDB);
       updateFailQueueBadge();
     }
   }
+}
+
+// ⚡ Phase 2 helper — อัปโหลด video ใน IDB ขึ้น Drive + update row ใน Sheet
+//   - โหลด blob จาก IDB → encode base64 → callGAS("uploadVideoForParcel")
+//   - success → ลบ blob ออกจาก IDB
+//   - fail → blob ยังอยู่ → retry รอบหน้า
+async function _uploadPendingVideo(pId) {
+  if (!navigator.onLine) return false;
+  let rec;
+  try {
+    rec = await _getVideoBlob(pId);
+  } catch(e) { return false; }
+  if (!rec || !rec.blob) return false; // ไม่มี blob = upload เสร็จไปแล้ว / ไม่เคยมี
+
+  let base64;
+  try {
+    base64 = await _blobToBase64(rec.blob);
+  } catch(e) {
+    console.warn(`[VideoUpload] encode fail ${pId}:`, e.message);
+    return false;
+  }
+
+  let res;
+  try {
+    res = await callGAS("uploadVideoForParcel", {
+      parcelId: pId,
+      videoEvidence: base64,
+      videoMimeType: rec.mimeType || 'video/webm'
+    }, 90000); // ⏱️ timeout 90s — video upload + Drive ใช้เวลานานได้
+  } catch(e) {
+    console.warn(`[VideoUpload] network fail ${pId}:`, e.message);
+    return false;
+  }
+
+  if (res && res.success) {
+    await _deleteVideoBlob(pId);
+    console.log(`[VideoUpload] ${pId} → Drive สำเร็จ${res.note ? ' (' + res.note + ')' : ''} videoUrl=${(res.videoUrl||'').substring(0,40)}`);
+    return true;
+  }
+
+  // case พิเศษ: row ยังไม่อยู่ในชีต (saveData ยังไม่เสร็จ) → ปล่อย blob ไว้รอ retry
+  console.warn(`[VideoUpload] ${pId} fail:`, res?.error || 'unknown');
+  return false;
+}
+
+// ✅ Sweep — สแกน IDB หา video ค้าง แล้วลองอัปโหลดที่ละใบ
+//   เรียกเป็นระยะ (interval, on visible, after retryFailedUploads)
+let _isSweepingVideos = false;
+async function _sweepPendingVideos() {
+  if (_isSweepingVideos || !navigator.onLine) return;
+  _isSweepingVideos = true;
+  try {
+    const keys = await _listVideoKeys();
+    if (!keys.length) return;
+    const sent = JSON.parse(localStorage.getItem(SENT_KEY) || '{}');
+    // upload เฉพาะ pId ที่ order ลงชีตแล้ว — ถ้ายังไม่ sent → รอ saveData ก่อน
+    let count = 0;
+    for (const pId of keys) {
+      if (!sent[pId]) continue;
+      const ok = await _uploadPendingVideo(pId);
+      if (ok) count++;
+    }
+    if (count > 0) console.log(`[VideoSweep] อัปโหลด ${count} video สำเร็จ`);
+  } catch(e) { console.warn('[VideoSweep] error:', e.message); }
+  finally { _isSweepingVideos = false; }
 }
 
 async function resetAppForNext() {

@@ -40,13 +40,15 @@ const RATE_LIMITS = {
   getExpectedOrderDetails: 240,
   getSpreadsheetUrl: 30,
   getMarketplaceVersionUrl: 30,
+  uploadVideoForParcel: 120,
   _default: 120
 };
 
 const ALLOWED_ACTIONS = new Set([
   "getProductData", "saveData", "searchData", "saveMarketplaceData",
   "getExpectedOrderDetails", "getReportData", "getAllPendingOrders",
-  "getSpreadsheetUrl", "getMarketplaceVersionUrl"
+  "getSpreadsheetUrl", "getMarketplaceVersionUrl",
+  "uploadVideoForParcel"
 ]);
 
 // ============================================================
@@ -156,6 +158,7 @@ function doPost(e) {
     else if (action === "getAllPendingOrders")        result = getAllPendingOrders();
     else if (action === "getSpreadsheetUrl")          result = getSpreadsheetUrl();
     else if (action === "getMarketplaceVersionUrl")   result = getMarketplaceVersionUrl();
+    else if (action === "uploadVideoForParcel")       result = uploadVideoForParcel(body);
 
     return _json(result);
 
@@ -539,6 +542,113 @@ function _tryUpdateVideoUrl(sheet, rowIndex, parcelId, videoBase64, videoMime, v
     Logger.log("[saveData] อัปเดตวิดีโอให้แถว " + rowIndex + ": " + parcelId);
   } catch(e) {
     Logger.log("[_tryUpdateVideoUrl] error: " + e.message);
+  }
+}
+
+// ============================================================
+// uploadVideoForParcel — phase 2 ของการบันทึก
+// frontend จะเรียก saveData ก่อน (ส่งแค่ order, เร็ว) แล้วเรียกฟังก์ชันนี้ตามมา
+// (ส่ง video, ช้ากว่า, retry แยกได้)
+// flow:
+//   1. หา row ของ parcelId ใน Orders sheet (ถ้าไม่พบ → saveData ยังไม่เสร็จ — error)
+//   2. ถ้า row มี videoUrl เป็น Drive URL อยู่แล้ว → skip (ส่ง retry เกินมา)
+//   3. อัปโหลด video ไป Drive (นอก lock — slow operation)
+//   4. ถือ lock แค่ตอน setValue → ปล่อย lock เร็ว
+// ============================================================
+function uploadVideoForParcel(body) {
+  const parcelId    = String(body.parcelId || "").trim();
+  const videoBase64 = String(body.videoEvidence || "");
+  const videoMimeIn = String(body.videoMimeType || "video/webm").toLowerCase().split(';')[0].trim();
+
+  if (!parcelId)            return { success: false, error: "parcelId ว่าง" };
+  if (parcelId.length > 64) return { success: false, error: "parcelId ยาวเกินไป" };
+  if (!videoBase64 || videoBase64 === "no_video")
+    return { success: false, error: "ไม่มี video" };
+  if (videoBase64.length > MAX_VIDEO_BASE64_LEN)
+    return { success: false, error: "Video too large" };
+
+  const ALLOWED_VIDEO_MIMES = { 'video/mp4': 'mp4', 'video/webm': 'webm' };
+  const videoMime = ALLOWED_VIDEO_MIMES[videoMimeIn] ? videoMimeIn : 'video/webm';
+  const videoExt  = ALLOWED_VIDEO_MIMES[videoMime];
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_ORDERS);
+    if (!sheet) return { success: false, error: "Orders sheet ไม่พบ" };
+
+    // หา row โดยไม่ถือ lock — getRange().getValues() เป็น snapshot read ไม่ติด lock
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, error: "Orders sheet ว่าง — รอ saveData ก่อน" };
+
+    const trackingCol = sheet.getRange(2, 4, lastRow - 1, 1).getValues();
+    let rowIndex = -1;
+    for (let i = trackingCol.length - 1; i >= 0; i--) { // ค้นจากล่างขึ้น — row ใหม่อยู่ล่าง
+      if (numToStr(trackingCol[i][0]).toUpperCase() === parcelId.toUpperCase()) {
+        rowIndex = i + 2;
+        break;
+      }
+    }
+    if (rowIndex === -1) {
+      Logger.log("[uploadVideoForParcel] row ไม่พบ — saveData อาจยังไม่เสร็จ: " + parcelId);
+      return { success: false, error: "row ไม่พบ — saveData ยังไม่เสร็จ" };
+    }
+
+    // ถ้า row มี Drive URL อยู่แล้ว → skip (retry ที่ส่งเกินมา)
+    const currentVideoUrl = String(sheet.getRange(rowIndex, 5).getValue()).trim();
+    if (currentVideoUrl && currentVideoUrl.indexOf('drive.google.com') !== -1) {
+      Logger.log("[uploadVideoForParcel] " + parcelId + " มี video แล้ว skip");
+      return { success: true, note: "already_has_video", videoUrl: currentVideoUrl };
+    }
+
+    // อัปโหลด Drive (slow — นอก lock)
+    let videoUrl;
+    try {
+      const decoded = Utilities.base64Decode(videoBase64);
+      const blob    = Utilities.newBlob(decoded, videoMime, parcelId + "." + videoExt);
+      const folder  = DriveApp.getFolderById(TARGET_FOLDER_ID);
+      const file    = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      videoUrl = file.getUrl();
+    } catch(uploadErr) {
+      Logger.log("[uploadVideoForParcel] อัปโหลด Drive fail: " + uploadErr.message);
+      return { success: false, error: "Drive upload fail: " + uploadErr.message };
+    }
+
+    // ถือ lock สั้นๆ ตอน setValue
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(15000);
+    } catch(e) {
+      Logger.log("[uploadVideoForParcel] ไม่ได้ lock: " + e.message);
+      // Drive file อัปไปแล้ว — return videoUrl ให้ client retry แค่ setValue
+      return { success: false, error: "Server busy, please retry", _orphanVideoUrl: videoUrl };
+    }
+    try {
+      // re-check (เผื่อ row ขยับจากการ delete) — หา rowIndex ใหม่
+      const ts2 = sheet.getRange(2, 4, sheet.getLastRow() - 1, 1).getValues();
+      let r2 = -1;
+      for (let i = ts2.length - 1; i >= 0; i--) {
+        if (numToStr(ts2[i][0]).toUpperCase() === parcelId.toUpperCase()) {
+          r2 = i + 2;
+          break;
+        }
+      }
+      if (r2 === -1) return { success: false, error: "row หายไประหว่างอัปโหลด" };
+
+      const cur = String(sheet.getRange(r2, 5).getValue()).trim();
+      if (cur && cur.indexOf('drive.google.com') !== -1) {
+        return { success: true, note: "already_has_video", videoUrl: cur };
+      }
+      sheet.getRange(r2, 5).setValue(videoUrl);
+      SpreadsheetApp.flush();
+      Logger.log("[uploadVideoForParcel] " + parcelId + " row=" + r2 + " video=" + videoUrl.substring(0, 40));
+      return { success: true, videoUrl, row: r2 };
+    } finally {
+      lock.releaseLock();
+    }
+  } catch(e) {
+    Logger.log("[uploadVideoForParcel] error: " + e.message);
+    return { success: false, error: e.toString() };
   }
 }
 
