@@ -183,12 +183,63 @@ function _firebaseDelete(cfg, key) {
 function setupFirebaseTrigger() {
   ScriptApp.getProjectTriggers().forEach(t => {
     const fn = t.getHandlerFunction();
-    if (fn === "drainFirebaseInbox" || fn === "refreshRecentStats") ScriptApp.deleteTrigger(t);
+    if (fn === "drainFirebaseInbox" || fn === "refreshRecentStats" || fn === "refreshPendingCache") ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger("drainFirebaseInbox").timeBased().everyMinutes(1).create();
   // 📊 อัปเดต stats รายงานเข้า Firebase ทุก 5 นาที (เบื้องหลัง — ไม่แตะ saveData)
   ScriptApp.newTrigger("refreshRecentStats").timeBased().everyMinutes(5).create();
-  Logger.log("✅ Firebase triggers: drainFirebaseInbox (1 นาที) + refreshRecentStats (5 นาที)");
+  // 📋 อัปเดต pending orders + products ทุก 5 นาที (ข้ามถ้าข้อมูลไม่เปลี่ยน — กัน quota)
+  ScriptApp.newTrigger("refreshPendingCache").timeBased().everyMinutes(5).create();
+  Logger.log("✅ Firebase triggers: drain(1m) + stats(5m) + pending(5m)");
+}
+
+// ============================================================
+// 📋 PENDING CACHE → Firebase — มือถืออ่าน /pending แทนเรียก getAllPendingOrders (ช้า)
+//   GAS คำนวณ logic เดิม (ไม่แตะ) แล้วเก็บผลลัพธ์ + product map ลง Firebase
+//   มือถืออ่านตรง ~100ms ไม่ต้องรอ scan MarketplaceData + cold start
+//   ✅ ข้ามถ้า Orders/MarketplaceData ไม่เปลี่ยนตั้งแต่รอบก่อน — กัน GAS quota หมด
+// ============================================================
+function refreshPendingCache(force) {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) return;
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ordSheet = ss.getSheetByName(SHEET_ORDERS);
+    const mpSheet  = ss.getSheetByName(SHEET_MARKETPLACE);
+    const pSheet   = ss.getSheetByName(SHEET_PRODUCTS);
+    const sig = (ordSheet ? ordSheet.getLastRow() : 0) + ":" +
+                (mpSheet ? mpSheet.getLastRow() : 0) + ":" +
+                (pSheet ? pSheet.getLastRow() : 0);
+
+    const props = PropertiesService.getScriptProperties();
+    if (!force && props.getProperty('pendingCacheSig') === sig) {
+      // ไม่มีอะไรเปลี่ยน → ข้าม (ออกเร็ว <1s กัน quota)
+      return;
+    }
+
+    const pending = getAllPendingOrders();   // ✅ reuse logic เดิม
+    const products = getProductData();
+
+    _fbPut(cfg, "/pending.json", pending);
+    _fbPut(cfg, "/products.json", products);
+    _fbPut(cfg, "/cacheMeta.json", { ts: Date.now() });
+    props.setProperty('pendingCacheSig', sig);
+    Logger.log("[refreshPendingCache] pending=" + Object.keys(pending).length +
+               " products=" + Object.keys(products).length + " sig=" + sig);
+  } catch(e) {
+    Logger.log("[refreshPendingCache] error: " + e.message);
+  }
+}
+
+function _fbPut(cfg, path, obj) {
+  const url = cfg.url + path + "?auth=" + encodeURIComponent(cfg.secret);
+  const resp = UrlFetchApp.fetch(url, {
+    method: "put",
+    contentType: "application/json",
+    payload: JSON.stringify(obj),
+    muteHttpExceptions: true
+  });
+  if (resp.getResponseCode() !== 200) Logger.log("[_fbPut] " + path + " fail: " + resp.getResponseCode());
 }
 
 // ============================================================
