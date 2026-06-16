@@ -133,8 +133,8 @@ function drainFirebaseInbox() {
       const d = docs[key] || {};
       // validate
       const parcelId = String(d.parcelId || "").trim();
-      if (!parcelId || parcelId.length > 64) {
-        // junk → ลบทิ้ง
+      if (!parcelId || parcelId.length > 64 || parcelId === "__DIAGTEST__") {
+        // junk / doc ทดสอบจากปุ่มตรวจสอบ → ลบทิ้ง ไม่สร้าง row
         _firebaseDelete(cfg, key);
         continue;
       }

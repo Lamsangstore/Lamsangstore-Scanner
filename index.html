@@ -2349,7 +2349,7 @@
 
 <!-- TOP APP BAR -->
 <div id="app-header">
-  <div class="topbar-logo" style="font-family:'Inter',sans-serif; font-weight:800; font-size:0.9rem; color:white; letter-spacing:-0.5px;">LS</div>
+  <div class="topbar-logo" onclick="showDiagnostic()" title="ตรวจสอบระบบ" style="font-family:'Inter',sans-serif; font-weight:800; font-size:0.9rem; color:white; letter-spacing:-0.5px; cursor:pointer;">LS</div>
   <div style="flex:1; margin-left:10px;">
     <div class="topbar-title" style="font-family:'Inter','Mitr',sans-serif; font-weight:800; letter-spacing:-0.3px;">LAMSANG <span style="font-weight:400; font-size:0.82em; opacity:0.7;">Scanner</span>
       <span class="topbar-sub">ระบบแพ็กและตรวจสอบพัสดุ</span>
@@ -3518,6 +3518,47 @@ function updateFailQueueBadge() {
     if (queueBanner) queueBanner.style.display = 'none';
     updateNetworkBadge();
   }
+}
+
+// 🔧 ตรวจสอบระบบ — แตะโลโก้ LS เพื่อเปิด (ไม่ต้องใช้ console)
+//   ทดสอบเขียน Firebase /inbox จริง + แสดงสถานะคิวบนจอ
+async function showDiagnostic() {
+  const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
+  const atRisk = q.filter(j => !j.fbPushed && !j.orderDone).length;
+
+  Swal.fire({ title: '🔧 กำลังตรวจสอบ...', html: 'ทดสอบเขียน Firebase', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+  let fbStatus, fbColor;
+  if (!FIREBASE_ENABLED()) {
+    fbStatus = '⚪ Firebase ปิด (ไม่ได้ตั้ง FIREBASE_DB_URL)'; fbColor = '#888';
+  } else {
+    try {
+      const url = `${FIREBASE_DB_URL}/inbox/__DIAGTEST__.json`;
+      const res = await fetch(url, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ k: FIREBASE_WRITE_KEY, parcelId: '__DIAGTEST__', ts: Date.now() })
+      });
+      if (res.ok) { fbStatus = '✅ Firebase เขียนได้ — Rules ถูกต้อง พร้อมใช้งาน'; fbColor = '#2e7d32'; }
+      else {
+        let t = ''; try { t = await res.text(); } catch(e) {}
+        fbStatus = `❌ เขียน Firebase ไม่ได้ (${res.status})\n→ ยังไม่ได้แก้ Rules /inbox (ดูที่แอดมินบอก)`; fbColor = '#c62828';
+      }
+    } catch(e) { fbStatus = '❌ ต่อ Firebase ไม่ได้: ' + e.message; fbColor = '#c62828'; }
+  }
+
+  Swal.fire({
+    title: '🔧 ตรวจสอบระบบ',
+    html: `<div style="text-align:left; font-size:0.9rem; line-height:1.9;">
+      <div style="padding:8px 10px; background:${fbColor}15; border-left:3px solid ${fbColor}; border-radius:6px; white-space:pre-line; margin-bottom:8px;">${escHtml(fbStatus)}</div>
+      <b>📦 ออเดอร์รอ sync:</b> ${atRisk} ${atRisk > 0 ? '<span style="color:#c62828;">(ค้าง)</span>' : '<span style="color:#2e7d32;">(เคลียร์)</span>'}<br>
+      <b>📋 คิวทั้งหมด:</b> ${q.length} <span style="color:#888;">(รวมวิดีโอที่กำลังอัป)</span><br>
+      <b>🌐 เน็ต:</b> ${navigator.onLine ? '✅ ออนไลน์' : '❌ ออฟไลน์'}<br>
+      <b>📱 เครื่อง:</b> <span style="font-size:0.75rem;">${escHtml((DEVICE_ID||'').slice(0,8))}</span>
+    </div>`,
+    confirmButtonText: 'ปิด',
+    showCancelButton: q.length > 0,
+    cancelButtonText: '🔄 sync เดี๋ยวนี้',
+  }).then(r => { if (r.dismiss === Swal.DismissReason.cancel) retryFailedUploads(true); });
 }
 
 function showQueueModal() {
