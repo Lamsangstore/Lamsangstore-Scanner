@@ -3200,6 +3200,12 @@ updateNetworkBadge();
   } catch(e) {}
 })();
 
+// ✅ Recovery ตอน app เปิด — เคลียร์ video orphan ใน IDB + ลบของเก่าเกิน 7 วัน
+setTimeout(() => {
+  _cleanSentVideoBlobs().catch(() => {});
+  _purgeOldVideoBlobs().catch(() => {});
+}, 3000);
+
 // retry อัตโนมัติทุก 60 วินาที
 setInterval(() => retryFailedUploads(), 60000);
 
@@ -3220,7 +3226,136 @@ setInterval(updateSyncTimeBadge, 30000);
 updateSyncTimeBadge();
 
 // ============================================================
-// 5. FAILED UPLOAD QUEUE — retry เมื่อออนไลน์
+// 5. VIDEO STORAGE (IndexedDB) — เก็บ Blob ในเครื่อง, sync เมื่อ online
+// ============================================================
+// ทำไมต้อง IndexedDB?
+//   - localStorage iOS Safari ~5MB → เก็บ video 1 ใบไม่ได้ด้วยซ้ำ
+//   - IndexedDB iOS ~50MB-1GB+ / Android Chrome หลาย GB
+//   - รองรับ Blob โดยตรง ไม่ต้องแปลง base64 (ประหยัดเมโมรี่)
+//   - Sync ต่อหลัง app close แล้วเปิดใหม่ได้
+const VIDEO_DB_NAME = 'LamsangVideoDB';
+const VIDEO_DB_VERSION = 1;
+const VIDEO_STORE = 'videos';
+let _videoDBPromise = null;
+
+function _openVideoDB() {
+  if (_videoDBPromise) return _videoDBPromise;
+  _videoDBPromise = new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error('IndexedDB ไม่รองรับ')); return; }
+    const req = indexedDB.open(VIDEO_DB_NAME, VIDEO_DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(VIDEO_STORE)) {
+        db.createObjectStore(VIDEO_STORE, { keyPath: 'parcelId' });
+      }
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => { _videoDBPromise = null; reject(e.target.error); };
+  });
+  return _videoDBPromise;
+}
+
+async function _saveVideoBlob(parcelId, blob, mimeType) {
+  const db = await _openVideoDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(VIDEO_STORE, 'readwrite');
+    const store = tx.objectStore(VIDEO_STORE);
+    const req = store.put({ parcelId, blob, mimeType: mimeType || 'video/webm', size: blob.size, ts: Date.now() });
+    req.onsuccess = () => resolve(true);
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+async function _getVideoBlob(parcelId) {
+  try {
+    const db = await _openVideoDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(VIDEO_STORE, 'readonly');
+      const store = tx.objectStore(VIDEO_STORE);
+      const req = store.get(parcelId);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = (e) => reject(e.target.error);
+    });
+  } catch(e) { return null; }
+}
+
+async function _deleteVideoBlob(parcelId) {
+  try {
+    const db = await _openVideoDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(VIDEO_STORE, 'readwrite');
+      const store = tx.objectStore(VIDEO_STORE);
+      const req = store.delete(parcelId);
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => resolve(false);
+    });
+  } catch(e) { return false; }
+}
+
+async function _listVideoKeys() {
+  try {
+    const db = await _openVideoDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(VIDEO_STORE, 'readonly');
+      const store = tx.objectStore(VIDEO_STORE);
+      const req = store.getAllKeys();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+  } catch(e) { return []; }
+}
+
+// แปลง Blob → base64 (เฉพาะตอนจะส่งไป GAS — ไม่เก็บ base64 ใน memory นาน)
+function _blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onloadend = () => {
+      const result = String(fr.result || '');
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(blob);
+  });
+}
+
+// ลบ video ที่ค้างใน IDB เกินอายุ (เผื่อ orphan)
+async function _purgeOldVideoBlobs(maxAgeMs = 7 * 24 * 60 * 60 * 1000) {
+  try {
+    const db = await _openVideoDB();
+    const cutoff = Date.now() - maxAgeMs;
+    return new Promise((resolve) => {
+      const tx = db.transaction(VIDEO_STORE, 'readwrite');
+      const store = tx.objectStore(VIDEO_STORE);
+      let deleted = 0;
+      const cursorReq = store.openCursor();
+      cursorReq.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (!cursor) { if (deleted > 0) console.log(`[VideoDB] purged ${deleted} expired blobs`); resolve(deleted); return; }
+        if ((cursor.value.ts || 0) < cutoff) { cursor.delete(); deleted++; }
+        cursor.continue();
+      };
+      cursorReq.onerror = () => resolve(0);
+    });
+  } catch(e) { return 0; }
+}
+
+// recovery: ตอน app เปิด — ลบ video ใน IDB ที่ pId เป็น sent แล้ว (orphan จากการที่ลบไม่สำเร็จ)
+async function _cleanSentVideoBlobs() {
+  try {
+    const keys = await _listVideoKeys();
+    if (!keys.length) return;
+    const sent = JSON.parse(localStorage.getItem(SENT_KEY) || '{}');
+    let removed = 0;
+    for (const pId of keys) {
+      if (sent[pId]) { await _deleteVideoBlob(pId); removed++; }
+    }
+    if (removed > 0) console.log(`[VideoDB] cleaned ${removed} already-sent videos`);
+  } catch(e) {}
+}
+
+// ============================================================
+// 5b. FAILED UPLOAD QUEUE — retry เมื่อออนไลน์
 // ============================================================
 const SENT_KEY = 'sentParcels'; // ✅ dedup guard: pId ที่ GAS ยืนยันสำเร็จแล้ว
 
@@ -3265,7 +3400,7 @@ function saveToFailQueue(pId, itemsArr, remarkNote, orderId, marketplace, videoB
 // ข้อมูลยังอยู่ใน queue → retryFailedUploads จะมาเอาไปยิงใหม่
 // upsert: ถ้ามี pId อยู่แล้ว → replace (ไม่ skip เหมือน saveToFailQueue)
 // quota-aware: ถ้า localStorage เต็ม → fallback เก็บแบบไม่มี video (อย่างน้อยข้อมูลออเดอร์รอด)
-function _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64, videoMime, idemToken) {
+function _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoBase64, videoMime, idemToken, videoInIDB) {
   const entry = {
     pId, itemsArr,
     remarkNote: remarkNote || '',
@@ -3274,6 +3409,7 @@ function _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, vide
     videoBase64: videoBase64 || '',
     videoMime: videoMime || currentVideoMime || 'video/webm',
     idemToken: idemToken || '',
+    videoInIDB: !!videoInIDB, // ✅ true = วิดีโออยู่ใน IndexedDB, false = inline base64 หรือไม่มี
     ts: Date.now()
   };
   const _write = (e) => {
@@ -3329,10 +3465,22 @@ async function retryFailedUploads() {
         continue;
       }
       try {
+        // ✅ ถ้า video อยู่ใน IDB → โหลด blob มาแปลง base64 ตอน upload (ไม่เก็บใน memory นาน)
+        let videoData = job.videoBase64 || '';
+        let videoMime = job.videoMime || 'video/webm';
+        if (!videoData && job.videoInIDB) {
+          try {
+            const rec = await _getVideoBlob(job.pId);
+            if (rec && rec.blob) {
+              videoData = await _blobToBase64(rec.blob);
+              videoMime = rec.mimeType || videoMime;
+            }
+          } catch(e) { console.warn(`[VideoDB] โหลด ${job.pId} ไม่ได้:`, e.message); }
+        }
         const res = await callGAS("saveData", {
           parcelId: job.pId, items: job.itemsArr,
-          videoEvidence: job.videoBase64 || "no_video",
-          videoMimeType: job.videoMime || "video/webm",
+          videoEvidence: videoData || "no_video",
+          videoMimeType: videoMime,
           remark: job.remarkNote || "",
           orderId: job.orderId || "",
           marketplace: job.marketplace || "",
@@ -3342,6 +3490,8 @@ async function retryFailedUploads() {
           console.log(`[FailQueue] retry ${job.pId} สำเร็จ`);
           _markSent(job.pId);
           _flushedIds.delete(job.pId);
+          // ✅ ลบ video ใน IDB หลัง sync สำเร็จ
+          if (job.videoInIDB) _deleteVideoBlob(job.pId);
         } else { remaining.push(job); }
       } catch(e) { remaining.push(job); }
     }
@@ -4921,6 +5071,7 @@ async function _doFinishWork(isManual = false) {
 async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', orderId = '', marketplace = '', idemToken = '') {
   let videoData = '';
   let persisted = false;
+  let videoMimeForUpload = currentVideoMime || 'video/webm';
   try {
     // ✅ ถ้า GAS ยืนยันสำเร็จแล้ว (เช่น อีกเครื่องส่งไปแล้ว) → ข้ามเลย
     if (_isSent(pId)) {
@@ -4937,18 +5088,28 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       }
     } catch(e) { console.warn('[Cache] ล้าง localOrdersCache ไม่ได้:', e.message); }
 
-    // แปลงวิดีโอเป็น base64 ก่อนทุกขั้นตอน — ถ้า fail ที่นี่ก็เก็บแบบไม่มีวิดีโอ
-    try {
-      videoData = await convertChunksToBase64(chunks);
-    } catch(convErr) {
-      console.warn(`[Background] convert video fail for ${pId}:`, convErr.message);
-      videoData = '';
+    // ✅ เก็บ Blob ลง IndexedDB (quota ใหญ่ ~50MB-GBs vs localStorage 5MB)
+    //   วิดีโอจะอยู่ในเครื่องจนกว่าจะ sync สำเร็จ แล้วลบทิ้งอัตโนมัติ
+    let videoSavedToIDB = false;
+    if (chunks && chunks.length > 0) {
+      try {
+        const blob = new Blob(chunks, { type: videoMimeForUpload });
+        if (blob.size > 0) {
+          await _saveVideoBlob(pId, blob, videoMimeForUpload);
+          videoSavedToIDB = true;
+          console.log(`[VideoDB] เก็บ ${pId} ลง IDB (${(blob.size/1024).toFixed(0)} KB)`);
+        }
+      } catch(idbErr) {
+        console.warn(`[VideoDB] เก็บ ${pId} ไม่ได้:`, idbErr.message);
+        // fallback — แปลงเป็น base64 ใส่ queue เลย (เก่า)
+        try { videoData = await convertChunksToBase64(chunks); } catch(_) {}
+      }
     }
 
-    // ✅ Persist-before-upload — บันทึกลง localStorage queue ก่อน callGAS
-    //   กรณีที่ browser ฆ่า fetch กลางคัน (user ปิดแอป / สลับแอป / หน้าจอดับ บนมือถือ)
-    //   ข้อมูล + วิดีโอจะยังอยู่ใน queue และ retry อัตโนมัติเมื่อเปิดแอปอีกครั้ง
-    _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, currentVideoMime, idemToken);
+    // ✅ Persist-before-upload — บันทึก order data ลง localStorage queue ก่อน callGAS
+    //   ถ้า videoSavedToIDB=true → queue ไม่ต้องมี videoBase64 (โหลดจาก IDB ตอน upload)
+    //   ถ้า fallback → queue มี videoBase64 inline เหมือนเดิม
+    _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, videoMimeForUpload, idemToken, videoSavedToIDB);
     persisted = true;
     updateFailQueueBadge();
 
@@ -4957,7 +5118,18 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       return;
     }
 
-    const res = await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", videoMimeType: currentVideoMime || "video/webm", remark: remarkNote || "", orderId, marketplace, idemToken });
+    // โหลด video จาก IDB ตอนจะ upload จริง (ไม่ค้าง base64 ใน memory นาน)
+    if (videoSavedToIDB && !videoData) {
+      try {
+        const rec = await _getVideoBlob(pId);
+        if (rec && rec.blob) {
+          videoData = await _blobToBase64(rec.blob);
+          videoMimeForUpload = rec.mimeType || videoMimeForUpload;
+        }
+      } catch(e) { console.warn(`[VideoDB] อ่าน blob ${pId} ไม่ได้:`, e.message); }
+    }
+
+    const res = await callGAS("saveData", { parcelId: pId, items: itemsArr, videoEvidence: videoData || "no_video", videoMimeType: videoMimeForUpload, remark: remarkNote || "", orderId, marketplace, idemToken });
     if (!isGasSuccess(res)) {
       console.warn(`[Background] ${pId} GAS ไม่สำเร็จ — ยังอยู่ใน queue รอ retry:`, res?.error || 'no response');
       // ไม่ลบออกจาก queue — retryFailedUploads จะมาเอาไปยิงใหม่
@@ -4988,6 +5160,10 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
 
     _markSent(pId);
     _removeFromFailQueue(pId);
+    // ✅ Sync เสร็จ → ลบ video ใน IDB อัตโนมัติ
+    _deleteVideoBlob(pId).then(ok => {
+      if (ok) console.log(`[VideoDB] ลบ ${pId} หลัง sync เสร็จ`);
+    });
     updateFailQueueBadge();
     console.log(`[Background] บันทึก ${pId} สำเร็จ${res?.note ? ' (' + res.note + ')' : ''}`);
     // ✅ v2.8: refresh localOrdersCache จาก GAS พื้นหลัง ทันทีหลัง save สำเร็จ
@@ -5000,7 +5176,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       if (!videoData && chunks && chunks.length > 0) {
         try { videoData = await convertChunksToBase64(chunks); } catch(e) {}
       }
-      _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, currentVideoMime, idemToken);
+      _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, currentVideoMime, idemToken, false);
       updateFailQueueBadge();
     }
   }

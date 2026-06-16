@@ -396,7 +396,10 @@ function saveData(body) {
   const idemToken = String(body.idemToken || "").slice(0, 64);
 
   // ⚡ Fast path: เช็ค token ก่อนทำอะไรเลย — ถ้าเคย complete แล้วก็ไม่ต้องถือ lock
-  if (idemToken && _isCompletedToken(idemToken)) {
+  //   ยกเว้นกรณี request นี้มี video แต่ row เดิมอาจไม่มี (เช่น keepalive flush ส่งไปก่อนแบบไม่มี video)
+  //   → ปล่อยให้เข้า lock เพื่ออัปเดต videoUrl ของ row เดิม
+  const hasVideo = !!(videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large");
+  if (idemToken && _isCompletedToken(idemToken) && !hasVideo) {
     Logger.log("[saveData] Idempotent retry (fast path): " + idemToken);
     _logSaveAttempt(parcelId, marketplace, "idempotent_retry", itemsArr.length, "token " + idemToken);
     return { success: true, note: "idempotent_retry" };
@@ -435,7 +438,8 @@ function saveData(body) {
 
   try {
     // เช็ค token อีกครั้งใน lock — กันกรณี request อื่นเพิ่ง complete token เดียวกัน
-    if (idemToken && _isCompletedToken(idemToken)) {
+    //   ถ้ามี video → ปล่อยผ่านเพื่ออัปเดต video ของ row เดิม (เคส keepalive ส่งโดยไม่มี video)
+    if (idemToken && _isCompletedToken(idemToken) && !hasVideo) {
       Logger.log("[saveData] Idempotent retry (in-lock): " + idemToken);
       _logSaveAttempt(parcelId, marketplace, "idempotent_retry", itemsArr.length, "token " + idemToken);
       return { success: true, note: "idempotent_retry" };
