@@ -5274,35 +5274,32 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       return;
     }
 
-    // ⚡ PHASE A: บันทึก "ออเดอร์" (ไม่มีวิดีโอ) — เร็ว, lock สั้น
-    const ores = await callGAS("saveData", {
-      parcelId: pId, items: itemsArr,
-      videoEvidence: "no_video",
-      videoMimeType: videoMimeForUpload,
-      remark: remarkNote || "",
-      orderId, marketplace, idemToken
-    }, 30000);
-    await fbDone;
-
-    if (isGasSuccess(ores)) {
-      _updateQueueItem(pId, (cur) => { cur.orderSent = true; return cur; });
-      _auditPack(pId, 'order', 'sent', ores?.note || 'row ' + (ores?.row || '?'));
-      // ⚠️ duplicate_skipped — ตั้งใจ rescan tracking เดิม
-      if (ores.note === 'duplicate_skipped') {
-        try {
-          Swal.fire({ icon: 'warning', title: 'พัสดุนี้บันทึกซ้ำ',
-            html: `<div style="font-size:0.95rem; line-height:1.6;"><strong>${escHtml(pId)}</strong> เคยถูกบันทึกไปแล้ว<br><span style="color:#a00;">รายการที่เพิ่งสแกนรอบนี้ <u>ไม่ถูกบันทึกลงในชีต</u></span><br><span style="font-size:0.85rem; color:#666;">รายการของเดิมยังอยู่ — ถ้าต้องการแก้ไข ติดต่อแอดมินให้แก้ในชีตโดยตรง</span></div>`,
-            confirmButtonText: 'รับทราบ', timer: 8000, timerProgressBar: true });
-        } catch(e) {}
+    // ⚡ PHASE A + 🎬 PHASE B "ขนานกัน" — order กับ video ไม่ขึ้นต่อกัน
+    //   (uploadVideoForParcel สร้าง placeholder ถ้า order ยังไม่ลงชีต)
+    //   → วิดีโอเริ่มอัป Drive ทันที ไม่ต้องรอ order save ที่อาจติด lock 30s
+    const phaseA = (async () => {
+      const ores = await callGAS("saveData", {
+        parcelId: pId, items: itemsArr, videoEvidence: "no_video",
+        videoMimeType: videoMimeForUpload, remark: remarkNote || "",
+        orderId, marketplace, idemToken
+      }, 30000).catch(e => ({ success: false, error: e.message }));
+      if (isGasSuccess(ores)) {
+        _updateQueueItem(pId, (cur) => { cur.orderSent = true; return cur; });
+        _auditPack(pId, 'order', 'sent', ores?.note || 'row ' + (ores?.row || '?'));
+        if (ores.note === 'duplicate_skipped') {
+          try {
+            Swal.fire({ icon: 'warning', title: 'พัสดุนี้บันทึกซ้ำ',
+              html: `<div style="font-size:0.95rem; line-height:1.6;"><strong>${escHtml(pId)}</strong> เคยถูกบันทึกไปแล้ว<br><span style="color:#a00;">รายการที่เพิ่งสแกนรอบนี้ <u>ไม่ถูกบันทึกลงในชีต</u></span><br><span style="font-size:0.85rem; color:#666;">รายการของเดิมยังอยู่ — ถ้าต้องการแก้ไข ติดต่อแอดมินให้แก้ในชีตโดยตรง</span></div>`,
+              confirmButtonText: 'รับทราบ', timer: 8000, timerProgressBar: true });
+          } catch(e) {}
+        }
+      } else {
+        _auditPack(pId, 'order', 'error', ores?.error || 'no response');
       }
-    } else {
-      console.warn(`[Background] ${pId} order ไม่สำเร็จ — รอ retry/drain:`, ores?.error || 'no response');
-      _auditPack(pId, 'order', 'error', ores?.error || 'no response');
-    }
-    updateFailQueueBadge();
+    })();
 
-    // 🎬 PHASE B: อัปวิดีโอ "แยก call" (uploadVideoForParcel) — ไม่แย่ง lock กับการแพค → ติด URL ทันที
-    if (videoData) {
+    const phaseB = (async () => {
+      if (!videoData) return;
       _auditPack(pId, 'video', 'attempt', 'phase B');
       const vres = await callGAS("uploadVideoForParcel", {
         parcelId: pId, videoEvidence: videoData, videoMimeType: videoMimeForUpload
@@ -5315,7 +5312,10 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
         _updateQueueItem(pId, (cur) => { cur.videoAttempts = (cur.videoAttempts || 0) + 1; return cur; });
         _auditPack(pId, 'video', 'error', vres?.error || 'fail');
       }
-    }
+    })();
+
+    await Promise.all([phaseA, phaseB, fbDone]);
+    updateFailQueueBadge();
 
     _finalizeEntry(pId);   // ลบ entry ถ้า order ปลอดภัย + วิดีโอเสร็จ
     updateFailQueueBadge();
