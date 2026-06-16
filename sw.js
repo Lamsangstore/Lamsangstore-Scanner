@@ -51,6 +51,20 @@ self.addEventListener('fetch', (event) => {
     return; // ปล่อยให้ browser ต่อ network ตรงๆ ไม่ผ่าน SW cache
   }
 
+  // ✅ HTML/หน้าเว็บ (navigation) = network-first — โหลด index.html สดเสมอ
+  //    กัน "cache เก่าค้าง" ที่ทำให้ CSP/โค้ดเก่าติดอยู่ (offline ค่อย fallback cache)
+  if (event.request.mode === 'navigate' ||
+      url.pathname.endsWith('/') || url.pathname.endsWith('index.html')) {
+    event.respondWith(
+      fetch(event.request).then((response) => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return response;
+      }).catch(() => caches.match(event.request).then(c => c || caches.match('./index.html')))
+    );
+    return;
+  }
+
   // Always fetch manifest and icons from network (never serve stale)
   if (url.pathname.includes('manifest') ||
       url.pathname.includes('icon-') || 

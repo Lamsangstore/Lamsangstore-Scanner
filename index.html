@@ -3556,9 +3556,32 @@ async function showDiagnostic() {
       <b>📱 เครื่อง:</b> <span style="font-size:0.75rem;">${escHtml((DEVICE_ID||'').slice(0,8))}</span>
     </div>`,
     confirmButtonText: 'ปิด',
+    showDenyButton: true,
+    denyButtonText: '🧹 ล้าง cache + อัปเดตแอป',
+    denyButtonColor: '#e07a5f',
     showCancelButton: q.length > 0,
     cancelButtonText: '🔄 sync เดี๋ยวนี้',
-  }).then(r => { if (r.dismiss === Swal.DismissReason.cancel) retryFailedUploads(true); });
+  }).then(r => {
+    if (r.dismiss === Swal.DismissReason.cancel) retryFailedUploads(true);
+    else if (r.isDenied) _forceUpdateApp();
+  });
+}
+
+// 🧹 ล้าง cache + SW + reload — แก้กรณีแอปติด cache เก่า (เช่น CSP เก่าบล็อก Firebase)
+async function _forceUpdateApp() {
+  try {
+    Swal.fire({ title: 'กำลังอัปเดต...', html: 'ล้าง cache + โหลดเวอร์ชันใหม่', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    if ('caches' in window) {
+      const names = await caches.keys();
+      await Promise.all(names.map(n => caches.delete(n)));
+    }
+    if (navigator.serviceWorker) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+  } catch(e) { console.warn('[forceUpdate]', e); }
+  // reload แบบ bypass cache
+  location.reload(true);
 }
 
 function showQueueModal() {
