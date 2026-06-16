@@ -1106,6 +1106,17 @@ function _tryUpdateVideoUrl(sheet, rowIndex, parcelId, videoBase64, videoMime, v
 //   - row เดิมยังคงแสดง no_video, placeholder มี Drive URL แยกอยู่
 // reconcile วิ่งดู Drive แล้ว map กลับมา fix ทุก row ที่ยัง no_video
 // ============================================================
+// ✅ nightly wrapper — เติม videoUrl ให้ row ที่ no_video แต่มีไฟล์ใน Drive (กู้อัตโนมัติ)
+//   ตั้ง trigger ใน setupDailyCleanupTrigger (รัน 04:30 หลัง stats rebuild)
+function nightlyVideoReconcile() {
+  try {
+    const res = reconcileVideoUrls({ sinceDays: 3 });
+    Logger.log("[nightlyVideoReconcile] fixed " + (res && res.fixed) + " rows");
+  } catch(e) {
+    Logger.log("[nightlyVideoReconcile] error: " + e.message);
+  }
+}
+
 function reconcileVideoUrls(body) {
   body = body || {};
   const sinceDays = Math.max(1, Math.min(90, Number(body.sinceDays) || 7));
@@ -1887,7 +1898,7 @@ function setupDailyCleanupTrigger() {
   // ลบ trigger เดิม (กันซ้ำซ้อนถ้ารันหลายรอบ)
   const HANDLERS = ["cleanUpOldOrders", "backupOrdersDaily",
                     "cleanUpOldMarketplaceData", "reconcileSaveLogVsOrders",
-                    "mergeDuplicateOrders", "nightlyStatsRebuild"];
+                    "mergeDuplicateOrders", "nightlyStatsRebuild", "nightlyVideoReconcile"];
   ScriptApp.getProjectTriggers().forEach(t => {
     if (HANDLERS.indexOf(t.getHandlerFunction()) !== -1) {
       ScriptApp.deleteTrigger(t);
@@ -1905,6 +1916,10 @@ function setupDailyCleanupTrigger() {
   // ✅ Rebuild Firebase stats 3 วันล่าสุด ตอน 04:00 (หลัง merge/cleanup ทุกตัว → exact)
   ScriptApp.newTrigger("nightlyStatsRebuild")
     .timeBased().everyDays(1).atHour(4).create();
+
+  // ✅ เติม videoUrl ให้ row ที่ no_video แต่มีไฟล์ใน Drive (กู้ race ที่ scan พลาด) — 05:00
+  ScriptApp.newTrigger("nightlyVideoReconcile")
+    .timeBased().everyDays(1).atHour(5).create();
 
   // Backup ก่อน cleanup 1 ชั่วโมง — backup ล่าสุดจะเป็น snapshot ก่อนถูกตัด
   ScriptApp.newTrigger("backupOrdersDaily")
@@ -1925,6 +1940,7 @@ function setupDailyCleanupTrigger() {
   Logger.log("   02:00 น. → cleanUpOldOrders (เก็บ " + CLEANUP_ORDERS_RETENTION_DAYS + " วัน)");
   Logger.log("   03:00 น. → cleanUpOldMarketplaceData (เก็บ 2 วัน)");
   Logger.log("   04:00 น. → nightlyStatsRebuild (rebuild Firebase stats 3 วันล่าสุด)");
+  Logger.log("   05:00 น. → nightlyVideoReconcile (เติม videoUrl จาก Drive ให้ row no_video)");
 }
 
 // ============================================================
