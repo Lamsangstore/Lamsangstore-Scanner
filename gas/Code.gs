@@ -291,9 +291,10 @@ function refreshRecentStats() {
   const y = new Date(today.getTime() - 86400000);
   const dates = [Utilities.formatDate(y, tz, "yyyy-MM-dd"), Utilities.formatDate(today, tz, "yyyy-MM-dd")];
   _putStatsForDates(dates);
+  _mirrorOrdersForDates(dates); // 🔍 mirror ออเดอร์ลง /orders ให้ search เร็ว
 }
 
-// nightly — rebuild 3 วันล่าสุด exact (กัน drift จาก merge/late edits)
+// nightly — rebuild 3 วันล่าสุด exact (กัน drift จาก merge/late edits) + prune /orders เก่า
 function nightlyStatsRebuild() {
   const cfg = _firebaseCfg();
   if (!cfg.url || !cfg.secret) return;
@@ -303,7 +304,130 @@ function nightlyStatsRebuild() {
     dates.push(Utilities.formatDate(new Date(Date.now() - i * 86400000), tz, "yyyy-MM-dd"));
   }
   _putStatsForDates(dates);
+  _mirrorOrdersForDates(dates);
+  pruneOldFirebaseOrders();
   Logger.log("[nightlyStatsRebuild] rebuilt " + dates.join(", "));
+}
+
+// ============================================================
+// 🔍 FIREBASE ORDERS MIRROR — ให้ search อ่านตรงจาก Firebase (เร็ว ~100ms)
+//   /orders/{trackingKey} = { ts, tk, oid, mp, v, rm, it:[sku..] }
+//   key = tracking (sanitize) — ตรงกับ model dedup ของแอป
+// ============================================================
+function _collectOrdersForDates(dateSet) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_ORDERS);
+  const out = {}; // trackingKey -> doc
+  if (!sheet) return out;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return out;
+  const tz = Session.getScriptTimeZone();
+  let minDate = null;
+  dateSet.forEach(d => { if (!minDate || d < minDate) minDate = d; });
+
+  const lastCol = sheet.getLastColumn();
+  const CHUNK = 2000;
+  let row = lastRow, stop = false;
+  while (row >= 2 && !stop) {
+    const from = Math.max(2, row - CHUNK + 1);
+    const data = sheet.getRange(from, 1, row - from + 1, lastCol).getValues();
+    for (let i = data.length - 1; i >= 0; i--) {
+      const ts = data[i][0];
+      if (!(ts instanceof Date)) continue;
+      const dayKey = Utilities.formatDate(ts, tz, "yyyy-MM-dd");
+      if (dayKey < minDate) { stop = true; break; }
+      if (dateSet.indexOf(dayKey) === -1) continue;
+      const remark = String(data[i][5] || "");
+      if (remark.indexOf("__VIDEO_FIRST__") === 0) continue;
+      const tracking = numToStr(data[i][3]);
+      if (!tracking) continue;
+      const items = [];
+      for (let c = 7; c < data[i].length; c++) {
+        const v = String(data[i][c]).trim();
+        if (v) items.push(v);
+      }
+      const key = _fbKey(tracking.toUpperCase());
+      // ถ้า tracking ซ้ำ (ออเดอร์เดียวกันหลายแถว) → เก็บแถวที่ใหม่กว่า
+      const tsMs = ts.getTime();
+      if (out[key] && out[key].ts >= tsMs) continue;
+      out[key] = {
+        ts: tsMs,
+        tk: tracking,
+        oid: numToStr(data[i][1]),
+        mp: String(data[i][2] || "").trim().toLowerCase(),
+        v: String(data[i][4] || ""),
+        rm: remark,
+        it: items
+      };
+    }
+    row = from - 1;
+  }
+  return out;
+}
+
+// PATCH /orders.json ทีเดียวหลายรายการ (efficient — 1 HTTP call)
+function _mirrorOrdersForDates(dates) {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) return;
+  const docs = _collectOrdersForDates(dates);
+  const keys = Object.keys(docs);
+  if (keys.length === 0) return;
+  try {
+    const url = cfg.url + "/orders.json?auth=" + encodeURIComponent(cfg.secret);
+    const resp = UrlFetchApp.fetch(url, {
+      method: "patch",
+      contentType: "application/json",
+      payload: JSON.stringify(docs),
+      muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() !== 200) Logger.log("[mirrorOrders] PATCH fail: " + resp.getResponseCode());
+    else Logger.log("[mirrorOrders] mirrored " + keys.length + " orders");
+  } catch(e) { Logger.log("[mirrorOrders] error: " + e.message); }
+}
+
+// backfill ออเดอร์ทั้งหมด → /orders (รันครั้งเดียวใน editor)
+function backfillAllOrders() {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) throw new Error("ยังไม่ได้ setupFirebase()");
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_ORDERS);
+  if (!sheet || sheet.getLastRow() < 2) { Logger.log("[backfillOrders] ไม่มีข้อมูล"); return; }
+  const tz = Session.getScriptTimeZone();
+  const tsCol = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+  const dateSet = {};
+  tsCol.forEach(r => { if (r[0] instanceof Date) dateSet[Utilities.formatDate(r[0], tz, "yyyy-MM-dd")] = true; });
+  const dates = Object.keys(dateSet).sort();
+  for (let i = 0; i < dates.length; i += 10) {
+    _mirrorOrdersForDates(dates.slice(i, i + 10));
+  }
+  Logger.log("[backfillOrders] เสร็จ " + dates.length + " วัน");
+}
+
+// ลบ /orders เก่ากว่า retention (กัน Firebase บวม) — รัน nightly
+function pruneOldFirebaseOrders() {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) return;
+  try {
+    // ดึงเฉพาะ key+ts ทั้งหมด (shallow ไม่ได้กับค่า nested → ดึง orderBy ts)
+    const cutoff = Date.now() - CLEANUP_ORDERS_RETENTION_DAYS * 86400000;
+    const url = cfg.url + '/orders.json?auth=' + encodeURIComponent(cfg.secret) +
+                '&orderBy=' + encodeURIComponent('"ts"') + '&endAt=' + cutoff;
+    const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) return;
+    const body = resp.getContentText();
+    if (!body || body === "null") return;
+    const old = JSON.parse(body);
+    const keys = Object.keys(old || {});
+    if (keys.length === 0) return;
+    // ลบทีละก้อนผ่าน multi-path PATCH = null
+    const del = {};
+    keys.forEach(k => del[k] = null);
+    UrlFetchApp.fetch(cfg.url + '/orders.json?auth=' + encodeURIComponent(cfg.secret), {
+      method: "patch", contentType: "application/json",
+      payload: JSON.stringify(del), muteHttpExceptions: true
+    });
+    Logger.log("[pruneOldFirebaseOrders] ลบ " + keys.length + " orders เก่า");
+  } catch(e) { Logger.log("[pruneOldFirebaseOrders] error: " + e.message); }
 }
 
 // backfill — รันครั้งเดียวใน editor เพื่อสร้าง stats ย้อนหลังทั้งหมด

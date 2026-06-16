@@ -5091,6 +5091,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, videoMimeForUpload, idemToken);
     persisted = true;
     updateFailQueueBadge();
+    _searchCacheAddOptimistic(pId, itemsArr, orderId, marketplace, remarkNote); // 🔍 search เจอทันที
 
     // 🔥 Mirror ลง Firebase ทันที (durable ฝั่ง server — กันออเดอร์หายแม้เครื่องหาย)
     //   ทำคู่ขนาน ไม่ block GAS call
@@ -6558,6 +6559,7 @@ async function openTab(tab, btn) {
   // ── Search Animations ──
   if (tab === 'search') {
     animateSearch();
+    _loadOrdersCache(false).catch(() => {}); // 🔍 preload Firebase orders → ค้นครั้งแรกเร็ว
   }
 
   if (tab !== 'search' && searchScanner) { searchScanner.clear(); document.getElementById("search-reader").style.display = "none"; }
@@ -6868,6 +6870,72 @@ async function _firebaseReadStats(start, end) {
     console.warn('[Report] Firebase stats read fail → fallback GAS:', e.message);
     return null;
   }
+}
+
+// ============================================================
+// 🔍 FIREBASE SEARCH — โหลด /orders เข้า cache แล้วค้น substring ในเครื่อง
+//   เร็ว ~instant, พฤติกรรมเหมือน GAS searchData (match tracking + orderId)
+// ============================================================
+let _ordersCache = null;         // array ของ doc { ts, tk, oid, mp, v, rm, it }
+let _ordersCacheAt = 0;          // เวลาโหลดล่าสุด
+const ORDERS_CACHE_TTL = 5 * 60 * 1000; // 5 นาที
+
+async function _loadOrdersCache(force) {
+  if (!FIREBASE_ENABLED()) return null;
+  if (!force && _ordersCache && (Date.now() - _ordersCacheAt) < ORDERS_CACHE_TTL) return _ordersCache;
+  try {
+    // ดึง 8000 รายการล่าสุด (ต้องมี rule ".indexOn": "ts" ที่ /orders)
+    const url = `${FIREBASE_DB_URL}/orders.json?orderBy=${encodeURIComponent('"ts"')}&limitToLast=8000`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return _ordersCache; // คงของเก่าไว้
+    const raw = await res.json();
+    const arr = [];
+    if (raw) for (const k in raw) arr.push(raw[k]);
+    arr.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    _ordersCache = arr;
+    _ordersCacheAt = Date.now();
+    return _ordersCache;
+  } catch(e) {
+    console.warn('[Search] load orders cache fail:', e.message);
+    return _ordersCache;
+  }
+}
+
+// แปลง doc Firebase → row array แบบเดียวกับ GAS searchData
+//   [ts(formatted), orderId, marketplace, tracking, videoUrl, remark, count, ...items]
+function _fbOrderToRow(d) {
+  const dt = d.ts ? new Date(d.ts) : null;
+  const tsStr = dt ? `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}` : '';
+  const items = Array.isArray(d.it) ? d.it : [];
+  return [tsStr, d.oid || '', d.mp || '', d.tk || '', d.v || '', d.rm || '', items.length, ...items];
+}
+
+// ค้นใน cache → คืน row arrays (เรียงใหม่→เก่า) หรือ null ถ้าใช้ Firebase ไม่ได้
+async function _firebaseSearch(query) {
+  const cache = await _loadOrdersCache(false);
+  if (!cache) return null;
+  const kw = String(query || '').trim().toUpperCase();
+  if (!kw) return [];
+  const hits = cache.filter(d =>
+    String(d.tk || '').toUpperCase().includes(kw) ||
+    String(d.oid || '').toUpperCase().includes(kw)
+  );
+  return hits.map(_fbOrderToRow);
+}
+
+// ออเดอร์ที่เพิ่งแพ็ก → ใส่ cache ทันที (search เจอเลยไม่ต้องรอ mirror 5 นาที)
+function _searchCacheAddOptimistic(pId, itemsArr, orderId, marketplace, remark) {
+  if (!FIREBASE_ENABLED() || !_ordersCache) return;
+  const key = String(pId || '').toUpperCase();
+  // ถ้ามีอยู่แล้ว → ไม่ซ้ำ
+  if (_ordersCache.some(d => String(d.tk || '').toUpperCase() === key)) return;
+  _ordersCache.unshift({
+    ts: Date.now(), tk: pId, oid: orderId || '', mp: (marketplace || '').toLowerCase(),
+    v: '', rm: remark || '', it: Array.isArray(itemsArr) ? itemsArr.map(String) : []
+  });
 }
 
 async function fetchReport() {
@@ -7311,7 +7379,10 @@ async function runSearch() {
   document.getElementById("resultBody").innerHTML = "";
   document.getElementById("tableHead").innerHTML = "";
   try {
-    const res = await callGAS("searchData", { query: q });
+    // ⚡ ลอง Firebase ก่อน (เร็ว) → ไม่ได้ค่อย fallback GAS
+    let res = await _firebaseSearch(q);
+    if (res === null) res = await callGAS("searchData", { query: q });
+    else console.log('[Search] served from Firebase ⚡');
     document.getElementById("loadingSearch").style.display = "none";
     if (!res || res.length === 0) {
       document.getElementById("emptySearch").style.display = "block";
