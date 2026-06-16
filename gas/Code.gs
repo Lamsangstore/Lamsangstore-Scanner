@@ -224,6 +224,7 @@ function drainFirebaseInbox(opts) {
     const delKeys = {};              // doc ที่ process แล้ว → ลบทีเดียว
     const newRows = [];              // row ใหม่ที่จะ append
     const newTokens = [];            // token ที่ต้อง mark completed
+    const ordersMirror = {};         // 🔍 เขียน /orders มิเรอร์พร้อมกัน → search เห็นทันที (ไม่รอ mirror 5 นาที)
     const seenInBatch = new Set();
     let processed = 0;
 
@@ -256,6 +257,12 @@ function drainFirebaseInbox(opts) {
       seenInBatch.add(tk);
       newRows.push([new Date(), String(d.orderId || ""), String(d.marketplace || ""), parcelId,
                     videoUrl || "no_video", String(d.remark || ""), itemsArr.length, ...itemsArr.slice(0, 500).map(String)]);
+      // 🔍 มิเรอร์ /orders จากข้อมูล /inbox ที่มีอยู่ในมือ — ไม่ต้องวนกลับไปอ่านชีต
+      ordersMirror[_fbKey(tk)] = {
+        ts: Number(d.ts) || Date.now(), tk: parcelId, oid: String(d.orderId || ""),
+        mp: String(d.marketplace || "").trim().toLowerCase(), v: videoUrl || "",
+        rm: String(d.remark || ""), it: itemsArr.slice(0, 500).map(String)
+      };
       if (d.idemToken) newTokens.push({ token: d.idemToken, parcelId: parcelId });
       delKeys[key] = null;
     }
@@ -276,6 +283,15 @@ function drainFirebaseInbox(opts) {
         SpreadsheetApp.flush();
         newTokens.forEach(x => _markTokenCompleted(x.token));
       } finally { try { slock.releaseLock(); } catch(_) {} }
+
+      // 🔍 เขียน /orders มิเรอร์ "ตอนเดียวกับที่เขียนชีต" → search เห็นออเดอร์ใหม่ในไม่กี่วิ
+      //   (ไม่ต้องรอ refreshRecentStats mirror รอบ 5 นาที — ตัด round-trip ชีต→มิเรอร์ออก)
+      try {
+        UrlFetchApp.fetch(cfg.url + "/orders.json?auth=" + encodeURIComponent(cfg.secret), {
+          method: "patch", contentType: "application/json",
+          payload: JSON.stringify(ordersMirror), muteHttpExceptions: true
+        });
+      } catch(e) { Logger.log("[drainFirebase] /orders mirror error: " + e.message); }
     }
 
     // ลบ doc ที่ process แล้วทั้งหมด "ทีเดียว" (multi-path PATCH = null)
