@@ -3416,12 +3416,21 @@ async function retryFailedUploads(force) {
         _updateQueueItem(job.pId, () => null); // ลบออกจาก queue
         synced++;
       } else {
-        // ล้มเหลว → เพิ่ม backoff ต่อรายการ (เขียนกลับแบบ read-modify-write)
-        _updateQueueItem(job.pId, (cur) => {
-          cur.attempts = (cur.attempts || 0) + 1;
-          cur.nextAt = Date.now() + _backoffFor(cur.attempts);
-          return cur;
-        });
+        // ล้มเหลว → เพิ่ม backoff ต่อรายการ
+        // ✅ ถ้าออเดอร์ขึ้น Firebase แล้ว (fbPushed) — drain จะลงชีตแน่
+        //    ที่ค้างคือ "วิดีโอ" → ลองอัปครบ 6 ครั้งแล้วเลิกถือไว้ (วิดีโอ best-effort
+        //    + nightlyVideoReconcile เก็บกวาดให้) กัน queue ค้างถาวร
+        const next = (job.attempts || 0) + 1;
+        if (job.fbPushed && next >= 6) {
+          _updateQueueItem(job.pId, () => null);
+          console.log(`[Queue] ${job.pId} ออเดอร์ปลอดภัยใน Firebase แล้ว — เลิก retry วิดีโอ (${next} ครั้ง)`);
+        } else {
+          _updateQueueItem(job.pId, (cur) => {
+            cur.attempts = next;
+            cur.nextAt = Date.now() + _backoffFor(next);
+            return cur;
+          });
+        }
       }
     }
     if (synced > 0) showSyncToast(`sync สำเร็จ ${synced} รายการ`);
@@ -3483,10 +3492,14 @@ function updateFailQueueBadge() {
   const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
   const badge = document.getElementById('networkBadge');
   const queueBanner = document.getElementById('queueBanner');
-  if (q.length > 0 && navigator.onLine) {
-    if (badge) { badge.style.background = 'var(--bg-d)'; badge.style.color = 'var(--text2)'; badge.textContent = `⏳ ${q.length}`; }
+  // ✅ นับเฉพาะ "ออเดอร์ที่ยังไม่ปลอดภัย" — fbPushed=true แปลว่าขึ้น Firebase แล้ว
+  //    GAS drain จะดูดลงชีตแน่นอน → ออเดอร์ปลอดภัย ที่ค้างคือแค่ "วิดีโอ" → ไม่ต้องเตือน
+  //    (Firebase ปิด → fbPushed เป็น false เสมอ → นับทั้งหมดเหมือนเดิม)
+  const atRisk = q.filter(j => !j.fbPushed).length;
+  if (atRisk > 0 && navigator.onLine) {
+    if (badge) { badge.style.background = 'var(--bg-d)'; badge.style.color = 'var(--text2)'; badge.textContent = `⏳ ${atRisk}`; }
     if (queueBanner) {
-      document.getElementById('queueBannerCount').textContent = q.length;
+      document.getElementById('queueBannerCount').textContent = atRisk;
       queueBanner.style.display = 'block';
     }
   } else {
