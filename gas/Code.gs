@@ -1289,22 +1289,29 @@ function reconcileVideoUrls(body) {
     const lastRow = sheet.getLastRow();
     if (lastRow <= 1) return { success: true, fixed: 0, scanned: 0, found: 0, driveFiles: 0, sinceDays };
 
-    // 1) scan ชีตหา row ที่ no_video + อยู่ในช่วง sinceDays "ก่อน" (เร็ว)
-    const data = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+    // 1) อ่าน "เฉพาะแถวท้ายชีต" ที่อยู่ในช่วง sinceDays — ไม่อ่านทั้งชีต
+    //    row append ต่อท้ายตามเวลาบันทึก → row ในช่วงวันที่อยู่ "ล่างสุด" เสมอ
+    //    อ่านจากล่างขึ้นบนทีละ chunk แล้วหยุดทันทีเมื่อเจอ ts เก่ากว่า cutoff
     const cutoff = Date.now() - (sinceDays * 24 * 60 * 60 * 1000);
-
+    const CHUNK = 2000;
     const candidates = []; // { row, parcelId }
     let scanned = 0, skippedDateRange = 0, skippedHadVideo = 0;
 
-    for (let i = 0; i < data.length; i++) {
-      const ts = data[i][0];
-      const tracking = String(data[i][3] || "").trim().toUpperCase();
-      const videoUrl = String(data[i][4] || "").trim();
-      if (!tracking) continue;
-      scanned++;
-      if (ts instanceof Date && ts.getTime() < cutoff) { skippedDateRange++; continue; }
-      if (videoUrl.indexOf('drive.google.com') !== -1) { skippedHadVideo++; continue; }
-      candidates.push({ row: i + 2, parcelId: tracking });
+    let cur = lastRow, reachedOlder = false;
+    while (cur >= 2 && !reachedOlder) {
+      const from = Math.max(2, cur - CHUNK + 1);
+      const chunk = sheet.getRange(from, 1, cur - from + 1, 5).getValues();
+      for (let i = chunk.length - 1; i >= 0; i--) {  // ล่าง → บน
+        const ts = chunk[i][0];
+        if (ts instanceof Date && ts.getTime() < cutoff) { reachedOlder = true; break; } // พ้นช่วง → หยุด
+        const tracking = String(chunk[i][3] || "").trim().toUpperCase();
+        if (!tracking) continue;
+        scanned++;
+        const videoUrl = String(chunk[i][4] || "").trim();
+        if (videoUrl.indexOf('drive.google.com') !== -1) { skippedHadVideo++; continue; }
+        candidates.push({ row: from + i, parcelId: tracking });
+      }
+      cur = from - 1;
     }
 
     // 2) ค้นไฟล์ใน Drive "เฉพาะ tracking ที่ no_video" (getFilesByName — ไม่ scan ทั้งโฟลเดอร์)
