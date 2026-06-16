@@ -6896,10 +6896,16 @@ async function _firebaseReadStats(start, end) {
     const q = `orderBy=${encodeURIComponent('"$key"')}&startAt=${encodeURIComponent('"'+start+'"')}&endAt=${encodeURIComponent('"'+end+'"')}`;
     const url = `${FIREBASE_DB_URL}/stats.json?${q}`;
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const timer = setTimeout(() => ctrl.abort(), 4000); // ⏱️ 4s — ถ้า Firebase พังจะไม่ช้ากว่า GAS มาก
     const res = await fetch(url, { signal: ctrl.signal });
     clearTimeout(timer);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // ❌ อ่านไม่ได้ — บอกสาเหตุชัดเจน (มักเป็น Rules ไม่เปิด read /stats)
+      let why = res.status;
+      try { const t = await res.text(); why += ' ' + t.slice(0, 120); } catch(e) {}
+      console.warn(`[Report] Firebase /stats อ่านไม่ได้ (${why}) → fallback GAS. เช็ค Rules: "stats":{".read":true}`);
+      return null;
+    }
     const raw = await res.json();
     if (!raw) return { totalOrders: 0, totalItems: 0, allProducts: [], dailyBreakdown: {}, byMarketplace: {} };
 
