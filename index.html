@@ -4212,6 +4212,7 @@ async function initScanner() {
     if (cachedProduct) {
       // ✅ มี product cache → โหลดทันที ไม่รอ GAS
       productMap = JSON.parse(cachedProduct);
+      _rebuildProductNameIndex();
       console.log('[initScanner] โหลด productMap จาก cache ทันที:', Object.keys(productMap).length, 'สินค้า');
       setupScanUI();
       // fetch order cache + เช็ค product hash background (ไม่บล็อก UI)
@@ -4248,12 +4249,35 @@ async function _firebaseFetchProducts() {
   } catch(e) { return null; }
 }
 
+// ✅ แปลง SKU → ชื่อสินค้า แบบทนทาน (case-insensitive) — ใช้ทั้ง search + report
+//   /stats เก็บ sku เป็น UPPERCASE, product sheet อาจ key คนละ case → index แบบ uppercase กันพลาด
+let _productNameUpper = {}; // UPPERCASE(sku) -> name
+function _rebuildProductNameIndex() {
+  const idx = {};
+  for (const k in productMap) {
+    if (Object.prototype.hasOwnProperty.call(productMap, k)) idx[String(k).toUpperCase()] = productMap[k];
+  }
+  _productNameUpper = idx;
+}
+function _productName(sku) {
+  const s = String(sku || '');
+  return _productNameUpper[s.toUpperCase()] || productMap[s] || s;
+}
+// ✅ บังคับให้ productMap พร้อมก่อนเปิด report/search (เผื่อยังไม่กด "เริ่ม" → ยังไม่โหลด)
+async function _ensureProductMap() {
+  if (!productMap || Object.keys(productMap).length === 0) {
+    try { await _fetchProductCacheNow(); } catch(e) {}
+  }
+  if (Object.keys(_productNameUpper).length === 0) _rebuildProductNameIndex();
+}
+
 // ✅ ดึง productMap (Firebase ก่อน → fallback GAS) แล้วบันทึก cache
 async function _fetchProductCacheNow() {
   let prodRes = await _firebaseFetchProducts();
   if (!prodRes) prodRes = await callGAS("getProductData").catch(() => ({}));
   if (prodRes && Object.keys(prodRes).length > 0) {
     productMap = prodRes;
+    _rebuildProductNameIndex();
     const json = JSON.stringify(prodRes);
     localStorage.setItem('productMap_cache', json);
     localStorage.setItem('productMap_hash', _simpleHash(json));
@@ -4274,6 +4298,7 @@ async function _checkProductCacheUpdate() {
     const oldHash = localStorage.getItem('productMap_hash') || '';
     if (newHash !== oldHash) {
       productMap = prodRes;
+      _rebuildProductNameIndex();
       localStorage.setItem('productMap_cache', newJson);
       localStorage.setItem('productMap_hash', newHash);
       localStorage.setItem('productMap_time', Date.now().toString());
@@ -7115,7 +7140,7 @@ async function _firebaseReadStats(start, end) {
       if (d.sku) for (const sk in d.sku) skuTotals[sk] = (skuTotals[sk] || 0) + d.sku[sk];
     }
     const allProducts = Object.entries(skuTotals)
-      .map(([sku, count]) => ({ sku, name: productMap[sku] || sku, count }))
+      .map(([sku, count]) => ({ sku, name: _productName(sku), count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 200);
     return { totalOrders, totalItems, allProducts, dailyBreakdown, byMarketplace, _source: 'firebase' };
@@ -7198,6 +7223,7 @@ async function fetchReport() {
   document.getElementById('dashLoading').style.display = 'block';
   document.getElementById('dashContent').style.display = 'none';
   try {
+    await _ensureProductMap(); // ให้ชื่อสินค้าพร้อมก่อน render (เผื่อยังไม่กด "เริ่ม")
     // ⚡ ลอง Firebase ก่อน (เร็ว ~100ms) → ไม่ได้ค่อย fallback GAS
     let data = await _firebaseReadStats(start, end);
     if (!data) data = await callGAS("getReportData", { start, end }, 45000);
@@ -7247,7 +7273,7 @@ function renderReport(data, start, end) {
       <div style="display:flex; align-items:center; gap:10px; overflow:hidden;">
         <div class="dash-rank">${i+1}</div>
         <div style="overflow:hidden;">
-          <div style="font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(item.name)}</div>
+          <div style="font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(item.sku ? _productName(item.sku) : item.name)}</div>
           <div style="font-size:0.72rem; color:#b89840;">${escHtml(item.sku || '')}</div>
         </div>
       </div>
@@ -7632,6 +7658,7 @@ async function runSearch() {
   document.getElementById("resultBody").innerHTML = "";
   document.getElementById("tableHead").innerHTML = "";
   try {
+    await _ensureProductMap(); // ให้ชื่อสินค้าพร้อมก่อนแสดงผลค้นหา
     // ⚡ ลอง Firebase ก่อน (เร็ว) → ไม่ได้ค่อย fallback GAS
     let res = await _firebaseSearch(q);
     if (res === null) res = await callGAS("searchData", { query: q });
@@ -7721,7 +7748,7 @@ function _renderSearchCards(rows) {
 
     const itemsHtml = rawItems.length > 0
       ? rawItems.map((item, i) => {
-          const name = productMap[String(item).toUpperCase()] || item;
+          const name = _productName(item);
           return `<div style="display:flex; align-items:baseline; gap:6px; padding:3px 0;">
             <span style="color:var(--gold); font-weight:600; font-size:0.75rem; flex-shrink:0;">${i + 1}.</span>
             <span style="font-size:0.82rem; color:var(--text);">${escHtml(name)}</span>
