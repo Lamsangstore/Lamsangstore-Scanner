@@ -538,6 +538,10 @@
       animation: shimmer 1.4s infinite;
     }
     @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    @keyframes syncPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.15); opacity: 0.75; }
+    }
     html.dark-mode .skeleton-line {
       background: linear-gradient(90deg, #2a2518 25%, #3a3020 50%, #2a2518 75%);
       background-size: 200% 100%;
@@ -3092,8 +3096,9 @@ document.addEventListener('visibilitychange', () => {
       if (scanner) { try { scanner.resume(); } catch(e) {} }
       if (!isRecording) startCameraRecording(false).catch(() => {}); // ✅ ต่อ chunks เดิม ไม่ reset
     }
-    // กลับมาแล้ว → retry queue ที่อาจ flush ไม่ทัน
+    // กลับมาแล้ว → retry queue ที่อาจ flush ไม่ทัน + kick video sync เร็ว
     setTimeout(() => retryFailedUploads(), 1000);
+    if (typeof _scheduleVideoSync === 'function') _scheduleVideoSync(1500);
   }
 });
 
@@ -3209,7 +3214,11 @@ function updateNetworkBadge() {
     }
   }
 }
-window.addEventListener('online',  updateNetworkBadge);
+window.addEventListener('online',  () => {
+  updateNetworkBadge();
+  // ⚡ ออนไลน์กลับมา → kick video sync ทันที (ไม่ต้องรอ 60s)
+  if (typeof _scheduleVideoSync === 'function') _scheduleVideoSync(500);
+});
 window.addEventListener('offline', updateNetworkBadge);
 updateNetworkBadge();
 
@@ -3485,9 +3494,7 @@ async function retryFailedUploads() {
     if (q.length === 0) {
       _isRetrying = false;
       _flushedIds.clear();
-      // queue ว่าง แต่อาจมี video ค้างใน IDB → ลอง sweep
-      _sweepPendingVideos().catch(() => {});
-      return;
+      return; // video sync มี scheduler ของตัวเอง — ไม่ต้องเรียก _sweep ที่นี่
     }
     console.log(`[FailQueue] กำลัง retry ${q.length} รายการ...`);
     const QUEUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // ✅ 7 วัน — หมดอายุอัตโนมัติ
@@ -3528,8 +3535,8 @@ async function retryFailedUploads() {
     updateFailQueueBadge();
   } catch(e) { console.error('retryFailedUploads:', e); }
   _isRetrying = false;
-  // ⚡ Phase 2: หลังจัดการ orders เสร็จ → sweep videos ที่ค้าง IDB
-  _sweepPendingVideos().catch(() => {});
+  // ⚡ Phase 2: หลังจัดการ orders เสร็จ → kick video sync ทันที (จะอัปต่อเนื่องถ้ายังเหลือ)
+  if (typeof _scheduleVideoSync === 'function') _scheduleVideoSync(800);
 }
 
 // เช็ก response จาก GAS ว่าสำเร็จหรือไม่ (รองรับทุกรูปแบบ)
@@ -5232,16 +5239,11 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     _auditPack(pId, 'order', 'sent', res?.note || 'row ' + (res?.row || '?'));
     console.log(`[Background] order ${pId} ลงชีตสำเร็จ${res?.note ? ' (' + res.note + ')' : ''}`);
 
-    // ⚡ Phase 2: upload video แยก (async — ไม่ block) → ลง Drive + update row
-    //   ถ้าล้ม → video ยังอยู่ใน IDB → retry รอบถัดไป (ทุก 60s, on visible, on online)
+    // ⚡ Phase 2: kick video sync scheduler → จะอัป continuous จนกว่าจะหมด
+    //   ไม่เรียก _uploadPendingVideo ตรงๆ — ให้ scheduler จัดการ batch parallel
     if (videoSavedToIDB) {
-      _auditPack(pId, 'video', 'attempt', 'phase2 start');
-      _uploadPendingVideo(pId).then(r => {
-        _auditPack(pId, 'video', r.ok ? 'sent' : 'error', r.ok ? (r.note || 'uploaded') : r.reason);
-      }).catch(e => {
-        _auditPack(pId, 'video', 'error', e.message);
-        console.warn(`[VideoUpload] ${pId} fail:`, e.message);
-      });
+      _auditPack(pId, 'video', 'attempt', 'phase2 queued');
+      if (typeof _scheduleVideoSync === 'function') _scheduleVideoSync(500);
     }
 
     // ✅ v2.8: refresh localOrdersCache จาก GAS พื้นหลัง ทันทีหลัง save สำเร็จ
@@ -5303,28 +5305,82 @@ async function _uploadPendingVideo(pId) {
   return { ok: false, reason };
 }
 
-// ✅ Sweep — สแกน IDB หา video ค้าง แล้วลองอัปโหลดที่ละใบ
-//   เรียกเป็นระยะ (interval, on visible, after retryFailedUploads)
+// ✅ Continuous video upload — adaptive scheduler
+//   มี video ค้าง → upload เป็น batch ต่อเนื่อง (parallel 2 ใบ ทุก 8 วินาที)
+//   ไม่มี video ค้าง → fall back เป็น health check ทุก 60 วินาที
 let _isSweepingVideos = false;
+let _videoSyncTimer = null;
+const VIDEO_SYNC_ACTIVE_MS  = 8000;   // 8s ระหว่างรอบ ตอนยัง catch-up
+const VIDEO_SYNC_IDLE_MS    = 60000;  // 60s ตอน queue ว่าง — เผื่อมี video ใหม่เพิ่ม
+const VIDEO_SYNC_PARALLEL   = 2;       // upload 2 ใบพร้อมกัน
+const VIDEO_SYNC_BATCH_MAX  = 6;       // ต่อ tick — กัน Drive API quota
 async function _sweepPendingVideos() {
-  if (_isSweepingVideos || !navigator.onLine) return;
+  if (_isSweepingVideos) return { uploaded: 0, remaining: -1 };
+  if (!navigator.onLine) return { uploaded: 0, remaining: -1 };
   _isSweepingVideos = true;
+  let uploaded = 0;
+  let remaining = 0;
   try {
     const keys = await _listVideoKeys();
-    if (!keys.length) { updateSyncVideoBadge(0); return; }
-    // ✅ พยายามอัปทุกใบ — GAS สร้าง placeholder ให้ถ้า order ยังไม่ลงชีต
-    let count = 0;
-    for (const pId of keys) {
-      const r = await _uploadPendingVideo(pId);
-      if (r.ok) count++;
+    if (!keys.length) { updateSyncVideoBadge(0); _setVideoBadgeActive(false); return { uploaded: 0, remaining: 0 }; }
+
+    _setVideoBadgeActive(true); // badge pulse → user เห็นว่ากำลังทำงาน
+
+    // upload เป็น batch — ทุก ๆ tick ส่ง VIDEO_SYNC_BATCH_MAX ใบ
+    // แต่ละ batch ส่ง VIDEO_SYNC_PARALLEL ใบขนานกัน → เร็วขึ้น 2x
+    const batchKeys = keys.slice(0, VIDEO_SYNC_BATCH_MAX);
+    for (let i = 0; i < batchKeys.length; i += VIDEO_SYNC_PARALLEL) {
+      const parallel = batchKeys.slice(i, i + VIDEO_SYNC_PARALLEL);
+      const results = await Promise.all(parallel.map(pId =>
+        _uploadPendingVideo(pId).catch(e => ({ ok: false, reason: e.message }))
+      ));
+      uploaded += results.filter(r => r && r.ok).length;
+      // ระหว่าง batch ดู badge สด — user เห็น progress
+      const liveCount = await _listVideoKeys();
+      updateSyncVideoBadge(liveCount.length);
     }
-    if (count > 0) console.log(`[VideoSweep] อัปโหลด ${count} video สำเร็จ`);
-    // อัปเดต badge ตามจำนวนที่ยังเหลือ
-    const remaining = await _listVideoKeys();
-    updateSyncVideoBadge(remaining.length);
+
+    remaining = (await _listVideoKeys()).length;
+    if (uploaded > 0) console.log(`[VideoSweep] อัปโหลด ${uploaded} ใบ — เหลือ ${remaining} ใบ`);
+    if (remaining === 0) _setVideoBadgeActive(false);
   } catch(e) { console.warn('[VideoSweep] error:', e.message); }
   finally { _isSweepingVideos = false; }
+  return { uploaded, remaining };
 }
+
+// ✅ Adaptive scheduler — กำหนดเวลา tick ถัดไปตามสถานะ
+function _scheduleVideoSync(ms) {
+  if (_videoSyncTimer) clearTimeout(_videoSyncTimer);
+  _videoSyncTimer = setTimeout(_videoSyncTick, ms);
+}
+
+async function _videoSyncTick() {
+  if (!navigator.onLine) {
+    // offline → tick ช้า ๆ รอ online
+    _scheduleVideoSync(VIDEO_SYNC_IDLE_MS);
+    return;
+  }
+  const { remaining } = await _sweepPendingVideos();
+  // ⚡ ยังเหลือ → tick ถัดไปเร็ว 8s — continuous catch-up
+  // 💤 ว่างแล้ว → tick ถัดไปช้า 60s — เผื่อมี video ใหม่
+  _scheduleVideoSync(remaining > 0 ? VIDEO_SYNC_ACTIVE_MS : VIDEO_SYNC_IDLE_MS);
+}
+
+// ✅ Badge pulse animation ระหว่างกำลัง sync
+function _setVideoBadgeActive(active) {
+  const badge = document.getElementById('syncVideoBadge');
+  if (!badge) return;
+  if (active) {
+    badge.style.animation = 'syncPulse 1.5s ease-in-out infinite';
+    badge.style.boxShadow = '0 0 8px rgba(224,122,95,0.8)';
+  } else {
+    badge.style.animation = '';
+    badge.style.boxShadow = '';
+  }
+}
+
+// ✅ เริ่ม tick ครั้งแรกหลัง app boot 4 วินาที (รอ IDB + service worker settle)
+setTimeout(_videoSyncTick, 4000);
 
 // ============================================================
 // 🎬 SYNC VIDEO TAB — แสดงรายการ video ใน IDB + ปุ่มอัป
