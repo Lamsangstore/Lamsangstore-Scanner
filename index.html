@@ -3011,6 +3011,7 @@ function autoDetectColumns(marketplace, headerRow) {
 const FAIL_QUEUE_KEY = 'failedUploadQueue';
 let _isRetrying = false;
 let _flushedIds = new Set(); // ป้องกัน duplicate flush
+let _videoConvertInFlight = 0; // จำนวนวิดีโอที่กำลังแปลง base64 (ยังไม่ลง queue) — กันปิดแอประหว่างแปลง
 let productMap = {}, currentP = "", items = [], scanner, searchScanner, lastScanTime = 0;
 let sessionParcels = {}, scanBuffer = [], bufferTimeout = null, isFinishing = false, isEditingId = false;
 let isSpeakingRemark = false; // ✅ ล็อคสแกนสินค้าระหว่างพูดเลขพัสดุ + remark
@@ -3125,6 +3126,10 @@ document.addEventListener('visibilitychange', () => {
     // ===== FLUSH: ส่งข้อมูลค้างใน failedUploadQueue ก่อนปิดแอป =====
     _flushPendingUploads();
 
+    // ✅ ถ้ายังมีวิดีโอค้าง → ดันอัป Drive "ทันที" (head-start ก่อนแอปอาจถูก kill)
+    //   บนมือถือ beforeunload มักไม่เด้ง → จังหวะ hidden นี้คือโอกาสสุดท้ายที่จะส่งวิดีโอ
+    if (_pendingVideoCount() > 0) { try { retryFailedUploads(true); } catch(e) {} }
+
   } else if (document.visibilityState === 'visible') {
     if (currentP) {
       requestWakeLock();
@@ -3185,12 +3190,26 @@ function _flushOrderOnly(useBeacon) {
 function _flushPendingUploads() { _flushOrderOnly(false); }
 function _flushWithBeacon()     { _flushOrderOnly(true); }
 
-// ป้องกันปิด tab / refresh โดยไม่ตั้งใจระหว่างแพ็กสินค้า + flush ข้อมูล
+// นับ "วิดีโอที่ยังไม่ขึ้น Drive" — ยังมีไฟล์ใน queue + ยัง retry ไม่หมดสิทธิ์
+//   ถ้าปิดแอปตอนนี้ วิดีโอพวกนี้จะหาย (order ยังปลอดภัยเพราะอยู่ Firebase/queue)
+function _pendingVideoCount() {
+  try {
+    const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
+    return q.filter(j => j.hadVideo && !j.videoSent && j.videoBase64 &&
+                         (j.videoAttempts || 0) < VIDEO_MAX_ATTEMPTS).length;
+  } catch(e) { return 0; }
+}
+
+// ป้องกันปิด tab / refresh โดยไม่ตั้งใจระหว่างแพ็กสินค้า / วิดีโอยังไม่ขึ้น Drive + flush ข้อมูล
 window.addEventListener('beforeunload', (e) => {
-  _flushPendingUploads(); // พยายามส่งอีกครั้ง
-  if (currentP && !isFinishing) {
+  _flushPendingUploads(); // พยายามส่ง order อีกครั้ง
+  const vPending = _pendingVideoCount() + _videoConvertInFlight; // ลง queue แล้ว + กำลังแปลงอยู่
+  if ((currentP && !isFinishing) || vPending > 0) {
     e.preventDefault();
-    e.returnValue = 'กำลังแพ็กสินค้าอยู่ ออกจากหน้านี้จะทำให้ข้อมูลหาย';
+    e.returnValue = vPending > 0
+      ? `ยังมีวิดีโอ ${vPending} รายการรออัปขึ้น Drive — ออกตอนนี้วิดีโออาจหาย`
+      : 'กำลังแพ็กสินค้าอยู่ ออกจากหน้านี้จะทำให้ข้อมูลหาย';
+    return e.returnValue;
   }
 });
 
@@ -5247,12 +5266,17 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       .catch(() => {});
 
     // 3️⃣ แปลงวิดีโอเป็น base64 (ช้า) — ทำหลัง Firebase รับออเดอร์แล้ว
+    //   นับ in-flight ระหว่างแปลง → ช่วงนี้วิดีโออยู่ใน memory อย่างเดียว (ยังไม่ลง queue)
+    //   ถ้าปิดแอปตอนนี้จะหายจริง → ให้ beforeunload เตือนด้วย
     if (chunks && chunks.length > 0) {
+      _videoConvertInFlight++;
       try {
         videoData = await convertChunksToBase64(chunks);
       } catch(convErr) {
         console.warn(`[Background] convert video fail for ${pId}:`, convErr.message);
         videoData = '';
+      } finally {
+        _videoConvertInFlight = Math.max(0, _videoConvertInFlight - 1);
       }
     }
     // เก็บวิดีโอลง queue entry เพื่อ retry แยก (phase B)
