@@ -395,19 +395,48 @@ function saveData(body) {
   //   "ตั้งใจ rescan ใหม่" (เตือน user)
   const idemToken = String(body.idemToken || "").slice(0, 64);
 
+  // ⚡ Fast path: เช็ค token ก่อนทำอะไรเลย — ถ้าเคย complete แล้วก็ไม่ต้องถือ lock
+  if (idemToken && _isCompletedToken(idemToken)) {
+    Logger.log("[saveData] Idempotent retry (fast path): " + idemToken);
+    _logSaveAttempt(parcelId, marketplace, "idempotent_retry", itemsArr.length, "token " + idemToken);
+    return { success: true, note: "idempotent_retry" };
+  }
+
+  // 🚀 Upload video ก่อน acquire lock — ตัดเวลาถือ lock ลง 2-5 วินาที
+  //   ถ้าไม่ทำตรงนี้ video upload (slow) จะเกิดในขณะถือ lock → request อื่น timeout
+  //   ผลข้างเคียง: ถ้า dedup ตรวจเจอว่าซ้ำ video จะกลายเป็น orphan ใน Drive
+  //   (รับได้ — orphan รายปีเทียบไม่กับ lock_timeout รายวัน)
+  let videoUrl = "no_video";
+  if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
+    try {
+      const decoded = Utilities.base64Decode(videoBase64);
+      const blob    = Utilities.newBlob(decoded, videoMime, parcelId + "." + videoExt);
+      const folder  = DriveApp.getFolderById(TARGET_FOLDER_ID);
+      const file    = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      videoUrl = file.getUrl();
+    } catch (videoErr) {
+      Logger.log("Video upload error: " + videoErr.message);
+      videoUrl = "upload_failed";
+    }
+  } else if (videoBase64 === "video_too_large") {
+    videoUrl = "video_too_large";
+  }
+
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    // ✅ bump 10s → 30s — เผื่อมีหลายเครื่อง save พร้อมกัน
+    lock.waitLock(30000);
   } catch(e) {
-    Logger.log("[saveData] ไม่ได้ lock ภายใน 10s: " + e.message);
+    Logger.log("[saveData] ไม่ได้ lock ภายใน 30s: " + e.message);
     _logSaveAttempt(parcelId, marketplace, "lock_timeout", itemsArr.length, e.message);
     return { success: false, error: "Server busy, please retry" };
   }
 
   try {
-    // เช็คก่อนว่า token นี้เคย save สำเร็จไปแล้วไหม (retry ของ request เดิม)
+    // เช็ค token อีกครั้งใน lock — กันกรณี request อื่นเพิ่ง complete token เดียวกัน
     if (idemToken && _isCompletedToken(idemToken)) {
-      Logger.log("[saveData] Idempotent retry detected — token already completed: " + idemToken);
+      Logger.log("[saveData] Idempotent retry (in-lock): " + idemToken);
       _logSaveAttempt(parcelId, marketplace, "idempotent_retry", itemsArr.length, "token " + idemToken);
       return { success: true, note: "idempotent_retry" };
     }
@@ -422,30 +451,19 @@ function saveData(body) {
         const existing = numToStr(trackingCol[i][0]).toUpperCase();
         if (existing === parcelId.toUpperCase()) {
           Logger.log("[saveData] Duplicate skipped: " + parcelId);
-          if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
-            _tryUpdateVideoUrl(sheet, i + 2, parcelId, videoBase64, videoMime, videoExt);
+          // ถ้า row เดิมยังไม่มี video → อัปเดตด้วย videoUrl ที่เพิ่งอัปไป
+          if (videoUrl && videoUrl !== "no_video" && videoUrl !== "upload_failed") {
+            try {
+              const currentVideoUrl = String(sheet.getRange(i + 2, 5).getValue()).trim();
+              if (currentVideoUrl === "no_video") {
+                sheet.getRange(i + 2, 5).setValue(videoUrl);
+              }
+            } catch(e) { Logger.log("[saveData] update existing video error: " + e.message); }
           }
           _logSaveAttempt(parcelId, marketplace, "duplicate_skipped", itemsArr.length, "row " + (i + 2));
           return { success: true, note: "duplicate_skipped" };
         }
       }
-    }
-
-    let videoUrl = "no_video";
-    if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
-      try {
-        const decoded = Utilities.base64Decode(videoBase64);
-        const blob    = Utilities.newBlob(decoded, videoMime, parcelId + "." + videoExt);
-        const folder  = DriveApp.getFolderById(TARGET_FOLDER_ID);
-        const file    = folder.createFile(blob);
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-        videoUrl = file.getUrl();
-      } catch (videoErr) {
-        Logger.log("Video upload error: " + videoErr.message);
-        videoUrl = "upload_failed";
-      }
-    } else if (videoBase64 === "video_too_large") {
-      videoUrl = "video_too_large";
     }
 
     const timestamp = new Date();
