@@ -3396,7 +3396,7 @@ async function retryFailedUploads(force) {
       if (!force && job.nextAt && now < job.nextAt) continue; // ยังไม่ถึงเวลา (ยกเว้น force)
       // 🔥 ensure Firebase mirror ก่อน (กันออเดอร์หายแม้ GAS ยังไม่ผ่าน)
       await _ensureFirebasePush(job);
-      let ok = false;
+      let ok = false, videoPending = false;
       try {
         const res = await callGAS("saveData", {
           parcelId: job.pId, items: job.itemsArr,
@@ -3408,28 +3408,33 @@ async function retryFailedUploads(force) {
           idemToken: job.idemToken || ""
         }, 90000);
         ok = isGasSuccess(res);
+        videoPending = !!(res && res.videoPending);
       } catch(e) { ok = false; }
 
-      if (ok) {
+      if (ok && !videoPending) {
+        // ออเดอร์ + วิดีโอ เข้าครบ → ลบออกจากคิว
         _markSent(job.pId);
         _flushedIds.delete(job.pId);
-        _updateQueueItem(job.pId, () => null); // ลบออกจาก queue
+        _updateQueueItem(job.pId, () => null);
         synced++;
+      } else if (ok && videoPending) {
+        // ✅ ออเดอร์ลงชีตแล้ว แต่วิดีโออัป Drive ไม่ขึ้น → retry เฉพาะวิดีโอ (cap 6 ครั้ง)
+        //    ไม่นับใน badge (orderDone) — กัน badge ค้างเพราะวิดีโอ
+        const next = (job.attempts || 0) + 1;
+        if (next >= 6) {
+          _updateQueueItem(job.pId, () => null);
+          console.log(`[Queue] ${job.pId} ออเดอร์ลงชีตแล้ว — เลิก retry วิดีโอหลัง ${next} ครั้ง (best-effort)`);
+        } else {
+          _updateQueueItem(job.pId, (cur) => { cur.orderDone = true; cur.attempts = next; cur.nextAt = Date.now() + _backoffFor(next); return cur; });
+        }
       } else {
-        // ล้มเหลว → เพิ่ม backoff ต่อรายการ
-        // ✅ ถ้าออเดอร์ขึ้น Firebase แล้ว (fbPushed) — drain จะลงชีตแน่
-        //    ที่ค้างคือ "วิดีโอ" → ลองอัปครบ 6 ครั้งแล้วเลิกถือไว้ (วิดีโอ best-effort
-        //    + nightlyVideoReconcile เก็บกวาดให้) กัน queue ค้างถาวร
+        // ล้มเหลวทั้งออเดอร์ → backoff; ถ้า fbPushed แล้ว (order ปลอดภัยใน Firebase) cap วิดีโอ 6 ครั้ง
         const next = (job.attempts || 0) + 1;
         if (job.fbPushed && next >= 6) {
           _updateQueueItem(job.pId, () => null);
-          console.log(`[Queue] ${job.pId} ออเดอร์ปลอดภัยใน Firebase แล้ว — เลิก retry วิดีโอ (${next} ครั้ง)`);
+          console.log(`[Queue] ${job.pId} ออเดอร์ปลอดภัยใน Firebase — เลิก retry วิดีโอ (${next} ครั้ง)`);
         } else {
-          _updateQueueItem(job.pId, (cur) => {
-            cur.attempts = next;
-            cur.nextAt = Date.now() + _backoffFor(next);
-            return cur;
-          });
+          _updateQueueItem(job.pId, (cur) => { cur.attempts = next; cur.nextAt = Date.now() + _backoffFor(next); return cur; });
         }
       }
     }
@@ -3492,10 +3497,10 @@ function updateFailQueueBadge() {
   const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
   const badge = document.getElementById('networkBadge');
   const queueBanner = document.getElementById('queueBanner');
-  // ✅ นับเฉพาะ "ออเดอร์ที่ยังไม่ปลอดภัย" — fbPushed=true แปลว่าขึ้น Firebase แล้ว
-  //    GAS drain จะดูดลงชีตแน่นอน → ออเดอร์ปลอดภัย ที่ค้างคือแค่ "วิดีโอ" → ไม่ต้องเตือน
-  //    (Firebase ปิด → fbPushed เป็น false เสมอ → นับทั้งหมดเหมือนเดิม)
-  const atRisk = q.filter(j => !j.fbPushed).length;
+  // ✅ นับเฉพาะ "ออเดอร์ที่ยังไม่ปลอดภัย"
+  //    fbPushed=true (ขึ้น Firebase, drain จะลงชีต) หรือ orderDone=true (ลงชีตแล้ว, วิดีโอ pending)
+  //    → ออเดอร์ปลอดภัยแล้ว ไม่ต้องเตือน (Firebase ปิด → ทั้งคู่ false → นับทั้งหมดเหมือนเดิม)
+  const atRisk = q.filter(j => !j.fbPushed && !j.orderDone).length;
   if (atRisk > 0 && navigator.onLine) {
     if (badge) { badge.style.background = 'var(--bg-d)'; badge.style.color = 'var(--text2)'; badge.textContent = `⏳ ${atRisk}`; }
     if (queueBanner) {
@@ -5191,11 +5196,21 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       } catch(e) { console.warn('[Background] swal error:', e); }
     }
 
-    _markSent(pId);
-    _removeFromFailQueue(pId);
-    updateFailQueueBadge();
-    _auditPack(pId, 'order', 'sent', res?.note || 'row ' + (res?.row || '?'));
-    console.log(`[Background] บันทึก ${pId} สำเร็จ${res?.note ? ' (' + res.note + ')' : ''}`);
+    if (res && res.videoPending) {
+      // ✅ ออเดอร์ลงชีตแล้ว แต่วิดีโออัป Drive ไม่ขึ้น → คงไว้ใน queue ให้ scheduler retry วิดีโอ
+      //    (mark orderDone → ไม่นับใน badge) — ไม่ markSent/remove
+      _updateQueueItem(pId, (cur) => { cur.orderDone = true; return cur; });
+      updateFailQueueBadge();
+      _auditPack(pId, 'video', 'pending', 'order saved, video retry');
+      console.log(`[Background] ${pId} ออเดอร์ลงชีตแล้ว — วิดีโอจะ retry`);
+      _scheduleRetry();
+    } else {
+      _markSent(pId);
+      _removeFromFailQueue(pId);
+      updateFailQueueBadge();
+      _auditPack(pId, 'order', 'sent', res?.note || 'row ' + (res?.row || '?'));
+      console.log(`[Background] บันทึก ${pId} สำเร็จ${res?.note ? ' (' + res.note + ')' : ''}`);
+    }
 
     _refreshOrderCacheBackground();
   } catch (err) {

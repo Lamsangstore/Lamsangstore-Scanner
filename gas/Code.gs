@@ -986,28 +986,31 @@ function saveData(body) {
         return { success: true, note: "placeholder_upgraded", row: matchRow };
       }
 
-      // duplicate ปกติ
-      let videoUrl = "no_video";
-      if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
-        videoUrl = _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId);
-      }
-      if (videoUrl && videoUrl !== "no_video" && videoUrl !== "upload_failed") {
-        try {
-          const currentVideoUrl = String(sheet.getRange(matchRow, 5).getValue()).trim();
-          if (currentVideoUrl === "no_video") {
-            sheet.getRange(matchRow, 5).setValue(videoUrl);
-          }
-        } catch(e) { Logger.log("[saveData] update existing video error: " + e.message); }
+      // duplicate ปกติ — เติม video ถ้า row ยังไม่มี
+      let dupVideoPending = false;
+      if (hasVideo) {
+        let cur0 = "";
+        try { cur0 = String(sheet.getRange(matchRow, 5).getValue()).trim(); } catch(e) {}
+        if (cur0.indexOf('drive.google.com') === -1) { // row ยังไม่มี video → อัป + เติม
+          const uploaded = _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId);
+          if (uploaded === "upload_failed") dupVideoPending = true;
+          else { try { sheet.getRange(matchRow, 5).setValue(uploaded); } catch(e) {} }
+        }
+        // row มี video อยู่แล้ว → ไม่อัปซ้ำ (กัน orphan ใน Drive)
       }
       if (idemToken) _markTokenCompleted(idemToken);
       _logSaveAttempt(parcelId, marketplace, "duplicate_skipped", itemsArr.length, "row " + matchRow);
-      return { success: true, note: "duplicate_skipped" };
+      return { success: true, note: "duplicate_skipped", videoPending: dupVideoPending };
     }
 
     // 🎬 Upload video → Drive (ก่อน appendRow เพื่อใส่ URL ลง row)
+    //   ถ้าอัปไม่ขึ้น → เก็บ row เป็น "no_video" (เติมทีหลังได้) + ส่ง videoPending ให้ client retry
     let videoUrl = "no_video";
+    let videoPending = false;
     if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
-      videoUrl = _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId);
+      const uploaded = _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId);
+      if (uploaded === "upload_failed") { videoUrl = "no_video"; videoPending = true; }
+      else videoUrl = uploaded;
     } else if (videoBase64 === "video_too_large") {
       videoUrl = "video_too_large";
     }
@@ -1022,8 +1025,8 @@ function saveData(body) {
     if (idemToken) _markTokenCompleted(idemToken);
     _setCachedParcelRow(parcelId, newRow, false);
 
-    _logSaveAttempt(parcelId, marketplace, "success", itemsArr.length, "row " + newRow);
-    Logger.log("[saveData] บันทึก: " + parcelId + " | row=" + newRow);
+    _logSaveAttempt(parcelId, marketplace, videoPending ? "success_video_pending" : "success", itemsArr.length, "row " + newRow);
+    Logger.log("[saveData] บันทึก: " + parcelId + " | row=" + newRow + (videoPending ? " (video pending)" : ""));
 
     // PropertiesService update — non-critical
     try {
@@ -1044,7 +1047,7 @@ function saveData(body) {
       Logger.log("[saveData] PropertiesService error: " + propErr.message);
     }
 
-    return { success: true, row: newRow };
+    return { success: true, row: newRow, videoPending: videoPending };
   } catch (e) {
     Logger.log("Error in saveData: " + e.message);
     _logSaveAttempt(parcelId, marketplace, "exception", itemsArr.length, e.toString());
@@ -1053,18 +1056,33 @@ function saveData(body) {
 }
 
 // ✅ Helper: upload video → Drive, คืน URL (หรือ "upload_failed")
+// ✅ อัปวิดีโอขึ้น Drive — retry 3 ครั้ง (กัน Drive ล้มชั่วคราวตอนแพคเร็ว/หลายคนพร้อมกัน)
+//    setSharing แยก try — ถ้า share fail แต่ไฟล์ขึ้นแล้ว ยังคืน URL (ไม่นับว่า fail)
 function _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId) {
+  let decoded, folder;
   try {
-    const decoded = Utilities.base64Decode(videoBase64);
-    const blob = Utilities.newBlob(decoded, videoMime, parcelId + "." + videoExt);
-    const folder = DriveApp.getFolderById(TARGET_FOLDER_ID);
-    const file = folder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return file.getUrl();
+    decoded = Utilities.base64Decode(videoBase64);
+    folder = DriveApp.getFolderById(TARGET_FOLDER_ID);
   } catch(e) {
-    Logger.log("[_uploadVideoToDrive] error: " + e.message);
+    Logger.log("[_uploadVideoToDrive] decode/folder error: " + e.message);
     return "upload_failed";
   }
+  let lastErr = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const blob = Utilities.newBlob(decoded, videoMime, parcelId + "." + videoExt);
+      const file = folder.createFile(blob);
+      try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }
+      catch(shareErr) { Logger.log("[_uploadVideoToDrive] setSharing fail (ไฟล์ขึ้นแล้ว): " + shareErr.message); }
+      return file.getUrl();
+    } catch(e) {
+      lastErr = e.message;
+      Logger.log("[_uploadVideoToDrive] attempt " + (attempt + 1) + " fail: " + e.message);
+      if (attempt < 2) Utilities.sleep(800 * (attempt + 1)); // 0.8s, 1.6s
+    }
+  }
+  Logger.log("[_uploadVideoToDrive] หมด retry: " + lastErr);
+  return "upload_failed";
 }
 
 function _tryUpdateVideoUrl(sheet, rowIndex, parcelId, videoBase64, videoMime, videoExt) {
