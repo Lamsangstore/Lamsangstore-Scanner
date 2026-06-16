@@ -34,6 +34,80 @@ const MAX_VIDEO_BASE64_LEN = 14 * 1024 * 1024;
 //    และ "upgrade" row นั้นด้วยข้อมูลเต็มแทนที่จะ skip เป็น duplicate
 const PLACEHOLDER_MARKER = "__VIDEO_FIRST__ waiting for order data";
 
+// ✅ Cache-based dedup — แทนการอ่าน column tracking ทั้งหมดจาก sheet
+//    เดิม: scan 16K rows ใน lock = 1-3s → lock_timeout
+//    ใหม่: CacheService.get() = 10ms → lock hold time ~700ms
+//    ค่าใน cache: "<rowIndex>" สำหรับ row ปกติ, "P:<rowIndex>" สำหรับ placeholder
+const PARCEL_CACHE_PREFIX = 'parcel_';
+const PARCEL_CACHE_TTL_SEC = 6 * 60 * 60; // 6 ชม.
+const FALLBACK_SCAN_RECENT_ROWS = 2000;   // ถ้า cache miss → scan แค่ 2000 แถวล่าสุด (ไม่ใช่ทั้ง 16K+)
+
+function _getCachedParcelRow(parcelId) {
+  try {
+    const v = CacheService.getScriptCache().get(PARCEL_CACHE_PREFIX + parcelId.toUpperCase());
+    if (!v) return null;
+    if (v.indexOf('P:') === 0) {
+      return { rowIndex: parseInt(v.slice(2), 10), isPlaceholder: true };
+    }
+    return { rowIndex: parseInt(v, 10), isPlaceholder: false };
+  } catch(e) {
+    return null;
+  }
+}
+
+function _setCachedParcelRow(parcelId, rowIndex, isPlaceholder) {
+  try {
+    const v = (isPlaceholder ? 'P:' : '') + String(rowIndex);
+    CacheService.getScriptCache().put(PARCEL_CACHE_PREFIX + parcelId.toUpperCase(), v, PARCEL_CACHE_TTL_SEC);
+  } catch(e) {
+    Logger.log("[_setCachedParcelRow] cache error: " + e.message);
+  }
+}
+
+function _clearCachedParcelRow(parcelId) {
+  try {
+    CacheService.getScriptCache().remove(PARCEL_CACHE_PREFIX + parcelId.toUpperCase());
+  } catch(e) {}
+}
+
+// ✅ หา row ของ parcelId แบบ "เร็ว" — cache ก่อน, fallback scan แค่ 2000 แถวล่าสุด
+//    return: { rowIndex, isPlaceholder } หรือ null
+function _findParcelRow(sheet, parcelId) {
+  // Fast path: cache
+  const cached = _getCachedParcelRow(parcelId);
+  if (cached) {
+    // verify ว่า cache ยังตรงกับชีตจริง (กัน race condition)
+    try {
+      const actual = numToStr(sheet.getRange(cached.rowIndex, 4).getValue()).toUpperCase();
+      if (actual === parcelId.toUpperCase()) {
+        // เช็ค placeholder marker จาก remark column (col F) ให้แม่นยำ
+        const remark = String(sheet.getRange(cached.rowIndex, 6).getValue() || "");
+        const isPlaceholder = remark.indexOf("__VIDEO_FIRST__") === 0;
+        return { rowIndex: cached.rowIndex, isPlaceholder };
+      }
+      // cache เพี้ยน → ลบและ scan ต่อ
+      _clearCachedParcelRow(parcelId);
+    } catch(e) {}
+  }
+
+  // Fallback: scan แค่ 2000 แถวล่าสุด (ไม่ใช่ทั้งชีต)
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return null;
+  const startScan = Math.max(2, lastRow - FALLBACK_SCAN_RECENT_ROWS + 1);
+  const numScan = lastRow - startScan + 1;
+  const data = sheet.getRange(startScan, 4, numScan, 3).getValues(); // col D (tracking), E (video), F (remark)
+  const target = parcelId.toUpperCase();
+  for (let i = data.length - 1; i >= 0; i--) {
+    if (numToStr(data[i][0]).toUpperCase() === target) {
+      const rowIndex = startScan + i;
+      const isPlaceholder = String(data[i][2] || "").indexOf("__VIDEO_FIRST__") === 0;
+      _setCachedParcelRow(parcelId, rowIndex, isPlaceholder); // populate cache สำหรับ call ถัดไป
+      return { rowIndex, isPlaceholder };
+    }
+  }
+  return null;
+}
+
 // Rate limit ต่อนาที (รวมทุกผู้ใช้)
 const RATE_LIMITS = {
   saveData: 120,
@@ -458,8 +532,9 @@ function saveData(body) {
 
   const lock = LockService.getScriptLock();
   try {
-    // ✅ bump 10s → 30s — เผื่อมีหลายเครื่อง save พร้อมกัน
-    lock.waitLock(30000);
+    // ✅ 60s — รอ lock นานพอที่ queue จะระบายได้แม้มีหลายเครื่อง save พร้อมกัน
+    //    critical section ใหม่ ~500ms-1s → 60s รับได้ ~60 concurrent saves
+    lock.waitLock(60000);
   } catch(e) {
     Logger.log("[saveData] ไม่ได้ lock ภายใน 30s: " + e.message);
     _logSaveAttempt(parcelId, marketplace, "lock_timeout", itemsArr.length, e.message);
@@ -478,55 +553,48 @@ function saveData(body) {
     const ss    = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_ORDERS) || ss.insertSheet(SHEET_ORDERS);
 
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      const trackingCol = sheet.getRange(2, 4, lastRow - 1, 1).getValues();
-      for (let i = 0; i < trackingCol.length; i++) {
-        const existing = numToStr(trackingCol[i][0]).toUpperCase();
-        if (existing === parcelId.toUpperCase()) {
-          const matchRow = i + 2;
+    // ⚡ Fast dedup — ใช้ cache (10ms) แทน scan column tracking ทั้งหมด (1-3s)
+    //    ถ้า cache miss → fallback scan แค่ 2000 แถวล่าสุด (~500ms)
+    const found = _findParcelRow(sheet, parcelId);
+    if (found) {
+      const matchRow = found.rowIndex;
 
-          // ✅ ตรวจ placeholder — row ที่ uploadVideoForParcel สร้างไว้ก่อน
-          //    เงื่อนไข: remark (col F) ขึ้นต้นด้วย PLACEHOLDER_MARKER
-          //    ถ้าใช่ → upgrade ด้วยข้อมูลเต็ม (ไม่ใช่ duplicate)
-          const existingRemark = String(sheet.getRange(matchRow, 6).getValue() || "");
-          if (existingRemark.indexOf("__VIDEO_FIRST__") === 0) {
-            const existingVideoUrl = String(sheet.getRange(matchRow, 5).getValue() || "no_video").trim();
-            // ใช้ videoUrl เดิม (placeholder มี) ถ้า request นี้ไม่มี video หรือเป็น no_video
-            const finalVideoUrl = (videoUrl && videoUrl !== "no_video" && videoUrl !== "upload_failed")
-              ? videoUrl
-              : existingVideoUrl;
-            const newTs = new Date();
-            const upgradedRow = [newTs, orderId, marketplace, parcelId, finalVideoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
-            sheet.getRange(matchRow, 1, 1, upgradedRow.length).setValues([upgradedRow]);
-            SpreadsheetApp.flush();
-            // verify
-            const verifyTracking = numToStr(sheet.getRange(matchRow, 4).getValue()).toUpperCase();
-            if (verifyTracking !== parcelId.toUpperCase()) {
-              Logger.log("[saveData] placeholder upgrade verify FAIL: " + parcelId);
-              _logSaveAttempt(parcelId, marketplace, "verify_failed", itemsArr.length, "placeholder upgrade");
-              return { success: false, error: "Placeholder upgrade verification failed" };
-            }
-            if (idemToken) _markTokenCompleted(idemToken);
-            Logger.log("[saveData] placeholder upgraded: " + parcelId + " row=" + matchRow);
-            _logSaveAttempt(parcelId, marketplace, "placeholder_upgraded", itemsArr.length, "row " + matchRow);
-            return { success: true, note: "placeholder_upgraded", row: matchRow };
-          }
-
-          Logger.log("[saveData] Duplicate skipped: " + parcelId);
-          // ถ้า row เดิมยังไม่มี video → อัปเดตด้วย videoUrl ที่เพิ่งอัปไป
-          if (videoUrl && videoUrl !== "no_video" && videoUrl !== "upload_failed") {
-            try {
-              const currentVideoUrl = String(sheet.getRange(matchRow, 5).getValue()).trim();
-              if (currentVideoUrl === "no_video") {
-                sheet.getRange(matchRow, 5).setValue(videoUrl);
-              }
-            } catch(e) { Logger.log("[saveData] update existing video error: " + e.message); }
-          }
-          _logSaveAttempt(parcelId, marketplace, "duplicate_skipped", itemsArr.length, "row " + matchRow);
-          return { success: true, note: "duplicate_skipped" };
+      // ✅ placeholder → upgrade ด้วยข้อมูลเต็ม (ไม่ใช่ duplicate)
+      if (found.isPlaceholder) {
+        const existingVideoUrl = String(sheet.getRange(matchRow, 5).getValue() || "no_video").trim();
+        const finalVideoUrl = (videoUrl && videoUrl !== "no_video" && videoUrl !== "upload_failed")
+          ? videoUrl
+          : existingVideoUrl;
+        const newTs = new Date();
+        const upgradedRow = [newTs, orderId, marketplace, parcelId, finalVideoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
+        sheet.getRange(matchRow, 1, 1, upgradedRow.length).setValues([upgradedRow]);
+        SpreadsheetApp.flush();
+        // verify
+        const verifyTracking = numToStr(sheet.getRange(matchRow, 4).getValue()).toUpperCase();
+        if (verifyTracking !== parcelId.toUpperCase()) {
+          Logger.log("[saveData] placeholder upgrade verify FAIL: " + parcelId);
+          _logSaveAttempt(parcelId, marketplace, "verify_failed", itemsArr.length, "placeholder upgrade");
+          return { success: false, error: "Placeholder upgrade verification failed" };
         }
+        _setCachedParcelRow(parcelId, matchRow, false); // อัปเดต cache → ไม่ใช่ placeholder แล้ว
+        if (idemToken) _markTokenCompleted(idemToken);
+        Logger.log("[saveData] placeholder upgraded: " + parcelId + " row=" + matchRow);
+        _logSaveAttempt(parcelId, marketplace, "placeholder_upgraded", itemsArr.length, "row " + matchRow);
+        return { success: true, note: "placeholder_upgraded", row: matchRow };
       }
+
+      // duplicate ปกติ
+      Logger.log("[saveData] Duplicate skipped: " + parcelId);
+      if (videoUrl && videoUrl !== "no_video" && videoUrl !== "upload_failed") {
+        try {
+          const currentVideoUrl = String(sheet.getRange(matchRow, 5).getValue()).trim();
+          if (currentVideoUrl === "no_video") {
+            sheet.getRange(matchRow, 5).setValue(videoUrl);
+          }
+        } catch(e) { Logger.log("[saveData] update existing video error: " + e.message); }
+      }
+      _logSaveAttempt(parcelId, marketplace, "duplicate_skipped", itemsArr.length, "row " + matchRow);
+      return { success: true, note: "duplicate_skipped" };
     }
 
     const timestamp = new Date();
@@ -569,6 +637,9 @@ function saveData(body) {
 
     // ✅ จำ token ไว้ — request ถัดไปที่ใช้ token เดียวกัน = retry → idempotent_retry
     if (idemToken) _markTokenCompleted(idemToken);
+
+    // ✅ populate parcel cache → request ถัดไปสำหรับ parcelId เดียวกัน = dedup ได้ใน 10ms ไม่ต้อง scan
+    _setCachedParcelRow(parcelId, startRow, false);
 
     _logSaveAttempt(parcelId, marketplace, "success", itemsArr.length, "row " + startRow);
     return { success: true, row: startRow };
@@ -641,18 +712,10 @@ function uploadVideoForParcel(body) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_ORDERS) || ss.insertSheet(SHEET_ORDERS);
 
-    // หา row โดยไม่ถือ lock — getRange().getValues() เป็น snapshot read ไม่ติด lock
-    const lastRow = sheet.getLastRow();
-    let rowIndex = -1;
-    if (lastRow > 1) {
-      const trackingCol = sheet.getRange(2, 4, lastRow - 1, 1).getValues();
-      for (let i = trackingCol.length - 1; i >= 0; i--) { // ค้นจากล่างขึ้น — row ใหม่อยู่ล่าง
-        if (numToStr(trackingCol[i][0]).toUpperCase() === parcelId.toUpperCase()) {
-          rowIndex = i + 2;
-          break;
-        }
-      }
-    }
+    // ⚡ Fast lookup ด้วย cache (10ms) แทน scan tracking column
+    const foundExisting = _findParcelRow(sheet, parcelId);
+    let rowIndex = foundExisting ? foundExisting.rowIndex : -1;
+
     // ถ้า row มี Drive URL อยู่แล้ว → skip (retry ที่ส่งเกินมา)
     if (rowIndex !== -1) {
       const currentVideoUrl = String(sheet.getRange(rowIndex, 5).getValue()).trim();
@@ -689,28 +752,19 @@ function uploadVideoForParcel(body) {
       return { success: false, error: "Server busy, please retry", _orphanVideoUrl: videoUrl };
     }
     try {
-      // re-check (เผื่อ row ขยับจากการ delete) — หา rowIndex ใหม่
-      const newLastRow = sheet.getLastRow();
-      let r2 = -1;
-      if (newLastRow > 1) {
-        const ts2 = sheet.getRange(2, 4, newLastRow - 1, 1).getValues();
-        for (let i = ts2.length - 1; i >= 0; i--) {
-          if (numToStr(ts2[i][0]).toUpperCase() === parcelId.toUpperCase()) {
-            r2 = i + 2;
-            break;
-          }
-        }
-      }
+      // re-check ใน lock ด้วย cache (fast) — กัน race condition
+      const foundInLock = _findParcelRow(sheet, parcelId);
+      let r2 = foundInLock ? foundInLock.rowIndex : -1;
 
       // ✅ ไม่พบ row → สร้าง placeholder row (saveData จะมา upgrade ทีหลัง)
-      //    video ใน Drive ถูกอัปแล้ว ใส่ videoUrl ลงคอลัมน์ E
-      //    marker "__VIDEO_FIRST__" ใน remark column ให้ saveData ตรวจจับและ upgrade
       if (r2 === -1) {
         const ts = new Date();
         const placeholderRow = [ts, "", "", parcelId, videoUrl, PLACEHOLDER_MARKER, 0];
-        const startRow = newLastRow + 1;
+        const startRow = sheet.getLastRow() + 1;
         sheet.getRange(startRow, 1, 1, placeholderRow.length).setValues([placeholderRow]);
         SpreadsheetApp.flush();
+        // populate cache → request ถัดไปไม่ต้อง scan
+        _setCachedParcelRow(parcelId, startRow, true);
         Logger.log("[uploadVideoForParcel] สร้าง placeholder row " + startRow + " ให้ " + parcelId);
         _logSaveAttempt(parcelId, "", "video_placeholder_created", 0, "row " + startRow);
         return { success: true, note: "placeholder_created", row: startRow, videoUrl };
