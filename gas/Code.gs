@@ -1249,45 +1249,41 @@ function nightlyVideoReconcile() {
   }
 }
 
+// ✅ หาไฟล์วิดีโอใน Drive ด้วยชื่อ (เร็ว — ไม่ scan ทั้งโฟลเดอร์)
+//   ลองชื่อ: parcelId.webm / parcelId.mp4 / parcelId_retry.webm / parcelId_retry.mp4
+function _findDriveVideoUrl(folder, parcelId) {
+  const names = [parcelId + ".webm", parcelId + ".mp4", parcelId + "_retry.webm", parcelId + "_retry.mp4"];
+  let best = null, bestTs = -1;
+  for (const nm of names) {
+    const it = folder.getFilesByName(nm); // indexed lookup — เร็ว
+    while (it.hasNext()) {
+      const f = it.next();
+      const ts = f.getDateCreated().getTime();
+      if (ts > bestTs) { bestTs = ts; best = f.getUrl(); }
+    }
+  }
+  return best;
+}
+
 function reconcileVideoUrls(body) {
   body = body || {};
   const sinceDays = Math.max(1, Math.min(90, Number(body.sinceDays) || 7));
 
   try {
     const folder = DriveApp.getFolderById(TARGET_FOLDER_ID);
-    const driveMap = {};
-    const files = folder.getFiles();
-    let driveCount = 0;
-    while (files.hasNext()) {
-      const f = files.next();
-      const name = f.getName();
-      const m = name.match(/^(.+?)(?:_retry)?\.(webm|mp4)$/i);
-      if (!m) continue;
-      const parcelId = m[1].toUpperCase();
-      // เก็บไฟล์ใหม่สุดถ้ามีหลายไฟล์ (orphan retries)
-      const ts = f.getDateCreated().getTime();
-      if (!driveMap[parcelId] || driveMap[parcelId].ts < ts) {
-        driveMap[parcelId] = { url: f.getUrl(), ts };
-      }
-      driveCount++;
-    }
-    Logger.log("[reconcileVideoUrls] อ่าน Drive: " + driveCount + " ไฟล์, unique parcels: " + Object.keys(driveMap).length);
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_ORDERS);
     if (!sheet) return { success: false, error: "Orders sheet ไม่พบ" };
     const lastRow = sheet.getLastRow();
-    if (lastRow <= 1) return { success: true, fixed: 0, scanned: 0 };
+    if (lastRow <= 1) return { success: true, fixed: 0, scanned: 0, found: 0, driveFiles: 0, sinceDays };
 
-    // อ่าน cols A (ts), D (tracking), E (videoUrl) เพื่อ filter เฉพาะแถวที่ no_video และอยู่ในช่วง sinceDays
+    // 1) scan ชีตหา row ที่ no_video + อยู่ในช่วง sinceDays "ก่อน" (เร็ว)
     const data = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
     const cutoff = Date.now() - (sinceDays * 24 * 60 * 60 * 1000);
 
-    const updates = []; // { row, url, parcelId }
-    let scanned = 0;
-    let skippedDateRange = 0;
-    let skippedHadVideo = 0;
-    let noDriveMatch = 0;
+    const candidates = []; // { row, parcelId }
+    let scanned = 0, skippedDateRange = 0, skippedHadVideo = 0;
 
     for (let i = 0; i < data.length; i++) {
       const ts = data[i][0];
@@ -1295,27 +1291,24 @@ function reconcileVideoUrls(body) {
       const videoUrl = String(data[i][4] || "").trim();
       if (!tracking) continue;
       scanned++;
-
-      // skip ถ้าเก่ากว่า sinceDays
-      if (ts instanceof Date && ts.getTime() < cutoff) {
-        skippedDateRange++;
-        continue;
-      }
-      // skip ถ้ามี Drive URL อยู่แล้ว
-      if (videoUrl.indexOf('drive.google.com') !== -1) {
-        skippedHadVideo++;
-        continue;
-      }
-
-      const driveEntry = driveMap[tracking];
-      if (!driveEntry) { noDriveMatch++; continue; }
-
-      updates.push({ row: i + 2, url: driveEntry.url, parcelId: tracking });
+      if (ts instanceof Date && ts.getTime() < cutoff) { skippedDateRange++; continue; }
+      if (videoUrl.indexOf('drive.google.com') !== -1) { skippedHadVideo++; continue; }
+      candidates.push({ row: i + 2, parcelId: tracking });
     }
 
-    Logger.log("[reconcileVideoUrls] scanned=" + scanned + " toFix=" + updates.length +
-               " skippedHadVideo=" + skippedHadVideo + " noDriveMatch=" + noDriveMatch +
-               " skippedDateRange=" + skippedDateRange);
+    // 2) ค้นไฟล์ใน Drive "เฉพาะ tracking ที่ no_video" (getFilesByName — ไม่ scan ทั้งโฟลเดอร์)
+    const updates = [];
+    let noDriveMatch = 0;
+    candidates.forEach(c => {
+      const url = _findDriveVideoUrl(folder, c.parcelId);
+      if (url) updates.push({ row: c.row, url, parcelId: c.parcelId });
+      else noDriveMatch++;
+    });
+    const driveCount = candidates.length;
+
+    Logger.log("[reconcileVideoUrls] scanned=" + scanned + " no_video=" + candidates.length +
+               " toFix=" + updates.length + " noDriveMatch=" + noDriveMatch +
+               " skippedHadVideo=" + skippedHadVideo + " skippedDateRange=" + skippedDateRange);
 
     // ใช้ lock สั้นๆ ตอน setValue เพื่อกัน race กับ saveData
     const lock = LockService.getScriptLock();
