@@ -26,6 +26,68 @@ const SHEET_PRODUCTS    = "Product name";
 const SHEET_MARKETPLACE = "MarketplaceData";
 const TARGET_FOLDER_ID  = "1uC2i5w5p9MhEYK2DhV6LGh1KfZF-GlVG";
 
+// ============================================================
+// 🔧 เมนูบนชีต — เปิดชีตแล้วจะมีเมนู "🔧 Scanner Tools" บนแถบบนสุด
+//   เรียกเครื่องมือต่างๆ ได้โดยไม่ต้องเข้า Apps Script editor
+//   (ครั้งแรกต้องกด Authorize + reload ชีต 1 ครั้ง)
+// ============================================================
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('🔧 Scanner Tools')
+    .addItem('🎬 เติมลิงก์วิดีโอ (reconcile)', 'menuReconcileVideos')
+    .addSeparator()
+    .addItem('🔥 ดูด Firebase inbox → ชีต', 'menuDrainInbox')
+    .addItem('🔍 หาออเดอร์ที่หาย', 'menuFindLost')
+    .addItem('🧩 รวม row ซ้ำ (merge duplicates)', 'menuMergeDup')
+    .addToUi();
+}
+
+// 🎬 เติมลิงก์วิดีโอจาก Drive ให้ row ที่ no_video
+function menuReconcileVideos() {
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.prompt('🎬 เติมลิงก์วิดีโอ',
+    'ดึงไฟล์จาก Drive มาเติม row ที่ขึ้น no_video\nย้อนหลังกี่วัน? (เช่น 7 หรือ 30)',
+    ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  const days = parseInt(resp.getResponseText(), 10) || 7;
+  SpreadsheetApp.getActiveSpreadsheet().toast('กำลังเติมลิงก์วิดีโอ...', '🎬', 30);
+  const r = reconcileVideoUrls({ sinceDays: days });
+  if (r && r.success) {
+    ui.alert('✅ เสร็จแล้ว',
+      'เติมลิงก์: ' + r.fixed + ' แถว\n' +
+      'สแกน: ' + r.scanned + ' แถว\n' +
+      'ไฟล์ใน Drive: ' + r.driveFiles + '\n' +
+      'ช่วง: ' + r.sinceDays + ' วัน', ui.ButtonSet.OK);
+  } else {
+    ui.alert('❌ ไม่สำเร็จ', (r && r.error) || 'unknown', ui.ButtonSet.OK);
+  }
+}
+
+function menuDrainInbox() {
+  const ui = SpreadsheetApp.getUi();
+  SpreadsheetApp.getActiveSpreadsheet().toast('กำลังดูด Firebase inbox...', '🔥', 30);
+  drainFirebaseInbox();
+  ui.alert('✅ ดูด inbox เสร็จ', 'ดู Execution log ใน editor ถ้าต้องการรายละเอียด', ui.ButtonSet.OK);
+}
+
+function menuFindLost() {
+  const ui = SpreadsheetApp.getUi();
+  const r = findLostOrders();
+  const lost = (r && r.lost) || [];
+  ui.alert(lost.length === 0 ? '✅ ไม่มีออเดอร์หาย' : '⚠ พบออเดอร์หาย ' + lost.length + ' ใบ',
+    'success ใน SaveLog: ' + (r && r.successCount) + '\n' +
+    'อยู่ในชีต: ' + (r && r.present) + '\n' +
+    'หาย: ' + lost.length + (lost.length ? '\n\n' + lost.slice(0, 30).join('\n') : '') +
+    (lost.length ? '\n\n(รายละเอียดเต็มส่งไปอีเมลแล้ว)' : ''), ui.ButtonSet.OK);
+}
+
+function menuMergeDup() {
+  const ui = SpreadsheetApp.getUi();
+  SpreadsheetApp.getActiveSpreadsheet().toast('กำลังรวม row ซ้ำ...', '🧩', 30);
+  mergeDuplicateOrders();
+  ui.alert('✅ รวม row ซ้ำเสร็จ', 'ดู Execution log ถ้าต้องการรายละเอียด', ui.ButtonSet.OK);
+}
+
 // กัน Drive bombing — base64 ~14MB ≈ raw video ~10MB
 const MAX_VIDEO_BASE64_LEN = 14 * 1024 * 1024;
 
