@@ -2086,6 +2086,62 @@ function mergeDuplicateOrders() {
 }
 
 // ============================================================
+// findLostOrders — หา tracking ที่ SaveLog บอก "success" แต่หายจาก Orders sheet
+//   (= ถูก concurrent appendRow เขียนทับ → ข้อมูลหาย)
+//   รันใน editor: ดู Logger + จะได้อีเมลรายการที่หาย
+//   หมายเหตุ: เช็คย้อนหลังตาม SaveLog ที่มี (SaveLog ไม่ถูกลบอัตโนมัติ)
+// ============================================================
+function findLostOrders() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const logSheet = ss.getSheetByName("SaveLog");
+  const ordSheet = ss.getSheetByName(SHEET_ORDERS);
+  if (!logSheet || !ordSheet) { Logger.log("[findLostOrders] sheet ไม่ครบ"); return; }
+
+  // 1) tracking ที่ SaveLog บอกว่า success (มาถึง server จริง)
+  const successInfo = {}; // tracking -> { ts, marketplace, items }
+  if (logSheet.getLastRow() > 1) {
+    const ld = logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 5).getValues();
+    for (let i = 0; i < ld.length; i++) {
+      const result = String(ld[i][3] || "").toLowerCase();
+      if (result !== "success" && result !== "success_video_pending") continue;
+      const tk = String(ld[i][1] || "").trim().toUpperCase();
+      if (!tk) continue;
+      successInfo[tk] = { ts: ld[i][0], marketplace: ld[i][2], items: ld[i][4] };
+    }
+  }
+
+  // 2) tracking ที่อยู่ใน Orders จริง
+  const present = new Set();
+  if (ordSheet.getLastRow() > 1) {
+    const od = ordSheet.getRange(2, 4, ordSheet.getLastRow() - 1, 1).getValues();
+    od.forEach(r => { const t = numToStr(r[0]).toUpperCase(); if (t) present.add(t); });
+  }
+
+  // 3) success แต่ไม่อยู่ในชีต = หาย
+  const lost = [];
+  for (const tk in successInfo) {
+    if (!present.has(tk)) lost.push({ tracking: tk, ...successInfo[tk] });
+  }
+  lost.sort((a, b) => (a.ts instanceof Date ? a.ts.getTime() : 0) - (b.ts instanceof Date ? b.ts.getTime() : 0));
+
+  const tz = Session.getScriptTimeZone();
+  Logger.log("[findLostOrders] success ใน SaveLog: " + Object.keys(successInfo).length +
+             " | อยู่ในชีต: " + present.size + " | หาย: " + lost.length);
+  const lines = lost.map(o => {
+    const tstr = (o.ts instanceof Date) ? Utilities.formatDate(o.ts, tz, "dd/MM/yyyy HH:mm:ss") : "";
+    return tstr + "  " + o.tracking + "  " + (o.marketplace || "") + "  items=" + (o.items || 0);
+  });
+  lines.forEach(l => Logger.log("  ❌ " + l));
+
+  if (lost.length > 0) {
+    _alertOwner("พบออเดอร์หาย " + lost.length + " ใบ (เขียนทับจาก concurrent save)",
+      "tracking ที่ SaveLog บอกสำเร็จแต่ไม่อยู่ใน Orders sheet:\n\n" + lines.join("\n") +
+      "\n\n→ ต้องแพคใหม่ หรือเพิ่มเข้าชีตด้วยมือ (สินค้าที่คาดหวังดูได้จาก MarketplaceData)");
+  }
+  return { successCount: Object.keys(successInfo).length, present: present.size, lost: lost.map(o => o.tracking) };
+}
+
+// ============================================================
 // getAllPendingOrders
 // ============================================================
 function getAllPendingOrders() {
