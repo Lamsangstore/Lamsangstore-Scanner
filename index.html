@@ -2790,7 +2790,7 @@ const GAS_API_KEY = "d0be0cec0771dbb705616a737a5d3c76e42b1a4bbd10e376dd9d5bd88d7
 //   แล้ว GAS cron (drainFirebaseInbox) ดูดเข้า sheet → ออเดอร์ไม่หายเด็ดขาด
 //   ❗ ตั้งค่า: สร้าง Realtime Database ใน Firebase console แล้วใส่ค่า 2 ตัวนี้
 //   ถ้าเว้นว่าง ('') → ระบบทำงานปกติแบบไม่มี Firebase (ปิด feature อัตโนมัติ)
-const FIREBASE_DB_URL = ""; // เช่น "https://lamsang-scanner-default-rtdb.asia-southeast1.firebasedatabase.app"
+const FIREBASE_DB_URL = "https://lamsang-scanner-default-rtdb.asia-southeast1.firebasedatabase.app"; // เช่น "https://lamsang-scanner-default-rtdb.asia-southeast1.firebasedatabase.app"
 const FIREBASE_WRITE_KEY = GAS_API_KEY; // shared key — RTDB rules ตรวจ key นี้ก่อนอนุญาตเขียน
 const FIREBASE_ENABLED = () => !!FIREBASE_DB_URL;
 
@@ -6830,6 +6830,46 @@ function setPreset(type, btnEl) {
   fetchReport();
 }
 
+// 📊 อ่าน stats จาก Firebase ตรง (~100ms, ไม่มี GAS cold start)
+//   คืน null ถ้าปิด Firebase / อ่านไม่ได้ → ให้ fallback ไป GAS
+async function _firebaseReadStats(start, end) {
+  if (!FIREBASE_ENABLED()) return null;
+  try {
+    const q = `orderBy=${encodeURIComponent('"$key"')}&startAt=${encodeURIComponent('"'+start+'"')}&endAt=${encodeURIComponent('"'+end+'"')}`;
+    const url = `${FIREBASE_DB_URL}/stats.json?${q}`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const raw = await res.json();
+    if (!raw) return { totalOrders: 0, totalItems: 0, allProducts: [], dailyBreakdown: {}, byMarketplace: {} };
+
+    let totalOrders = 0, totalItems = 0;
+    const dailyBreakdown = {}, byMarketplace = {}, skuTotals = {};
+    for (const date in raw) {
+      const d = raw[date] || {};
+      const o = d.orders || 0, it = d.items || 0;
+      totalOrders += o; totalItems += it;
+      dailyBreakdown[date] = { orders: o, items: it };
+      if (d.mp) for (const mp in d.mp) {
+        if (!byMarketplace[mp]) byMarketplace[mp] = { orders: 0, items: 0 };
+        byMarketplace[mp].orders += d.mp[mp].orders || 0;
+        byMarketplace[mp].items  += d.mp[mp].items  || 0;
+      }
+      if (d.sku) for (const sk in d.sku) skuTotals[sk] = (skuTotals[sk] || 0) + d.sku[sk];
+    }
+    const allProducts = Object.entries(skuTotals)
+      .map(([sku, count]) => ({ sku, name: productMap[sku] || sku, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 200);
+    return { totalOrders, totalItems, allProducts, dailyBreakdown, byMarketplace, _source: 'firebase' };
+  } catch(e) {
+    console.warn('[Report] Firebase stats read fail → fallback GAS:', e.message);
+    return null;
+  }
+}
+
 async function fetchReport() {
   const start = document.getElementById('dashStart').value;
   const end   = document.getElementById('dashEnd').value;
@@ -6837,7 +6877,10 @@ async function fetchReport() {
   document.getElementById('dashLoading').style.display = 'block';
   document.getElementById('dashContent').style.display = 'none';
   try {
-    const data = await callGAS("getReportData", { start, end }, 45000); // ✅ timeout 45s สำหรับ report
+    // ⚡ ลอง Firebase ก่อน (เร็ว ~100ms) → ไม่ได้ค่อย fallback GAS
+    let data = await _firebaseReadStats(start, end);
+    if (!data) data = await callGAS("getReportData", { start, end }, 45000);
+    else console.log('[Report] served from Firebase ⚡');
     lastReportFetchTime = Date.now();
     lastReportParams = `${start}|${end}`;
     renderReport(data, start, end);
@@ -6941,7 +6984,8 @@ async function _renderComparePrevPeriod(start, end, curOrders, curItems) {
     const prevEnd   = new Date(s); prevEnd.setDate(s.getDate() - 1);
     const prevStart = new Date(prevEnd); prevStart.setDate(prevEnd.getDate() - (days - 1));
     const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const prev = await callGAS("getReportData", { start: fmt(prevStart), end: fmt(prevEnd) }, 45000);
+    let prev = await _firebaseReadStats(fmt(prevStart), fmt(prevEnd));
+    if (!prev) prev = await callGAS("getReportData", { start: fmt(prevStart), end: fmt(prevEnd) }, 45000);
     if (token !== _prevPeriodToken) return; // มี fetch ใหม่แทรกแล้ว
     if (!prev || prev.error) return;
     _setCompareDelta('d-box', _calcDelta(curOrders, prev.totalOrders || 0));
@@ -6994,7 +7038,8 @@ async function showDayDetail(dateStr) {
     customClass: { popup: 'swal-popup' },
   });
   try {
-    const data = await callGAS("getReportData", { start: dateStr, end: dateStr }, 45000);
+    let data = await _firebaseReadStats(dateStr, dateStr);
+    if (!data) data = await callGAS("getReportData", { start: dateStr, end: dateStr }, 45000);
     if (!data || data.error) throw new Error(data?.error || 'ไม่พบข้อมูล');
 
     const mpStyle = {

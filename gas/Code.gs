@@ -78,8 +78,8 @@ function _clearCachedParcelRow(parcelId) {
 // ============================================================
 function setupFirebase() {
   // ✏️ แก้ 2 ค่านี้ก่อนรัน:
-  const DB_URL = "PASTE-FIREBASE-DB-URL";   // เช่น https://xxx-default-rtdb.asia-southeast1.firebasedatabase.app
-  const DB_SECRET = "PASTE-DATABASE-SECRET"; // Firebase console → Project settings → Service accounts → Database secrets
+  const DB_URL = "https://lamsang-scanner-default-rtdb.asia-southeast1.firebasedatabase.app";   // เช่น https://xxx-default-rtdb.asia-southeast1.firebasedatabase.app
+  const DB_SECRET = "K9JldzYRGdygmQhpUtjdC3aGTv8pr6UzYTg1mBMT"; // Firebase console → Project settings → Service accounts → Database secrets
   if (DB_URL.indexOf("PASTE") === 0 || DB_SECRET.indexOf("PASTE") === 0) {
     throw new Error("กรุณาแก้ DB_URL และ DB_SECRET ในโค้ดก่อนรัน");
   }
@@ -182,10 +182,151 @@ function _firebaseDelete(cfg, key) {
 // ตั้ง trigger drain ทุก 1 นาที (รันครั้งเดียวใน editor)
 function setupFirebaseTrigger() {
   ScriptApp.getProjectTriggers().forEach(t => {
-    if (t.getHandlerFunction() === "drainFirebaseInbox") ScriptApp.deleteTrigger(t);
+    const fn = t.getHandlerFunction();
+    if (fn === "drainFirebaseInbox" || fn === "refreshRecentStats") ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger("drainFirebaseInbox").timeBased().everyMinutes(1).create();
-  Logger.log("✅ Firebase drain trigger: drainFirebaseInbox ทุก 1 นาที");
+  // 📊 อัปเดต stats รายงานเข้า Firebase ทุก 5 นาที (เบื้องหลัง — ไม่แตะ saveData)
+  ScriptApp.newTrigger("refreshRecentStats").timeBased().everyMinutes(5).create();
+  Logger.log("✅ Firebase triggers: drainFirebaseInbox (1 นาที) + refreshRecentStats (5 นาที)");
+}
+
+// ============================================================
+// 📊 FIREBASE STATS — pre-aggregated counters เพื่อรายงานเร็ว ~100ms
+//   client อ่าน /stats/{YYYY-MM-DD} ตรง ไม่ต้องให้ GAS scan ชีต
+//   วิธี: cron recompute วันนี้+เมื่อวาน (exact, PUT ทับ — ไม่มี drift)
+//   โครงสร้าง: /stats/{date} = { orders, items, mp:{shopee:{orders,items}}, sku:{B173..:n} }
+// ============================================================
+
+// sanitize key ให้ใช้กับ RTDB ได้ (ห้ามมี . $ # [ ] /)
+function _fbKey(s) {
+  return String(s || "").replace(/[.$#\[\]\/\x00-\x1f\x7f]/g, "_").slice(0, 200) || "_";
+}
+
+// คำนวณ stats ของวันที่กำหนด (array ของ "yyyy-MM-dd") จาก Orders sheet แบบ exact
+//   scan จากล่างขึ้น หยุดเมื่อพ้นช่วง → อ่านเฉพาะแถวล่าสุด ไม่ scan ทั้งชีต
+function _computeStatsForDates(dateSet) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_ORDERS);
+  const out = {}; // date -> { orders, items, mp:{}, sku:{} }
+  dateSet.forEach(d => out[d] = { orders: 0, items: 0, mp: {}, sku: {} });
+  if (!sheet) return out;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return out;
+
+  const tz = Session.getScriptTimeZone();
+  // หาวันเก่าสุดที่ต้องการ → ใช้เป็นจุดหยุด scan
+  let minDate = null;
+  dateSet.forEach(d => { if (!minDate || d < minDate) minDate = d; });
+
+  const lastCol = sheet.getLastColumn();
+  const CHUNK = 2000;
+  let row = lastRow;
+  let stop = false;
+  while (row >= 2 && !stop) {
+    const from = Math.max(2, row - CHUNK + 1);
+    const n = row - from + 1;
+    const data = sheet.getRange(from, 1, n, lastCol).getValues();
+    for (let i = data.length - 1; i >= 0; i--) {
+      const ts = data[i][0];
+      if (!(ts instanceof Date)) continue;
+      const dayKey = Utilities.formatDate(ts, tz, "yyyy-MM-dd");
+      if (dayKey < minDate) { stop = true; break; } // พ้นช่วงล่างสุดแล้ว
+      if (!out[dayKey]) continue; // ไม่ใช่วันที่สนใจ
+      const remark = String(data[i][5] || "");
+      if (remark.indexOf("__VIDEO_FIRST__") === 0) continue; // placeholder ยังไม่ใช่ออเดอร์จริง
+      const tracking = numToStr(data[i][3]);
+      if (!tracking) continue;
+      const mp = (String(data[i][2] || "").trim().toLowerCase()) || "other";
+      const bucket = out[dayKey];
+      bucket.orders++;
+      if (!bucket.mp[mp]) bucket.mp[mp] = { orders: 0, items: 0 };
+      bucket.mp[mp].orders++;
+      // items เริ่ม col 8 (index 7)
+      for (let c = 7; c < data[i].length; c++) {
+        const v = String(data[i][c]).trim();
+        if (!v) continue;
+        bucket.items++;
+        bucket.mp[mp].items++;
+        const sk = _fbKey(v.toUpperCase());
+        bucket.sku[sk] = (bucket.sku[sk] || 0) + 1;
+      }
+    }
+    row = from - 1;
+  }
+  return out;
+}
+
+// เขียน stats ของวันที่กำหนดลง Firebase (PUT ทับ — exact, ไม่ drift)
+function _putStatsForDates(dates) {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) return false;
+  const stats = _computeStatsForDates(dates);
+  let ok = true;
+  dates.forEach(d => {
+    const payload = stats[d] || { orders: 0, items: 0, mp: {}, sku: {} };
+    try {
+      const url = cfg.url + "/stats/" + d + ".json?auth=" + encodeURIComponent(cfg.secret);
+      const resp = UrlFetchApp.fetch(url, {
+        method: "put",
+        contentType: "application/json",
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      });
+      if (resp.getResponseCode() !== 200) {
+        ok = false;
+        Logger.log("[stats] PUT " + d + " fail: " + resp.getResponseCode());
+      }
+    } catch(e) { ok = false; Logger.log("[stats] PUT " + d + " error: " + e.message); }
+  });
+  return ok;
+}
+
+// cron ทุก 5 นาที — refresh วันนี้ + เมื่อวาน
+function refreshRecentStats() {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) return;
+  const tz = Session.getScriptTimeZone();
+  const today = new Date();
+  const y = new Date(today.getTime() - 86400000);
+  const dates = [Utilities.formatDate(y, tz, "yyyy-MM-dd"), Utilities.formatDate(today, tz, "yyyy-MM-dd")];
+  _putStatsForDates(dates);
+}
+
+// nightly — rebuild 3 วันล่าสุด exact (กัน drift จาก merge/late edits)
+function nightlyStatsRebuild() {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) return;
+  const tz = Session.getScriptTimeZone();
+  const dates = [];
+  for (let i = 0; i < 3; i++) {
+    dates.push(Utilities.formatDate(new Date(Date.now() - i * 86400000), tz, "yyyy-MM-dd"));
+  }
+  _putStatsForDates(dates);
+  Logger.log("[nightlyStatsRebuild] rebuilt " + dates.join(", "));
+}
+
+// backfill — รันครั้งเดียวใน editor เพื่อสร้าง stats ย้อนหลังทั้งหมด
+function backfillAllStats() {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) throw new Error("ยังไม่ได้ setupFirebase()");
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_ORDERS);
+  if (!sheet || sheet.getLastRow() < 2) { Logger.log("[backfill] ไม่มีข้อมูล"); return; }
+  const tz = Session.getScriptTimeZone();
+  // เก็บทุกวันที่ที่มีในชีต
+  const tsCol = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+  const dateSet = {};
+  tsCol.forEach(r => {
+    if (r[0] instanceof Date) dateSet[Utilities.formatDate(r[0], tz, "yyyy-MM-dd")] = true;
+  });
+  const dates = Object.keys(dateSet).sort();
+  Logger.log("[backfill] " + dates.length + " วัน");
+  // ทำทีละ batch 20 วัน กัน timeout
+  for (let i = 0; i < dates.length; i += 20) {
+    _putStatsForDates(dates.slice(i, i + 20));
+  }
+  Logger.log("[backfill] เสร็จ " + dates.length + " วัน");
 }
 
 // ✅ หา row ของ parcelId — cache ก่อน, fallback scan
@@ -1565,7 +1706,7 @@ function setupDailyCleanupTrigger() {
   // ลบ trigger เดิม (กันซ้ำซ้อนถ้ารันหลายรอบ)
   const HANDLERS = ["cleanUpOldOrders", "backupOrdersDaily",
                     "cleanUpOldMarketplaceData", "reconcileSaveLogVsOrders",
-                    "mergeDuplicateOrders"];
+                    "mergeDuplicateOrders", "nightlyStatsRebuild"];
   ScriptApp.getProjectTriggers().forEach(t => {
     if (HANDLERS.indexOf(t.getHandlerFunction()) !== -1) {
       ScriptApp.deleteTrigger(t);
@@ -1577,9 +1718,12 @@ function setupDailyCleanupTrigger() {
     .timeBased().everyDays(1).atHour(23).create();
 
   // ✅ Merge duplicates ก่อน reconcile — รวม row ที่ซ้ำกัน (จาก lock-free races)
-  //   22:00 → mergeDuplicateOrders → 23:00 reconcile → ตัวเลขจะตรง
   ScriptApp.newTrigger("mergeDuplicateOrders")
     .timeBased().everyDays(1).atHour(22).create();
+
+  // ✅ Rebuild Firebase stats 3 วันล่าสุด ตอน 04:00 (หลัง merge/cleanup ทุกตัว → exact)
+  ScriptApp.newTrigger("nightlyStatsRebuild")
+    .timeBased().everyDays(1).atHour(4).create();
 
   // Backup ก่อน cleanup 1 ชั่วโมง — backup ล่าสุดจะเป็น snapshot ก่อนถูกตัด
   ScriptApp.newTrigger("backupOrdersDaily")
@@ -1599,6 +1743,7 @@ function setupDailyCleanupTrigger() {
   Logger.log("   01:00 น. → backupOrdersDaily (เก็บ " + ORDERS_BACKUP_KEEP_DAYS + " วัน)");
   Logger.log("   02:00 น. → cleanUpOldOrders (เก็บ " + CLEANUP_ORDERS_RETENTION_DAYS + " วัน)");
   Logger.log("   03:00 น. → cleanUpOldMarketplaceData (เก็บ 2 วัน)");
+  Logger.log("   04:00 น. → nightlyStatsRebuild (rebuild Firebase stats 3 วันล่าสุด)");
 }
 
 // ============================================================
