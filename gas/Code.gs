@@ -103,8 +103,9 @@ function drainFirebaseInbox() {
   const cfg = _firebaseCfg();
   if (!cfg.url || !cfg.secret) { Logger.log("[drainFirebase] ยังไม่ได้ setupFirebase()"); return; }
 
-  // กันรันซ้อน
-  const lock = LockService.getScriptLock();
+  // กันรันซ้อน — ใช้ DocumentLock (คนละตัวกับ ScriptLock ที่ saveData ใช้)
+  //   ❗ ห้ามใช้ ScriptLock ที่นี่ เพราะ drain เรียก saveData() ที่ขอ ScriptLock → deadlock
+  const lock = LockService.getDocumentLock();
   try { if (!lock.tryLock(5000)) { Logger.log("[drainFirebase] ตัวก่อนยังรันอยู่ ข้าม"); return; } }
   catch(e) { return; }
 
@@ -902,12 +903,12 @@ function reconcileSaveLogVsOrders() {
 }
 
 // ============================================================
-// saveData — LOCK-FREE + appendRow + cache-based dedup + audit log
-//   เปลี่ยน design: ไม่มี LockService อีกแล้ว
-//   - appendRow() ของ Sheets API atomic ระดับ row → ไม่มี overwrite collision
-//   - idempotency token + cache → กัน duplicate ส่วนใหญ่
-//   - rare duplicates (2 device save parcel เดียวกันใน 200ms) → mergeDuplicateOrders ลบให้
-//   - video upload รวมกับ save → ไม่ต้องเก็บใน IDB
+// saveData — video upload (นอก lock) + short-lock write + cache dedup + audit
+//   ✅ video อัป Drive "นอก lock" (ส่วนช้า) → lock ไม่ค้างตอนแพคเร็ว
+//   ✅ การเขียนชีต (dedup + appendRow) อยู่ "ใต้ lock สั้น ~100ms-1s"
+//      → กัน concurrent appendRow เขียนทับ row เดียวกัน (เคยทำให้ 4 ออเดอร์หาย)
+//   ✅ idempotency token + cache → กัน duplicate, retry idempotent
+//   ✅ videoPending → client retry วิดีโอถ้า Drive ล้ม
 // ============================================================
 function saveData(body) {
   // --- validate input ---
@@ -956,13 +957,40 @@ function saveData(body) {
     return { success: true, note: "idempotent_retry" };
   }
 
+  // 🎬 Upload video → Drive ก่อน (ส่วนช้า — ทำ "นอก lock" เพื่อไม่ให้ lock ค้างตอนแพคเร็ว)
+  //   uploadedVideoUrl: "" = ไม่มีวิดีโอ, drive url, หรือ "video_too_large"
+  let uploadedVideoUrl = "";
+  let videoUploadFailed = false;
+  if (hasVideo) {
+    const u = _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId);
+    if (u === "upload_failed") videoUploadFailed = true;
+    else uploadedVideoUrl = u;
+  } else if (videoBase64 === "video_too_large") {
+    uploadedVideoUrl = "video_too_large";
+  }
+
+  // 🔒 LOCK เฉพาะ "ตอนเขียนชีต" (สั้น ~100ms-1s) — กัน concurrent appendRow เขียนทับ row เดียวกัน
+  //    (เคยเอา lock ออก → 4 ออเดอร์เขียนทับ row 17342 → ข้อมูลหาย)
+  //    วิดีโออัป Drive ไปแล้ว "นอก lock" → critical section สั้น → ไม่ timeout เหมือนเดิม
+  const lock = LockService.getScriptLock();
   try {
+    lock.waitLock(30000);
+  } catch(e) {
+    Logger.log("[saveData] ไม่ได้ lock ภายใน 30s: " + e.message);
+    _logSaveAttempt(parcelId, marketplace, "lock_timeout", itemsArr.length, e.message);
+    return { success: false, error: "Server busy, please retry" };
+  }
+
+  try {
+    // re-check token ใน lock — กัน request อื่นเพิ่ง complete token เดียวกัน
+    if (idemToken && _isCompletedToken(idemToken) && !hasVideo) {
+      _logSaveAttempt(parcelId, marketplace, "idempotent_retry", itemsArr.length, "token " + idemToken);
+      return { success: true, note: "idempotent_retry" };
+    }
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_ORDERS) || ss.insertSheet(SHEET_ORDERS);
 
-    // ⚡ Dedup ผ่าน cache + fallback scan (ไม่มี lock)
-    //    Race condition rare: 2 saves ของ parcel เดียวกันใน <200ms → อาจมี 2 rows
-    //    → mergeDuplicateOrders() กลางคืนจะรวมให้
     const found = _findParcelRow(sheet, parcelId);
     if (found) {
       const matchRow = found.rowIndex;
@@ -970,14 +998,7 @@ function saveData(body) {
       // ✅ placeholder → upgrade
       if (found.isPlaceholder) {
         const existingVideoUrl = String(sheet.getRange(matchRow, 5).getValue() || "no_video").trim();
-        // upload video ก่อน (ถ้ามี) — outside lock
-        let videoUrl = "no_video";
-        if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
-          videoUrl = _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId);
-        }
-        const finalVideoUrl = (videoUrl && videoUrl !== "no_video" && videoUrl !== "upload_failed")
-          ? videoUrl
-          : existingVideoUrl;
+        const finalVideoUrl = (uploadedVideoUrl && uploadedVideoUrl !== "video_too_large") ? uploadedVideoUrl : existingVideoUrl;
         const upgradedRow = [new Date(), orderId, marketplace, parcelId, finalVideoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
         sheet.getRange(matchRow, 1, 1, upgradedRow.length).setValues([upgradedRow]);
         _setCachedParcelRow(parcelId, matchRow, false);
@@ -987,46 +1008,29 @@ function saveData(body) {
       }
 
       // duplicate ปกติ — เติม video ถ้า row ยังไม่มี
-      let dupVideoPending = false;
-      if (hasVideo) {
-        let cur0 = "";
-        try { cur0 = String(sheet.getRange(matchRow, 5).getValue()).trim(); } catch(e) {}
-        if (cur0.indexOf('drive.google.com') === -1) { // row ยังไม่มี video → อัป + เติม
-          const uploaded = _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId);
-          if (uploaded === "upload_failed") dupVideoPending = true;
-          else { try { sheet.getRange(matchRow, 5).setValue(uploaded); } catch(e) {} }
-        }
-        // row มี video อยู่แล้ว → ไม่อัปซ้ำ (กัน orphan ใน Drive)
+      if (uploadedVideoUrl && uploadedVideoUrl !== "video_too_large") {
+        try {
+          const cur0 = String(sheet.getRange(matchRow, 5).getValue()).trim();
+          if (cur0.indexOf('drive.google.com') === -1) sheet.getRange(matchRow, 5).setValue(uploadedVideoUrl);
+        } catch(e) {}
       }
       if (idemToken) _markTokenCompleted(idemToken);
       _logSaveAttempt(parcelId, marketplace, "duplicate_skipped", itemsArr.length, "row " + matchRow);
-      return { success: true, note: "duplicate_skipped", videoPending: dupVideoPending };
+      return { success: true, note: "duplicate_skipped", videoPending: videoUploadFailed };
     }
 
-    // 🎬 Upload video → Drive (ก่อน appendRow เพื่อใส่ URL ลง row)
-    //   ถ้าอัปไม่ขึ้น → เก็บ row เป็น "no_video" (เติมทีหลังได้) + ส่ง videoPending ให้ client retry
-    let videoUrl = "no_video";
-    let videoPending = false;
-    if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
-      const uploaded = _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId);
-      if (uploaded === "upload_failed") { videoUrl = "no_video"; videoPending = true; }
-      else videoUrl = uploaded;
-    } else if (videoBase64 === "video_too_large") {
-      videoUrl = "video_too_large";
-    }
-
+    // 🆕 new row — appendRow ใต้ lock → ปลอดภัยจาก concurrent overwrite + auto-extend grid
+    const videoUrl = uploadedVideoUrl || "no_video";  // upload_failed → no_video (เติมทีหลัง)
     const timestamp = new Date();
     const row = [timestamp, orderId, marketplace, parcelId, videoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
-
-    // 🚀 appendRow — atomic ระดับ Sheets API, ไม่ต้องใช้ Lock เลย
     sheet.appendRow(row);
     const newRow = sheet.getLastRow();
 
     if (idemToken) _markTokenCompleted(idemToken);
     _setCachedParcelRow(parcelId, newRow, false);
 
-    _logSaveAttempt(parcelId, marketplace, videoPending ? "success_video_pending" : "success", itemsArr.length, "row " + newRow);
-    Logger.log("[saveData] บันทึก: " + parcelId + " | row=" + newRow + (videoPending ? " (video pending)" : ""));
+    _logSaveAttempt(parcelId, marketplace, videoUploadFailed ? "success_video_pending" : "success", itemsArr.length, "row " + newRow);
+    Logger.log("[saveData] บันทึก: " + parcelId + " | row=" + newRow + (videoUploadFailed ? " (video pending)" : ""));
 
     // PropertiesService update — non-critical
     try {
@@ -1047,11 +1051,13 @@ function saveData(body) {
       Logger.log("[saveData] PropertiesService error: " + propErr.message);
     }
 
-    return { success: true, row: newRow, videoPending: videoPending };
+    return { success: true, row: newRow, videoPending: videoUploadFailed };
   } catch (e) {
     Logger.log("Error in saveData: " + e.message);
     _logSaveAttempt(parcelId, marketplace, "exception", itemsArr.length, e.toString());
     return { success: false, error: e.toString() };
+  } finally {
+    try { lock.releaseLock(); } catch(_) {}
   }
 }
 
