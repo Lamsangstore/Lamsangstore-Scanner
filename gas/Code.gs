@@ -1394,7 +1394,6 @@ function uploadVideoForParcel(body) {
     }
 
     // อัปโหลด Drive (slow — นอก lock)
-    //   ✅ ทำ "ก่อน" หา/สร้าง row — video ขึ้น Drive ได้แม้ saveData ยังไม่เสร็จ
     let videoUrl;
     try {
       const decoded = Utilities.base64Decode(videoBase64);
@@ -1409,45 +1408,48 @@ function uploadVideoForParcel(body) {
       return { success: false, error: "Drive upload fail: " + uploadErr.message };
     }
 
-    // ถือ lock สั้นๆ ตอน setValue
-    const lock = LockService.getScriptLock();
-    try {
-      lock.waitLock(15000);
-    } catch(e) {
-      Logger.log("[uploadVideoForParcel] ไม่ได้ lock: " + e.message);
-      // Drive file อัปไปแล้ว — return videoUrl ให้ client retry แค่ setValue
-      return { success: false, error: "Server busy, please retry", _orphanVideoUrl: videoUrl };
-    }
-    try {
-      // re-check ใน lock ด้วย cache (fast) — กัน race condition
-      const foundInLock = _findParcelRow(sheet, parcelId, true);
-      let r2 = foundInLock ? foundInLock.rowIndex : -1;
-
-      // ✅ ไม่พบ row → สร้าง placeholder row (saveData จะมา upgrade ทีหลัง)
-      if (r2 === -1) {
-        const ts = new Date();
-        const placeholderRow = [ts, "", "", parcelId, videoUrl, PLACEHOLDER_MARKER, 0];
-        const startRow = sheet.getLastRow() + 1;
-        sheet.getRange(startRow, 1, 1, placeholderRow.length).setValues([placeholderRow]);
-        SpreadsheetApp.flush();
-        // populate cache → request ถัดไปไม่ต้อง scan
-        _setCachedParcelRow(parcelId, startRow, true);
-        Logger.log("[uploadVideoForParcel] สร้าง placeholder row " + startRow + " ให้ " + parcelId);
-        _logSaveAttempt(parcelId, "", "video_placeholder_created", 0, "row " + startRow);
-        return { success: true, note: "placeholder_created", row: startRow, videoUrl };
-      }
-
+    // ✅ เคสปกติ: row มีอยู่แล้ว → เติม URL ลง cell เดียว "ไม่ใช้ lock"
+    //    (setValue 1 cell + re-check → ไม่แย่ง script lock กับการแพค → ไม่ timeout)
+    const found2 = _findParcelRow(sheet, parcelId, true);
+    if (found2) {
+      const r2 = found2.rowIndex;
       const cur = String(sheet.getRange(r2, 5).getValue()).trim();
-      if (cur && cur.indexOf('drive.google.com') !== -1) {
+      if (cur.indexOf('drive.google.com') !== -1) {
         return { success: true, note: "already_has_video", videoUrl: cur };
       }
       sheet.getRange(r2, 5).setValue(videoUrl);
       SpreadsheetApp.flush();
-      Logger.log("[uploadVideoForParcel] " + parcelId + " row=" + r2 + " video=" + videoUrl.substring(0, 40));
+      Logger.log("[uploadVideoForParcel] " + parcelId + " row=" + r2 + " ✓");
       _logSaveAttempt(parcelId, "", "video_uploaded", 0, "row " + r2);
       return { success: true, videoUrl, row: r2 };
+    }
+
+    // ✅ เคส rare: ยังไม่มี row (video มาก่อน order) → สร้าง placeholder
+    //    appendRow ต้องกัน concurrent overwrite → ใช้ script lock "สั้น" เฉพาะตรงนี้
+    const lock = LockService.getScriptLock();
+    try { lock.waitLock(20000); }
+    catch(e) {
+      // ไฟล์อยู่ใน Drive แล้ว — reconcile 15 นาทีจะเก็บกวาดให้ → ไม่ใช่ error ร้ายแรง
+      Logger.log("[uploadVideoForParcel] placeholder lock timeout — reconcile จะเก็บให้");
+      return { success: true, note: "video_in_drive_pending_attach", videoUrl };
+    }
+    try {
+      // re-check ใน lock — เผื่อ saveData เพิ่งเขียน row
+      const fin = _findParcelRow(sheet, parcelId, true);
+      if (fin) {
+        const r3 = fin.rowIndex;
+        const cur3 = String(sheet.getRange(r3, 5).getValue()).trim();
+        if (cur3.indexOf('drive.google.com') === -1) sheet.getRange(r3, 5).setValue(videoUrl);
+        return { success: true, videoUrl, row: r3 };
+      }
+      const placeholderRow = [new Date(), "", "", parcelId, videoUrl, PLACEHOLDER_MARKER, 0];
+      sheet.appendRow(placeholderRow);
+      const startRow = sheet.getLastRow();
+      _setCachedParcelRow(parcelId, startRow, true);
+      _logSaveAttempt(parcelId, "", "video_placeholder_created", 0, "row " + startRow);
+      return { success: true, note: "placeholder_created", row: startRow, videoUrl };
     } finally {
-      lock.releaseLock();
+      try { lock.releaseLock(); } catch(_) {}
     }
   } catch(e) {
     Logger.log("[uploadVideoForParcel] error: " + e.message);
