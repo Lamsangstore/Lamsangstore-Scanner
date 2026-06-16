@@ -217,6 +217,10 @@ function drainFirebaseInbox(opts) {
     }
 
     const MAX_PER_RUN = 500;
+    // ⏳ grace — doc ที่ "ออเดอร์ยังไม่อยู่ในชีต + ยังใหม่กว่านี้" → ยังไม่ drain
+    //   ให้ direct saveData (เขียน row พร้อม link วิดีโอ) ทำเสร็จก่อน drain จะ fallback no_video
+    const DRAIN_GRACE_MS = 25000;
+    const nowMs = Date.now();
     const delKeys = {};              // doc ที่ process แล้ว → ลบทีเดียว
     const newRows = [];              // row ใหม่ที่จะ append
     const newTokens = [];            // token ที่ต้อง mark completed
@@ -236,6 +240,11 @@ function drainFirebaseInbox(opts) {
       if (existing.has(tk) || seenInBatch.has(tk) || (d.idemToken && _isCompletedToken(d.idemToken))) {
         delKeys[key] = null; continue;
       }
+
+      // ⏳ doc ยังใหม่ + ออเดอร์ยังไม่ลงชีต → ข้ามรอบนี้ (ไม่ลบ ไม่ append)
+      //   รอ direct saveData เขียน row พร้อม link วิดีโอก่อน — รอบหน้าถ้าลงแล้วจะ existing.has → ลบ
+      //   ถ้าเกิน grace แล้วยังไม่ลง (direct write ล้ม) → ค่อย fallback เขียน no_video กู้ไว้
+      if (Number(d.ts) && (nowMs - Number(d.ts)) < DRAIN_GRACE_MS) { continue; }
 
       // normalize items (RTDB คืน array เป็น object ได้)
       let itemsArr;
