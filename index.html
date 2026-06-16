@@ -3190,6 +3190,18 @@ function _flushOrderOnly(useBeacon) {
 function _flushPendingUploads() { _flushOrderOnly(false); }
 function _flushWithBeacon()     { _flushOrderOnly(true); }
 
+// ✅ On-demand drain — สั่ง GAS ดูด /inbox → ชีต "ทันที" ไม่ต้องรอ trigger 1 นาที
+//    (Apps Script trigger ถูก Google throttle เป็นหลายนาที → นี่คือทางลัดให้ทันใจ)
+//    debounce 8s/เครื่อง + rate-limit ฝั่ง GAS + drain ใช้ tryLock(1) → ไม่เปลือง quota, ไม่ทับซ้อน
+let _lastDrainKick = 0;
+function _kickDrain() {
+  if (!FIREBASE_DB_URL) return;            // Firebase ปิด → ไม่มี inbox
+  const now = Date.now();
+  if (now - _lastDrainKick < 8000) return; // debounce 8 วิ
+  _lastDrainKick = now;
+  try { callGAS("drainInbox", {}, 15000).catch(() => {}); } catch(e) {}
+}
+
 // นับ "วิดีโอที่ยังไม่ขึ้น Drive" — ยังมีไฟล์ใน queue + ยัง retry ไม่หมดสิทธิ์
 //   ถ้าปิดแอปตอนนี้ วิดีโอพวกนี้จะหาย (order ยังปลอดภัยเพราะอยู่ Firebase/queue)
 function _pendingVideoCount() {
@@ -3498,6 +3510,7 @@ async function retryFailedUploads(force) {
       }
     }
     if (synced > 0) showSyncToast(`sync สำเร็จ ${synced} รายการ`);
+    _kickDrain(); // เคลียร์ /inbox + กู้ออเดอร์ที่เพิ่งส่งผ่าน retry เข้าชีตทันที
     updateFailQueueBadge();
   } catch(e) { console.error('retryFailedUploads:', e); }
   _isRetrying = false;
@@ -5313,6 +5326,10 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       } else {
         _auditPack(pId, 'order', 'error', ores?.error || 'no response');
       }
+      // ✅ order write เสร็จ (สำเร็จ/ล้มก็ตาม) → สั่ง drain ทันที:
+      //   สำเร็จ → drain แค่ลบ doc /inbox (ไม่ append ซ้ำ เพราะ row+token มีแล้ว)
+      //   ล้ม    → drain กู้ออเดอร์จาก /inbox เข้าชีตทันที ไม่ต้องรอ trigger
+      _kickDrain();
     })();
 
     const phaseB = (async () => {

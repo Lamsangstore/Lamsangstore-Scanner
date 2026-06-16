@@ -179,13 +179,16 @@ function _firebaseCfg() {
 // ✅ cron — ดูด /inbox เข้า sheet แบบ BATCH (เร็ว) แล้วลบ doc ทีเดียว
 //   เดิม: เรียก saveData ทีละ doc → scan ชีต 2000 แถว + log + lock ทุก doc → ช้ามาก
 //   ใหม่: อ่าน tracking ในชีตครั้งเดียว → append รวด (lock เดียว) → ลบ doc ทีเดียว
-function drainFirebaseInbox() {
+function drainFirebaseInbox(opts) {
+  // onDemand = เรียกจากแอป (doPost action "drainInbox") → non-blocking ไม่ค้างถ้าตัวอื่นรันอยู่
+  //   trigger ส่ง event object เป็น arg แรก → (opts === true) เป็น false → โหมด blocking ปกติ
+  const onDemand = (opts === true);
   const cfg = _firebaseCfg();
-  if (!cfg.url || !cfg.secret) { Logger.log("[drainFirebase] ยังไม่ได้ setupFirebase()"); return; }
+  if (!cfg.url || !cfg.secret) { Logger.log("[drainFirebase] ยังไม่ได้ setupFirebase()"); return { success: false, error: "no firebase cfg" }; }
 
   const lock = LockService.getDocumentLock();
-  try { if (!lock.tryLock(5000)) { Logger.log("[drainFirebase] ตัวก่อนยังรันอยู่ ข้าม"); return; } }
-  catch(e) { return; }
+  try { if (!lock.tryLock(onDemand ? 1 : 5000)) { Logger.log("[drainFirebase] ตัวก่อนยังรันอยู่ ข้าม"); return { success: true, skipped: "busy" }; } }
+  catch(e) { return { success: false, error: e.message }; }
 
   try {
     const listUrl = cfg.url + "/inbox.json?auth=" + encodeURIComponent(cfg.secret);
@@ -199,7 +202,7 @@ function drainFirebaseInbox() {
     let docs;
     try { docs = JSON.parse(body); } catch(e) { Logger.log("[drainFirebase] bad json"); return; }
     const keys = Object.keys(docs || {});
-    if (keys.length === 0) return;
+    if (keys.length === 0) return { success: true, drained: 0, deleted: 0 };
     Logger.log("[drainFirebase] พบ " + keys.length + " docs");
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -250,8 +253,8 @@ function drainFirebaseInbox() {
     // เขียน row ใหม่ทั้งหมด "ใต้ lock เดียว" (appendRow auto-extend)
     if (newRows.length > 0) {
       const slock = LockService.getScriptLock();
-      try { slock.waitLock(30000); } catch(e) {
-        Logger.log("[drainFirebase] ไม่ได้ script lock — ข้ามรอบนี้"); return;
+      try { slock.waitLock(onDemand ? 8000 : 30000); } catch(e) {
+        Logger.log("[drainFirebase] ไม่ได้ script lock — ข้ามรอบนี้"); return { success: true, skipped: "script lock" };
       }
       try {
         for (let r = 0; r < newRows.length; r++) {
@@ -278,8 +281,10 @@ function drainFirebaseInbox() {
 
     Logger.log("[drainFirebase] เขียนใหม่ " + newRows.length + " | ลบ doc " + delCount);
     if (newRows.length > 0) _logSaveAttempt("", "", "firebase_drain", newRows.length, "drained=" + newRows.length + " deleted=" + delCount);
+    return { success: true, drained: newRows.length, deleted: delCount };
   } catch(e) {
     Logger.log("[drainFirebase] error: " + e.message);
+    return { success: false, error: e.message };
   } finally {
     try { lock.releaseLock(); } catch(_) {}
   }
@@ -686,6 +691,7 @@ const RATE_LIMITS = {
   getMarketplaceVersionUrl: 30,
   uploadVideoForParcel: 120,
   reconcileVideoUrls: 6,
+  drainInbox: 60,            // on-demand drain — debounce ฝั่ง client คุมอีกชั้น
   _default: 120
 };
 
@@ -693,7 +699,7 @@ const ALLOWED_ACTIONS = new Set([
   "getProductData", "saveData", "searchData", "saveMarketplaceData",
   "getExpectedOrderDetails", "getReportData", "getAllPendingOrders",
   "getSpreadsheetUrl", "getMarketplaceVersionUrl",
-  "uploadVideoForParcel", "reconcileVideoUrls"
+  "uploadVideoForParcel", "reconcileVideoUrls", "drainInbox"
 ]);
 
 // ============================================================
@@ -813,6 +819,7 @@ function doPost(e) {
     else if (action === "getMarketplaceVersionUrl")   result = getMarketplaceVersionUrl();
     else if (action === "uploadVideoForParcel")       result = uploadVideoForParcel(body);
     else if (action === "reconcileVideoUrls")         result = reconcileVideoUrls(body);
+    else if (action === "drainInbox")                 result = drainFirebaseInbox(true);
 
     return _json(result);
 
