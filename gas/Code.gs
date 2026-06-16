@@ -137,10 +137,16 @@ function drainFirebaseInbox() {
         _firebaseDelete(cfg, key);
         continue;
       }
+      // ✅ RTDB อาจคืน array เป็น object {"0":..,"1":..} หรือมี null คั่น → normalize เป็น array เสมอ
+      //   กัน items หาย (เคยเขียน array แต่ดึงกลับเป็น object → Array.isArray=false → items=[])
+      let itemsArr;
+      if (Array.isArray(d.items)) itemsArr = d.items.filter(x => x != null);
+      else if (d.items && typeof d.items === 'object') itemsArr = Object.values(d.items).filter(x => x != null);
+      else itemsArr = [];
       try {
         const res = saveData({
           parcelId: parcelId,
-          items: Array.isArray(d.items) ? d.items : [],
+          items: itemsArr,
           orderId: d.orderId || "",
           marketplace: d.marketplace || "",
           remark: d.remark || "",

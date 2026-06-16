@@ -4982,7 +4982,13 @@ async function _doFinishWork(isManual = false) {
   const summaryMsg = count > 0 ? `บันทึกสินค้า ${count} ชิ้น เรียบร้อยค่ะ` : `บันทึกพัสดุเบื้องหลังเรียบร้อยค่ะ`;
 
   try {
-    const videoChunks = await stopCameraRecording();
+    // ✅ วิดีโอเป็น best-effort — ถ้า stop ล้ม ต้อง "ยังบันทึกออเดอร์" ต่อ (ห้ามเสียทั้งออเดอร์เพราะวิดีโอ)
+    let videoChunks = [];
+    try {
+      videoChunks = await stopCameraRecording();
+    } catch(vErr) {
+      console.warn('[_doFinishWork] stopCameraRecording ล้ม — บันทึกออเดอร์แบบไม่มีวิดีโอ:', vErr);
+    }
     sessionParcels[snapshotParcelId] = { count, time: Date.now() };
     try { updateScanHistoryBar(); } catch(e) {}
 
@@ -6226,32 +6232,46 @@ function _updateProgressDialog(label, done, total, currentName) {
   Swal.update({ title: '', html: _progressBarHtml(label, done, total, currentName), showConfirmButton: false });
 }
 
-// อัปโหลด results เข้า GAS แบบขนาน — return aggregates + failures (พร้อม result object เพื่อ retry)
-// แนบ _serverWritten / _serverDup ลงในแต่ละ result เพื่อใช้รายงานต่อไฟล์ใน popup สำเร็จ
-// ✅ Auto-retry "Server busy" — backoff 3s, 6s, 12s (สูงสุด 3 ครั้ง)
-async function _uploadOneWithRetry(r, maxRetries = 3) {
+// ส่ง 1 chunk ไป GAS พร้อม retry "Server busy" (backoff 3s,6s,12s)
+async function _sendChunkWithRetry(chunk, fileName, marketplace, maxRetries = 3) {
   let lastError = 'unknown';
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const resp = await callGAS("saveMarketplaceData", { data: r.extractData, fileName: r.file.name, marketplace: r.marketplace }, 90000);
+      const resp = await callGAS("saveMarketplaceData", { data: chunk, fileName, marketplace }, 90000);
       if (resp && resp.success) return { ok: true, resp };
       lastError = resp?.error || 'unknown';
-      // Retry เฉพาะ "Server busy" (lock contention) — error อื่นเช่น verify fail ไม่ควร retry
-      const isBusy = /server busy/i.test(lastError);
-      if (!isBusy) return { ok: false, error: lastError };
-      // backoff: 3s, 6s, 12s
-      if (attempt < maxRetries - 1) {
-        await new Promise(res => setTimeout(res, 3000 * Math.pow(2, attempt)));
-      }
+      if (!/server busy/i.test(lastError)) return { ok: false, error: lastError };
+      if (attempt < maxRetries - 1) await new Promise(res => setTimeout(res, 3000 * Math.pow(2, attempt)));
     } catch (err) {
       lastError = err.message;
-      // network error — retry ด้วย
-      if (attempt < maxRetries - 1) {
-        await new Promise(res => setTimeout(res, 3000 * Math.pow(2, attempt)));
-      }
+      if (attempt < maxRetries - 1) await new Promise(res => setTimeout(res, 3000 * Math.pow(2, attempt)));
     }
   }
   return { ok: false, error: lastError + ' (retried ' + maxRetries + 'x)' };
+}
+
+// อัปโหลด 1 ไฟล์ — ✅ chunk ≤ 5000 รายการต่อครั้ง (GAS reject >10000 ทั้งก้อน → ไฟล์ใหญ่หาย)
+//   dedup ฝั่ง GAS (tracking|sku|orderId) ทำให้ส่งเป็น chunk ปลอดภัย ไม่ซ้ำข้ามก้อน
+const MP_UPLOAD_CHUNK = 5000;
+async function _uploadOneWithRetry(r) {
+  const all = r.extractData || [];
+  if (all.length <= MP_UPLOAD_CHUNK) {
+    return _sendChunkWithRetry(all, r.file.name, r.marketplace);
+  }
+  // ไฟล์ใหญ่ → แบ่งส่งทีละก้อน, รวมผล
+  let count = 0, dup = 0, bf = 0;
+  for (let i = 0; i < all.length; i += MP_UPLOAD_CHUNK) {
+    const chunk = all.slice(i, i + MP_UPLOAD_CHUNK);
+    const res = await _sendChunkWithRetry(chunk, r.file.name + ` [${i + 1}-${i + chunk.length}]`, r.marketplace);
+    if (!res.ok) {
+      // ก้อนนี้ล้ม → คืน error พร้อมยอดที่สำเร็จไปแล้ว (จะได้ retry ทั้งไฟล์รอบหน้า — dedup กันซ้ำ)
+      return { ok: false, error: `chunk ${i + 1}+ ล้ม: ${res.error} (สำเร็จก่อนหน้า ${count})` };
+    }
+    count += res.resp.count || 0;
+    dup   += res.resp.duplicateSkipped || 0;
+    bf    += res.resp.backfilled || 0;
+  }
+  return { ok: true, resp: { success: true, count, duplicateSkipped: dup, backfilled: bf } };
 }
 
 // ✅ concurrency = 1 — saveMarketplaceData ใช้ lock เดียวกันอยู่แล้ว
