@@ -70,6 +70,124 @@ function _clearCachedParcelRow(parcelId) {
   } catch(e) {}
 }
 
+// ============================================================
+// 🔥 FIREBASE INBOX DRAIN — durable safety net
+//   client เขียนออเดอร์ลง Firebase RTDB /inbox/{idemToken} ด้วย
+//   ฟังก์ชันนี้ (cron ทุก 1 นาที) ดูดเข้า Orders sheet → ออเดอร์ไม่หายแม้เครื่องหาย
+//   ตั้งค่าครั้งเดียว: รัน setupFirebase() ใน editor (ใส่ URL + secret)
+// ============================================================
+function setupFirebase() {
+  // ✏️ แก้ 2 ค่านี้ก่อนรัน:
+  const DB_URL = "PASTE-FIREBASE-DB-URL";   // เช่น https://xxx-default-rtdb.asia-southeast1.firebasedatabase.app
+  const DB_SECRET = "PASTE-DATABASE-SECRET"; // Firebase console → Project settings → Service accounts → Database secrets
+  if (DB_URL.indexOf("PASTE") === 0 || DB_SECRET.indexOf("PASTE") === 0) {
+    throw new Error("กรุณาแก้ DB_URL และ DB_SECRET ในโค้ดก่อนรัน");
+  }
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('FIREBASE_DB_URL', DB_URL.replace(/\/$/, ''));
+  props.setProperty('FIREBASE_SECRET', DB_SECRET);
+  Logger.log("✅ Firebase ตั้งค่าแล้ว: " + DB_URL);
+}
+
+function _firebaseCfg() {
+  const props = PropertiesService.getScriptProperties();
+  return {
+    url: props.getProperty('FIREBASE_DB_URL') || '',
+    secret: props.getProperty('FIREBASE_SECRET') || ''
+  };
+}
+
+// ✅ cron — ดูด /inbox เข้า sheet แล้วลบ doc ที่สำเร็จ
+//   reuse saveData() เต็มรูปแบบ → ได้ dedup + idempotency + cache ฟรี
+function drainFirebaseInbox() {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) { Logger.log("[drainFirebase] ยังไม่ได้ setupFirebase()"); return; }
+
+  // กันรันซ้อน
+  const lock = LockService.getScriptLock();
+  try { if (!lock.tryLock(5000)) { Logger.log("[drainFirebase] ตัวก่อนยังรันอยู่ ข้าม"); return; } }
+  catch(e) { return; }
+
+  try {
+    const listUrl = cfg.url + "/inbox.json?auth=" + encodeURIComponent(cfg.secret);
+    const resp = UrlFetchApp.fetch(listUrl, { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) {
+      Logger.log("[drainFirebase] list fail: " + resp.getResponseCode() + " " + resp.getContentText().slice(0, 200));
+      return;
+    }
+    const body = resp.getContentText();
+    if (!body || body === "null") return; // inbox ว่าง
+    let docs;
+    try { docs = JSON.parse(body); } catch(e) { Logger.log("[drainFirebase] bad json"); return; }
+
+    const keys = Object.keys(docs || {});
+    if (keys.length === 0) return;
+    Logger.log("[drainFirebase] พบ " + keys.length + " docs ใน inbox");
+
+    let drained = 0, failed = 0;
+    // จำกัดต่อรอบ กัน execution timeout (6 นาที) — ที่เหลือรอบหน้า
+    const MAX_PER_RUN = 200;
+    for (let i = 0; i < keys.length && i < MAX_PER_RUN; i++) {
+      const key = keys[i];
+      const d = docs[key] || {};
+      // validate
+      const parcelId = String(d.parcelId || "").trim();
+      if (!parcelId || parcelId.length > 64) {
+        // junk → ลบทิ้ง
+        _firebaseDelete(cfg, key);
+        continue;
+      }
+      try {
+        const res = saveData({
+          parcelId: parcelId,
+          items: Array.isArray(d.items) ? d.items : [],
+          orderId: d.orderId || "",
+          marketplace: d.marketplace || "",
+          remark: d.remark || "",
+          idemToken: d.idemToken || "",
+          videoEvidence: "no_video",          // video มาทาง direct GAS call เท่านั้น
+          videoMimeType: "video/webm"
+        });
+        if (res && res.success) {
+          _firebaseDelete(cfg, key); // เข้า sheet แล้ว → ลบ doc
+          drained++;
+        } else {
+          failed++;
+        }
+      } catch(e) {
+        Logger.log("[drainFirebase] saveData error " + parcelId + ": " + e.message);
+        failed++;
+      }
+    }
+    if (drained > 0 || failed > 0) {
+      Logger.log("[drainFirebase] drained=" + drained + " failed=" + failed);
+      _logSaveAttempt("", "", "firebase_drain", drained, "drained=" + drained + " failed=" + failed);
+    }
+  } catch(e) {
+    Logger.log("[drainFirebase] error: " + e.message);
+  } finally {
+    try { lock.releaseLock(); } catch(_) {}
+  }
+}
+
+function _firebaseDelete(cfg, key) {
+  try {
+    const url = cfg.url + "/inbox/" + encodeURIComponent(key) + ".json?auth=" + encodeURIComponent(cfg.secret);
+    UrlFetchApp.fetch(url, { method: "delete", muteHttpExceptions: true });
+  } catch(e) {
+    Logger.log("[_firebaseDelete] " + key + ": " + e.message);
+  }
+}
+
+// ตั้ง trigger drain ทุก 1 นาที (รันครั้งเดียวใน editor)
+function setupFirebaseTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === "drainFirebaseInbox") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("drainFirebaseInbox").timeBased().everyMinutes(1).create();
+  Logger.log("✅ Firebase drain trigger: drainFirebaseInbox ทุก 1 นาที");
+}
+
 // ✅ หา row ของ parcelId — cache ก่อน, fallback scan
 //    fullScan=true → scan ทั้งชีต (ช้ากว่าแต่หาเจอเสมอ — ใช้ใน uploadVideoForParcel)
 //    fullScan=false → scan แค่ 2000 แถวล่าสุด (เร็ว — ใช้ใน saveData hot path)

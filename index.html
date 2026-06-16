@@ -2784,6 +2784,67 @@
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz9V3qh2Ea8sapU7BLMZTlrC4HqWxL6ku5dwzIOpNBu2Gf-bIzl8Oe1G4FB9vcVDKp8yQ/exec";
 const GAS_API_KEY = "d0be0cec0771dbb705616a737a5d3c76e42b1a4bbd10e376dd9d5bd88d77adc5";
 
+// ============================================================
+// 🔥 FIREBASE — durable safety net ฝั่ง server (กันออเดอร์หายแม้เครื่องหาย)
+//   ทำงานคู่ขนานกับ GAS: client เขียนออเดอร์ลง Firebase /inbox ด้วย
+//   แล้ว GAS cron (drainFirebaseInbox) ดูดเข้า sheet → ออเดอร์ไม่หายเด็ดขาด
+//   ❗ ตั้งค่า: สร้าง Realtime Database ใน Firebase console แล้วใส่ค่า 2 ตัวนี้
+//   ถ้าเว้นว่าง ('') → ระบบทำงานปกติแบบไม่มี Firebase (ปิด feature อัตโนมัติ)
+const FIREBASE_DB_URL = ""; // เช่น "https://lamsang-scanner-default-rtdb.asia-southeast1.firebasedatabase.app"
+const FIREBASE_WRITE_KEY = GAS_API_KEY; // shared key — RTDB rules ตรวจ key นี้ก่อนอนุญาตเขียน
+const FIREBASE_ENABLED = () => !!FIREBASE_DB_URL;
+
+// deviceId ติดเครื่อง — ใช้ debug ว่าออเดอร์มาจากเครื่องไหน
+const DEVICE_ID = (() => {
+  try {
+    let d = localStorage.getItem('deviceId');
+    if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+Math.random().toString(36).slice(2)); localStorage.setItem('deviceId', d); }
+    return d;
+  } catch(e) { return 'unknown'; }
+})();
+
+// ✅ เขียนออเดอร์ลง Firebase /inbox/{idemToken} (PUT = idempotent, retry ไม่ซ้ำ)
+//   คืน true ถ้าสำเร็จ — best-effort, ไม่ throw
+async function _firebasePushOrder(job) {
+  if (!FIREBASE_ENABLED() || !job.idemToken) return false;
+  try {
+    const url = `${FIREBASE_DB_URL}/inbox/${encodeURIComponent(job.idemToken)}.json`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        k: FIREBASE_WRITE_KEY,
+        parcelId: job.pId,
+        items: job.itemsArr || [],
+        orderId: job.orderId || "",
+        marketplace: job.marketplace || "",
+        remark: job.remarkNote || "",
+        idemToken: job.idemToken,
+        device: DEVICE_ID,
+        ts: job.ts || Date.now()
+      }),
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    return res.ok;
+  } catch(e) {
+    return false;
+  }
+}
+
+// ✅ ensure ออเดอร์ถูก mirror ลง Firebase แล้ว (push ถ้ายัง) — best-effort
+//   อัปเดต flag fbPushed ใน queue เพื่อไม่ push ซ้ำ
+async function _ensureFirebasePush(job) {
+  if (!FIREBASE_ENABLED() || !job || !job.idemToken || job.fbPushed) return;
+  const ok = await _firebasePushOrder(job);
+  if (ok) {
+    try { _updateQueueItem(job.pId, (cur) => { cur.fbPushed = true; return cur; }); } catch(e) {}
+    job.fbPushed = true;
+  }
+}
+
 // --- Hash Routing ---
 function navigateByHash() {
   const hash = window.location.hash;
@@ -3241,7 +3302,8 @@ function _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, vide
     idemToken: idemToken || '',
     ts: Date.now(),
     attempts: 0,
-    nextAt: 0
+    nextAt: 0,
+    fbPushed: false  // ✅ true เมื่อเขียนลง Firebase /inbox สำเร็จแล้ว
   };
   const _writeQueue = (q) => localStorage.setItem(FAIL_QUEUE_KEY, JSON.stringify(q));
   const _loadQueue = () => { try { return JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]'); } catch(e) { return []; } };
@@ -3332,6 +3394,8 @@ async function retryFailedUploads(force) {
     for (const job of q) {
       if (_isSent(job.pId)) continue;
       if (!force && job.nextAt && now < job.nextAt) continue; // ยังไม่ถึงเวลา (ยกเว้น force)
+      // 🔥 ensure Firebase mirror ก่อน (กันออเดอร์หายแม้ GAS ยังไม่ผ่าน)
+      await _ensureFirebasePush(job);
       let ok = false;
       try {
         const res = await callGAS("saveData", {
@@ -5027,6 +5091,10 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, videoData, videoMimeForUpload, idemToken);
     persisted = true;
     updateFailQueueBadge();
+
+    // 🔥 Mirror ลง Firebase ทันที (durable ฝั่ง server — กันออเดอร์หายแม้เครื่องหาย)
+    //   ทำคู่ขนาน ไม่ block GAS call
+    _ensureFirebasePush({ pId, itemsArr, remarkNote, orderId, marketplace, idemToken, ts: Date.now(), fbPushed: false });
 
     if (!navigator.onLine) {
       console.log(`[Background] offline — ${pId} รออัปโหลดเมื่อ online`);
