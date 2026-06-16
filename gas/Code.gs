@@ -1091,33 +1091,15 @@ function saveData(body) {
     uploadedVideoUrl = "video_too_large";
   }
 
-  // 🔒 LOCK เฉพาะ "ตอนเขียนชีต" (สั้น ~100ms-1s) — กัน concurrent appendRow เขียนทับ row เดียวกัน
-  //    (เคยเอา lock ออก → 4 ออเดอร์เขียนทับ row 17342 → ข้อมูลหาย)
-  //    วิดีโออัป Drive ไปแล้ว "นอก lock" → critical section สั้น → ไม่ timeout เหมือนเดิม
-  const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(30000);
-  } catch(e) {
-    Logger.log("[saveData] ไม่ได้ lock ภายใน 30s: " + e.message);
-    _logSaveAttempt(parcelId, marketplace, "lock_timeout", itemsArr.length, e.message);
-    return { success: false, error: "Server busy, please retry" };
-  }
-
-  try {
-    // re-check token ใน lock — กัน request อื่นเพิ่ง complete token เดียวกัน
-    if (idemToken && _isCompletedToken(idemToken) && !hasVideo) {
-      _logSaveAttempt(parcelId, marketplace, "idempotent_retry", itemsArr.length, "token " + idemToken);
-      return { success: true, note: "idempotent_retry" };
-    }
-
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_ORDERS) || ss.insertSheet(SHEET_ORDERS);
 
+    // 🔎 dedup find "นอก lock" (scan อาจช้า — ไม่ควรถือ lock ระหว่างนี้)
     const found = _findParcelRow(sheet, parcelId);
     if (found) {
       const matchRow = found.rowIndex;
-
-      // ✅ placeholder → upgrade
+      // ✅ placeholder → upgrade (เขียน row เดิม — ไม่ใช่ append → ไม่ต้อง lock)
       if (found.isPlaceholder) {
         const existingVideoUrl = String(sheet.getRange(matchRow, 5).getValue() || "no_video").trim();
         const finalVideoUrl = (uploadedVideoUrl && uploadedVideoUrl !== "video_too_large") ? uploadedVideoUrl : existingVideoUrl;
@@ -1128,8 +1110,7 @@ function saveData(body) {
         _logSaveAttempt(parcelId, marketplace, "placeholder_upgraded", itemsArr.length, "row " + matchRow);
         return { success: true, note: "placeholder_upgraded", row: matchRow };
       }
-
-      // duplicate ปกติ — เติม video ถ้า row ยังไม่มี
+      // duplicate ปกติ — เติม video ถ้า row ยังไม่มี (เขียน cell เดิม — ไม่ต้อง lock)
       if (uploadedVideoUrl && uploadedVideoUrl !== "video_too_large") {
         try {
           const cur0 = String(sheet.getRange(matchRow, 5).getValue()).trim();
@@ -1141,20 +1122,36 @@ function saveData(body) {
       return { success: true, note: "duplicate_skipped", videoPending: videoUploadFailed };
     }
 
-    // 🆕 new row — appendRow ใต้ lock → ปลอดภัยจาก concurrent overwrite + auto-extend grid
-    const videoUrl = uploadedVideoUrl || "no_video";  // upload_failed → no_video (เติมทีหลัง)
-    const timestamp = new Date();
-    const row = [timestamp, orderId, marketplace, parcelId, videoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
-    sheet.appendRow(row);
-    const newRow = sheet.getLastRow();
-
-    if (idemToken) _markTokenCompleted(idemToken);
-    _setCachedParcelRow(parcelId, newRow, false);
+    // 🆕 new row — ❗LOCK เฉพาะ appendRow (สั้นมาก ~100ms) กัน concurrent overwrite
+    //    scan/dedup ทำนอก lock ไปแล้ว → critical section เหลือแค่ append → lock_timeout น้อยลงมาก
+    const videoUrl = uploadedVideoUrl || "no_video";
+    const lock = LockService.getScriptLock();
+    try { lock.waitLock(30000); }
+    catch(e) {
+      Logger.log("[saveData] ไม่ได้ lock ภายใน 30s: " + e.message);
+      _logSaveAttempt(parcelId, marketplace, "lock_timeout", itemsArr.length, e.message);
+      return { success: false, error: "Server busy, please retry" };
+    }
+    let newRow;
+    try {
+      // re-check token ใน lock — กัน retry ของ save เดิม append ซ้ำ (cache ~10ms)
+      if (idemToken && _isCompletedToken(idemToken) && !hasVideo) {
+        _logSaveAttempt(parcelId, marketplace, "idempotent_retry", itemsArr.length, "token " + idemToken);
+        return { success: true, note: "idempotent_retry" };
+      }
+      const row = [new Date(), orderId, marketplace, parcelId, videoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
+      sheet.appendRow(row);
+      newRow = sheet.getLastRow();
+      if (idemToken) _markTokenCompleted(idemToken);
+      _setCachedParcelRow(parcelId, newRow, false);
+    } finally {
+      try { lock.releaseLock(); } catch(_) {}
+    }
 
     _logSaveAttempt(parcelId, marketplace, videoUploadFailed ? "success_video_pending" : "success", itemsArr.length, "row " + newRow);
     Logger.log("[saveData] บันทึก: " + parcelId + " | row=" + newRow + (videoUploadFailed ? " (video pending)" : ""));
 
-    // PropertiesService update — non-critical
+    // PropertiesService update — non-critical, "นอก lock"
     try {
       const props = PropertiesService.getScriptProperties();
       const packed = JSON.parse(props.getProperty('packedTrackings') || '[]');
