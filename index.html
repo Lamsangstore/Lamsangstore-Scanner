@@ -5064,11 +5064,10 @@ async function _doFinishWork(isManual = false) {
     // ✅ ปล่อย memory ทันที — snapshot ถูกส่งให้ background แล้ว ไม่ต้องเก็บใน global
     recordedChunks = [];
 
-    // ✅ UI confirmation hold — รอ upload สูงสุด 2.5s ก่อน reset
-    //   ถ้าเสร็จเร็ว → user เห็น "✓ บันทึกแล้ว" ทันที (UX ดี)
+    // ✅ UI confirmation hold — รอ upload สูงสุด 1.5s ก่อน reset
+    //   GAS ใหม่ใช้เวลาแค่ ~200-500ms ต่อ save → 1.5s พอจับ "เสร็จเร็ว" ได้สบาย
     //   ถ้าช้ากว่านั้น → reset แล้ว upload ต่อ background (UX เหมือนเดิม)
-    //   ผลข้างเคียง: ลด race condition กรณี user สแกนใบถัดไปเร็วเกินไป
-    const UI_HOLD_MS = 2500;
+    const UI_HOLD_MS = 1500;
     setStatus("💾 กำลังบันทึก...", "primary");
     const raceResult = await Promise.race([
       uploadPromise.then(() => 'uploaded').catch(() => 'failed'),

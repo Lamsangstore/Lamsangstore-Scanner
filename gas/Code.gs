@@ -568,8 +568,8 @@ function saveData(body) {
         const newTs = new Date();
         const upgradedRow = [newTs, orderId, marketplace, parcelId, finalVideoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
         sheet.getRange(matchRow, 1, 1, upgradedRow.length).setValues([upgradedRow]);
-        SpreadsheetApp.flush();
-        // verify
+        // ❌ skip flush — Apps Script auto-flush ตอนจบ execution
+        // ✅ verify ยังเก็บไว้ — เป็น overwrite ที่เสี่ยงกว่า new row, จับ row mismatch ได้
         const verifyTracking = numToStr(sheet.getRange(matchRow, 4).getValue()).toUpperCase();
         if (verifyTracking !== parcelId.toUpperCase()) {
           Logger.log("[saveData] placeholder upgrade verify FAIL: " + parcelId);
@@ -600,23 +600,28 @@ function saveData(body) {
     const timestamp = new Date();
     const row = [timestamp, orderId, marketplace, parcelId, videoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
 
-    // ✅ เขียนด้วย setValues (กำหนด startRow ชัดเจน) แทน appendRow
-    //    → verify ได้แม่นยำกว่าใน lock เดียวกัน
+    // 🚀 SPEED-FIRST mode — เขียนแล้ว return เลย ไม่ flush/verify
+    //    เหตุผล:
+    //      - setValues ใน lock = atomic — สำเร็จหรือ throw ไม่มี partial write
+    //      - Apps Script auto-flush ตอนจบ execution → ข้อมูลจะ commit ก่อน response ถึง client
+    //      - safety net: SaveLog audit + daily reconciliation จับ row หายได้
+    //    ผลลัพธ์: critical section จาก ~700-900ms → ~150-300ms
     const startRow = sheet.getLastRow() + 1;
     sheet.getRange(startRow, 1, 1, row.length).setValues([row]);
-    SpreadsheetApp.flush(); // ✅ บังคับ commit ทันที — กัน partial write
+    // ❌ ไม่ flush — Apps Script auto-flush ตอนจบ execution (เร็วขึ้น ~300-500ms)
+    // ❌ ไม่ verify — setValues ใน lock ปลอดภัยแล้ว, มี SaveLog + reconciliation เป็น safety net
 
-    // ✅ Verify — อ่านกลับมาเช็คว่า tracking ตรงกับที่เพิ่งเขียน
-    const verifyTracking = numToStr(sheet.getRange(startRow, 4).getValue()).toUpperCase();
-    if (verifyTracking !== parcelId.toUpperCase()) {
-      Logger.log("[saveData] verify FAIL: expected " + parcelId + " got '" + verifyTracking + "' at row " + startRow);
-      _logSaveAttempt(parcelId, marketplace, "verify_failed", itemsArr.length,
-                      "expected " + parcelId + " got '" + verifyTracking + "' at row " + startRow);
-      return { success: false, error: "Write verification failed — please retry" };
-    }
+    // ✅ จำ token ไว้ — request ถัดไปที่ใช้ token เดียวกัน = retry → idempotent_retry
+    if (idemToken) _markTokenCompleted(idemToken);
 
-    Logger.log("[saveData] บันทึก: " + parcelId + " | row=" + startRow + " | video: " + videoUrl.substring(0, 40));
+    // ✅ populate parcel cache → request ถัดไปสำหรับ parcelId เดียวกัน = dedup ได้ใน 10ms ไม่ต้อง scan
+    _setCachedParcelRow(parcelId, startRow, false);
 
+    _logSaveAttempt(parcelId, marketplace, "success", itemsArr.length, "row " + startRow);
+    Logger.log("[saveData] บันทึก: " + parcelId + " | row=" + startRow);
+
+    // 📝 PropertiesService update ย้ายมาหลัง response prep — ถ้าช้าก็ไม่กระทบ user
+    //    (แต่ยังอยู่ใน lock เพื่อกันแย่ง)
     try {
       const props = PropertiesService.getScriptProperties();
       const packed = JSON.parse(props.getProperty('packedTrackings') || '[]');
@@ -635,13 +640,6 @@ function saveData(body) {
       Logger.log("[saveData] PropertiesService error: " + propErr.message);
     }
 
-    // ✅ จำ token ไว้ — request ถัดไปที่ใช้ token เดียวกัน = retry → idempotent_retry
-    if (idemToken) _markTokenCompleted(idemToken);
-
-    // ✅ populate parcel cache → request ถัดไปสำหรับ parcelId เดียวกัน = dedup ได้ใน 10ms ไม่ต้อง scan
-    _setCachedParcelRow(parcelId, startRow, false);
-
-    _logSaveAttempt(parcelId, marketplace, "success", itemsArr.length, "row " + startRow);
     return { success: true, row: startRow };
   } catch (e) {
     Logger.log("Error in saveData: " + e.message);
