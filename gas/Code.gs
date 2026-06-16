@@ -462,7 +462,12 @@ function reconcileSaveLogVsOrders() {
 }
 
 // ============================================================
-// saveData — Dedup + LockService + size limit + input validation + verify + audit log
+// saveData — LOCK-FREE + appendRow + cache-based dedup + audit log
+//   เปลี่ยน design: ไม่มี LockService อีกแล้ว
+//   - appendRow() ของ Sheets API atomic ระดับ row → ไม่มี overwrite collision
+//   - idempotency token + cache → กัน duplicate ส่วนใหญ่
+//   - rare duplicates (2 device save parcel เดียวกันใน 200ms) → mergeDuplicateOrders ลบให้
+//   - video upload รวมกับ save → ไม่ต้องเก็บใน IDB
 // ============================================================
 function saveData(body) {
   // --- validate input ---
@@ -498,97 +503,50 @@ function saveData(body) {
   if (!ALLOWED_VIDEO_MIMES[videoMime]) videoMime = 'video/webm';
   const videoExt = ALLOWED_VIDEO_MIMES[videoMime];
 
-  // ✅ Idempotency token — ส่งจาก client (UUID ต่อการ save 1 ครั้ง)
-  //   ใช้แยก "retry ของ save เดิม" (เงียบๆ ถือว่าสำเร็จ) ออกจาก
-  //   "ตั้งใจ rescan ใหม่" (เตือน user)
   const idemToken = String(body.idemToken || "").slice(0, 64);
 
-  // ⚡ Fast path: เช็ค token ก่อนทำอะไรเลย — ถ้าเคย complete แล้วก็ไม่ต้องถือ lock
-  //   ยกเว้นกรณี request นี้มี video แต่ row เดิมอาจไม่มี (เช่น keepalive flush ส่งไปก่อนแบบไม่มี video)
-  //   → ปล่อยให้เข้า lock เพื่ออัปเดต videoUrl ของ row เดิม
-  const hasVideo = !!(videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large");
-  if (idemToken && _isCompletedToken(idemToken) && !hasVideo) {
-    Logger.log("[saveData] Idempotent retry (fast path): " + idemToken);
+  // ⚡ Fast path: token เคย complete → retry เงียบๆ
+  if (idemToken && _isCompletedToken(idemToken)) {
+    Logger.log("[saveData] Idempotent retry: " + idemToken);
     _logSaveAttempt(parcelId, marketplace, "idempotent_retry", itemsArr.length, "token " + idemToken);
     return { success: true, note: "idempotent_retry" };
   }
 
-  // 🚀 Upload video ก่อน acquire lock — ตัดเวลาถือ lock ลง 2-5 วินาที
-  //   ถ้าไม่ทำตรงนี้ video upload (slow) จะเกิดในขณะถือ lock → request อื่น timeout
-  //   ผลข้างเคียง: ถ้า dedup ตรวจเจอว่าซ้ำ video จะกลายเป็น orphan ใน Drive
-  //   (รับได้ — orphan รายปีเทียบไม่กับ lock_timeout รายวัน)
-  let videoUrl = "no_video";
-  if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
-    try {
-      const decoded = Utilities.base64Decode(videoBase64);
-      const blob    = Utilities.newBlob(decoded, videoMime, parcelId + "." + videoExt);
-      const folder  = DriveApp.getFolderById(TARGET_FOLDER_ID);
-      const file    = folder.createFile(blob);
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      videoUrl = file.getUrl();
-    } catch (videoErr) {
-      Logger.log("Video upload error: " + videoErr.message);
-      videoUrl = "upload_failed";
-    }
-  } else if (videoBase64 === "video_too_large") {
-    videoUrl = "video_too_large";
-  }
-
-  const lock = LockService.getScriptLock();
   try {
-    // ✅ 60s — รอ lock นานพอที่ queue จะระบายได้แม้มีหลายเครื่อง save พร้อมกัน
-    //    critical section ใหม่ ~500ms-1s → 60s รับได้ ~60 concurrent saves
-    lock.waitLock(60000);
-  } catch(e) {
-    Logger.log("[saveData] ไม่ได้ lock ภายใน 30s: " + e.message);
-    _logSaveAttempt(parcelId, marketplace, "lock_timeout", itemsArr.length, e.message);
-    return { success: false, error: "Server busy, please retry" };
-  }
-
-  try {
-    // เช็ค token อีกครั้งใน lock — กันกรณี request อื่นเพิ่ง complete token เดียวกัน
-    //   ถ้ามี video → ปล่อยผ่านเพื่ออัปเดต video ของ row เดิม (เคส keepalive ส่งโดยไม่มี video)
-    if (idemToken && _isCompletedToken(idemToken) && !hasVideo) {
-      Logger.log("[saveData] Idempotent retry (in-lock): " + idemToken);
-      _logSaveAttempt(parcelId, marketplace, "idempotent_retry", itemsArr.length, "token " + idemToken);
-      return { success: true, note: "idempotent_retry" };
-    }
-
-    const ss    = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_ORDERS) || ss.insertSheet(SHEET_ORDERS);
 
-    // ⚡ Fast dedup — ใช้ cache (10ms) แทน scan column tracking ทั้งหมด (1-3s)
-    //    ถ้า cache miss → fallback scan แค่ 2000 แถวล่าสุด (~500ms)
+    // ⚡ Dedup ผ่าน cache + fallback scan (ไม่มี lock)
+    //    Race condition rare: 2 saves ของ parcel เดียวกันใน <200ms → อาจมี 2 rows
+    //    → mergeDuplicateOrders() กลางคืนจะรวมให้
     const found = _findParcelRow(sheet, parcelId);
     if (found) {
       const matchRow = found.rowIndex;
 
-      // ✅ placeholder → upgrade ด้วยข้อมูลเต็ม (ไม่ใช่ duplicate)
+      // ✅ placeholder → upgrade
       if (found.isPlaceholder) {
         const existingVideoUrl = String(sheet.getRange(matchRow, 5).getValue() || "no_video").trim();
+        // upload video ก่อน (ถ้ามี) — outside lock
+        let videoUrl = "no_video";
+        if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
+          videoUrl = _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId);
+        }
         const finalVideoUrl = (videoUrl && videoUrl !== "no_video" && videoUrl !== "upload_failed")
           ? videoUrl
           : existingVideoUrl;
-        const newTs = new Date();
-        const upgradedRow = [newTs, orderId, marketplace, parcelId, finalVideoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
+        const upgradedRow = [new Date(), orderId, marketplace, parcelId, finalVideoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
         sheet.getRange(matchRow, 1, 1, upgradedRow.length).setValues([upgradedRow]);
-        // ❌ skip flush — Apps Script auto-flush ตอนจบ execution
-        // ✅ verify ยังเก็บไว้ — เป็น overwrite ที่เสี่ยงกว่า new row, จับ row mismatch ได้
-        const verifyTracking = numToStr(sheet.getRange(matchRow, 4).getValue()).toUpperCase();
-        if (verifyTracking !== parcelId.toUpperCase()) {
-          Logger.log("[saveData] placeholder upgrade verify FAIL: " + parcelId);
-          _logSaveAttempt(parcelId, marketplace, "verify_failed", itemsArr.length, "placeholder upgrade");
-          return { success: false, error: "Placeholder upgrade verification failed" };
-        }
-        _setCachedParcelRow(parcelId, matchRow, false); // อัปเดต cache → ไม่ใช่ placeholder แล้ว
+        _setCachedParcelRow(parcelId, matchRow, false);
         if (idemToken) _markTokenCompleted(idemToken);
-        Logger.log("[saveData] placeholder upgraded: " + parcelId + " row=" + matchRow);
         _logSaveAttempt(parcelId, marketplace, "placeholder_upgraded", itemsArr.length, "row " + matchRow);
         return { success: true, note: "placeholder_upgraded", row: matchRow };
       }
 
       // duplicate ปกติ
-      Logger.log("[saveData] Duplicate skipped: " + parcelId);
+      let videoUrl = "no_video";
+      if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
+        videoUrl = _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId);
+      }
       if (videoUrl && videoUrl !== "no_video" && videoUrl !== "upload_failed") {
         try {
           const currentVideoUrl = String(sheet.getRange(matchRow, 5).getValue()).trim();
@@ -597,35 +555,33 @@ function saveData(body) {
           }
         } catch(e) { Logger.log("[saveData] update existing video error: " + e.message); }
       }
+      if (idemToken) _markTokenCompleted(idemToken);
       _logSaveAttempt(parcelId, marketplace, "duplicate_skipped", itemsArr.length, "row " + matchRow);
       return { success: true, note: "duplicate_skipped" };
+    }
+
+    // 🎬 Upload video → Drive (ก่อน appendRow เพื่อใส่ URL ลง row)
+    let videoUrl = "no_video";
+    if (videoBase64 && videoBase64 !== "no_video" && videoBase64 !== "video_too_large") {
+      videoUrl = _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId);
+    } else if (videoBase64 === "video_too_large") {
+      videoUrl = "video_too_large";
     }
 
     const timestamp = new Date();
     const row = [timestamp, orderId, marketplace, parcelId, videoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
 
-    // 🚀 SPEED-FIRST mode — เขียนแล้ว return เลย ไม่ flush/verify
-    //    เหตุผล:
-    //      - setValues ใน lock = atomic — สำเร็จหรือ throw ไม่มี partial write
-    //      - Apps Script auto-flush ตอนจบ execution → ข้อมูลจะ commit ก่อน response ถึง client
-    //      - safety net: SaveLog audit + daily reconciliation จับ row หายได้
-    //    ผลลัพธ์: critical section จาก ~700-900ms → ~150-300ms
-    const startRow = sheet.getLastRow() + 1;
-    sheet.getRange(startRow, 1, 1, row.length).setValues([row]);
-    // ❌ ไม่ flush — Apps Script auto-flush ตอนจบ execution (เร็วขึ้น ~300-500ms)
-    // ❌ ไม่ verify — setValues ใน lock ปลอดภัยแล้ว, มี SaveLog + reconciliation เป็น safety net
+    // 🚀 appendRow — atomic ระดับ Sheets API, ไม่ต้องใช้ Lock เลย
+    sheet.appendRow(row);
+    const newRow = sheet.getLastRow();
 
-    // ✅ จำ token ไว้ — request ถัดไปที่ใช้ token เดียวกัน = retry → idempotent_retry
     if (idemToken) _markTokenCompleted(idemToken);
+    _setCachedParcelRow(parcelId, newRow, false);
 
-    // ✅ populate parcel cache → request ถัดไปสำหรับ parcelId เดียวกัน = dedup ได้ใน 10ms ไม่ต้อง scan
-    _setCachedParcelRow(parcelId, startRow, false);
+    _logSaveAttempt(parcelId, marketplace, "success", itemsArr.length, "row " + newRow);
+    Logger.log("[saveData] บันทึก: " + parcelId + " | row=" + newRow);
 
-    _logSaveAttempt(parcelId, marketplace, "success", itemsArr.length, "row " + startRow);
-    Logger.log("[saveData] บันทึก: " + parcelId + " | row=" + startRow);
-
-    // 📝 PropertiesService update ย้ายมาหลัง response prep — ถ้าช้าก็ไม่กระทบ user
-    //    (แต่ยังอยู่ใน lock เพื่อกันแย่ง)
+    // PropertiesService update — non-critical
     try {
       const props = PropertiesService.getScriptProperties();
       const packed = JSON.parse(props.getProperty('packedTrackings') || '[]');
@@ -644,13 +600,26 @@ function saveData(body) {
       Logger.log("[saveData] PropertiesService error: " + propErr.message);
     }
 
-    return { success: true, row: startRow };
+    return { success: true, row: newRow };
   } catch (e) {
     Logger.log("Error in saveData: " + e.message);
     _logSaveAttempt(parcelId, marketplace, "exception", itemsArr.length, e.toString());
     return { success: false, error: e.toString() };
-  } finally {
-    lock.releaseLock();
+  }
+}
+
+// ✅ Helper: upload video → Drive, คืน URL (หรือ "upload_failed")
+function _uploadVideoToDrive(videoBase64, videoMime, videoExt, parcelId) {
+  try {
+    const decoded = Utilities.base64Decode(videoBase64);
+    const blob = Utilities.newBlob(decoded, videoMime, parcelId + "." + videoExt);
+    const folder = DriveApp.getFolderById(TARGET_FOLDER_ID);
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return file.getUrl();
+  } catch(e) {
+    Logger.log("[_uploadVideoToDrive] error: " + e.message);
+    return "upload_failed";
   }
 }
 
@@ -1473,7 +1442,8 @@ function cleanUpOldOrders() {
 function setupDailyCleanupTrigger() {
   // ลบ trigger เดิม (กันซ้ำซ้อนถ้ารันหลายรอบ)
   const HANDLERS = ["cleanUpOldOrders", "backupOrdersDaily",
-                    "cleanUpOldMarketplaceData", "reconcileSaveLogVsOrders"];
+                    "cleanUpOldMarketplaceData", "reconcileSaveLogVsOrders",
+                    "mergeDuplicateOrders"];
   ScriptApp.getProjectTriggers().forEach(t => {
     if (HANDLERS.indexOf(t.getHandlerFunction()) !== -1) {
       ScriptApp.deleteTrigger(t);
@@ -1483,6 +1453,11 @@ function setupDailyCleanupTrigger() {
   // ✅ Reconciliation รันก่อน cleanup — เพื่อเห็นยอดวันนี้ก่อนที่ Orders จะถูกลบ
   ScriptApp.newTrigger("reconcileSaveLogVsOrders")
     .timeBased().everyDays(1).atHour(23).create();
+
+  // ✅ Merge duplicates ก่อน reconcile — รวม row ที่ซ้ำกัน (จาก lock-free races)
+  //   22:00 → mergeDuplicateOrders → 23:00 reconcile → ตัวเลขจะตรง
+  ScriptApp.newTrigger("mergeDuplicateOrders")
+    .timeBased().everyDays(1).atHour(22).create();
 
   // Backup ก่อน cleanup 1 ชั่วโมง — backup ล่าสุดจะเป็น snapshot ก่อนถูกตัด
   ScriptApp.newTrigger("backupOrdersDaily")
@@ -1497,10 +1472,129 @@ function setupDailyCleanupTrigger() {
     .timeBased().everyDays(1).atHour(3).create();
 
   Logger.log("✅ Daily triggers set:");
+  Logger.log("   22:00 น. → mergeDuplicateOrders (รวม row ซ้ำจาก lock-free races)");
   Logger.log("   23:00 น. → reconcileSaveLogVsOrders (เปรียบเทียบ SaveLog vs Orders)");
   Logger.log("   01:00 น. → backupOrdersDaily (เก็บ " + ORDERS_BACKUP_KEEP_DAYS + " วัน)");
   Logger.log("   02:00 น. → cleanUpOldOrders (เก็บ " + CLEANUP_ORDERS_RETENTION_DAYS + " วัน)");
   Logger.log("   03:00 น. → cleanUpOldMarketplaceData (เก็บ 2 วัน)");
+}
+
+// ============================================================
+// mergeDuplicateOrders — รวม row ที่มี parcelId ซ้ำกันใน Orders sheet
+//   เกิดจาก race condition ใน lock-free saveData (rare)
+//   logic: เก็บ row ที่ "ครบสุด" (มี videoUrl, มี items, มี orderId) ลบที่เหลือ
+//   ถ้าเทียบกันแล้วเท่ากัน → เก็บ row ที่ใหม่กว่า (timestamp ใหญ่กว่า)
+// ============================================================
+function mergeDuplicateOrders() {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(60000); }
+  catch(e) {
+    Logger.log("[mergeDuplicateOrders] ไม่ได้ lock: " + e.message);
+    return;
+  }
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_ORDERS);
+    if (!sheet) return;
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return;
+
+    // อ่านทั้งชีต (รับได้ — รันแค่กลางคืน)
+    const data = sheet.getDataRange().getValues();
+    const header = data[0];
+
+    // group rows ตาม tracking (col D = index 3)
+    const groups = {}; // tracking → [{ rowIndex (1-based sheet), data }]
+    for (let i = 1; i < data.length; i++) {
+      const tracking = String(data[i][3] || "").trim().toUpperCase();
+      if (!tracking) continue;
+      if (!groups[tracking]) groups[tracking] = [];
+      groups[tracking].push({ rowIndex: i + 1, data: data[i] });
+    }
+
+    // หา group ที่มี duplicate
+    const rowsToDelete = []; // sheet row indices (1-based)
+    let mergedCount = 0;
+    for (const tracking in groups) {
+      const group = groups[tracking];
+      if (group.length < 2) continue;
+
+      // คะแนนความครบของ row (มากกว่า = ครบกว่า)
+      const score = (r) => {
+        const d = r.data;
+        let s = 0;
+        const videoUrl = String(d[4] || "");
+        if (videoUrl.indexOf('drive.google.com') !== -1) s += 100;
+        const remark = String(d[5] || "");
+        if (remark && remark.indexOf("__VIDEO_FIRST__") !== 0) s += 10;
+        const itemsCount = Number(d[6]) || 0;
+        s += itemsCount; // item count
+        const orderId = String(d[1] || "");
+        if (orderId) s += 50;
+        const marketplace = String(d[2] || "");
+        if (marketplace) s += 5;
+        return s;
+      };
+
+      // sort: คะแนนสูงสุดก่อน, ถ้าเท่ากันใช้ timestamp ใหม่กว่า
+      group.sort((a, b) => {
+        const sb = score(b), sa = score(a);
+        if (sb !== sa) return sb - sa;
+        const tb = (b.data[0] instanceof Date) ? b.data[0].getTime() : 0;
+        const ta = (a.data[0] instanceof Date) ? a.data[0].getTime() : 0;
+        return tb - ta;
+      });
+
+      // เก็บตัวแรก (ครบสุด), ลบที่เหลือ
+      const keep = group[0];
+      // ถ้า keep ไม่มี videoUrl แต่ตัวอื่นมี → copy มาใส่ keep
+      if (String(keep.data[4] || "").indexOf('drive.google.com') === -1) {
+        for (let i = 1; i < group.length; i++) {
+          const otherVid = String(group[i].data[4] || "");
+          if (otherVid.indexOf('drive.google.com') !== -1) {
+            sheet.getRange(keep.rowIndex, 5).setValue(otherVid);
+            break;
+          }
+        }
+      }
+      for (let i = 1; i < group.length; i++) {
+        rowsToDelete.push(group[i].rowIndex);
+        mergedCount++;
+      }
+    }
+
+    if (rowsToDelete.length === 0) {
+      Logger.log("[mergeDuplicateOrders] ไม่พบ duplicate");
+      return;
+    }
+
+    // ลบจากล่างขึ้นบน (กัน index shift)
+    rowsToDelete.sort((a, b) => b - a);
+    let i = 0;
+    while (i < rowsToDelete.length) {
+      const top = rowsToDelete[i];
+      let count = 1;
+      while (i + 1 < rowsToDelete.length && rowsToDelete[i + 1] === top - count) {
+        count++;
+        i++;
+      }
+      const start = top - count + 1;
+      sheet.deleteRows(start, count);
+      i++;
+    }
+    SpreadsheetApp.flush();
+    Logger.log("[mergeDuplicateOrders] รวม " + mergedCount + " duplicates");
+    _logSaveAttempt("", "", "merge_dedup", mergedCount, "deleted " + mergedCount + " duplicate rows");
+    if (mergedCount > 50) {
+      _alertOwner("Merge dedup: ลบ duplicates " + mergedCount + " rows",
+                  "พบ duplicate เยอะผิดปกติ ตรวจสอบ network/race condition");
+    }
+  } catch(e) {
+    Logger.log("[mergeDuplicateOrders] error: " + e.message);
+    _alertOwner("mergeDuplicateOrders error", e.toString());
+  } finally {
+    try { lock.releaseLock(); } catch(_) {}
+  }
 }
 
 // ============================================================
