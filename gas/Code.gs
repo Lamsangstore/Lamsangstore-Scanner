@@ -298,14 +298,28 @@ function _firebaseDelete(cfg, key) {
 function setupFirebaseTrigger() {
   ScriptApp.getProjectTriggers().forEach(t => {
     const fn = t.getHandlerFunction();
-    if (fn === "drainFirebaseInbox" || fn === "refreshRecentStats" || fn === "refreshPendingCache") ScriptApp.deleteTrigger(t);
+    if (fn === "drainFirebaseInbox" || fn === "refreshRecentStats" ||
+        fn === "refreshPendingCache" || fn === "frequentVideoReconcile") ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger("drainFirebaseInbox").timeBased().everyMinutes(1).create();
   // 📊 อัปเดต stats รายงานเข้า Firebase ทุก 5 นาที (เบื้องหลัง — ไม่แตะ saveData)
   ScriptApp.newTrigger("refreshRecentStats").timeBased().everyMinutes(5).create();
   // 📋 อัปเดต pending orders + products ทุก 5 นาที (ข้ามถ้าข้อมูลไม่เปลี่ยน — กัน quota)
   ScriptApp.newTrigger("refreshPendingCache").timeBased().everyMinutes(5).create();
-  Logger.log("✅ Firebase triggers: drain(1m) + stats(5m) + pending(5m)");
+  // 🎬 เติม videoUrl จาก Drive ให้ row no_video ทุก 15 นาที (เก็บกวาด lock_timeout)
+  ScriptApp.newTrigger("frequentVideoReconcile").timeBased().everyMinutes(15).create();
+  Logger.log("✅ Firebase triggers: drain(1m) + stats(5m) + pending(5m) + videoReconcile(15m)");
+}
+
+// 🎬 reconcile ถี่ — เติม videoUrl ให้ row no_video ของ 2 วันล่าสุด (เร็ว, ไม่ lock)
+//   แก้อาการ: วิดีโออัป Drive แล้ว แต่ saveData ติด lock_timeout เลยไม่ได้เขียน URL
+function frequentVideoReconcile() {
+  try {
+    const r = reconcileVideoUrls({ sinceDays: 2 });
+    if (r && r.fixed > 0) Logger.log("[frequentVideoReconcile] เติม " + r.fixed + " แถว");
+  } catch(e) {
+    Logger.log("[frequentVideoReconcile] error: " + e.message);
+  }
 }
 
 // ============================================================
