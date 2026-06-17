@@ -254,7 +254,9 @@ function drainFirebaseInbox(opts) {
       else itemsArr = [];
 
       seenInBatch.add(tk);
-      newRows.push([new Date(), String(d.orderId || ""), String(d.marketplace || ""), parcelId,
+      // ⏱️ ใช้ "เวลาแพค" (d.ts จาก Firebase) เป็น Timestamp ของ row — ไม่ใช่เวลาที่ drain เขียน
+      const packTime = (Number(d.ts) > 0) ? new Date(Number(d.ts)) : new Date();
+      newRows.push([packTime, String(d.orderId || ""), String(d.marketplace || ""), parcelId,
                     videoUrl || "no_video", String(d.remark || ""), itemsArr.length, ...itemsArr.slice(0, 500).map(String)]);
       // 🔍 มิเรอร์ /orders จากข้อมูล /inbox ที่มีอยู่ในมือ — ไม่ต้องวนกลับไปอ่านชีต
       ordersMirror[_fbKey(tk)] = {
@@ -1063,6 +1065,8 @@ function saveData(body) {
   const marketplace = String(body.marketplace || "").slice(0, 32);
   const remark      = String(body.remark || "").slice(0, 500);
   const itemsArr    = Array.isArray(body.items) ? body.items : [];
+  // ⏱️ ใช้ "เวลาแพค" ที่ client ส่งมา (body.ts) ถ้ามี — ไม่งั้นใช้เวลาปัจจุบัน
+  const rowTs       = (Number(body.ts) > 0) ? new Date(Number(body.ts)) : new Date();
 
   if (!parcelId) {
     _logSaveAttempt(parcelId, marketplace, "invalid", itemsArr.length, "parcelId ว่าง");
@@ -1127,7 +1131,7 @@ function saveData(body) {
       if (found.isPlaceholder) {
         const existingVideoUrl = String(sheet.getRange(matchRow, 5).getValue() || "no_video").trim();
         const finalVideoUrl = (uploadedVideoUrl && uploadedVideoUrl !== "video_too_large") ? uploadedVideoUrl : existingVideoUrl;
-        const upgradedRow = [new Date(), orderId, marketplace, parcelId, finalVideoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
+        const upgradedRow = [rowTs, orderId, marketplace, parcelId, finalVideoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
         sheet.getRange(matchRow, 1, 1, upgradedRow.length).setValues([upgradedRow]);
         _setCachedParcelRow(parcelId, matchRow, false);
         if (idemToken) _markTokenCompleted(idemToken);
@@ -1163,7 +1167,7 @@ function saveData(body) {
         _logSaveAttempt(parcelId, marketplace, "idempotent_retry", itemsArr.length, "token " + idemToken);
         return { success: true, note: "idempotent_retry" };
       }
-      const row = [new Date(), orderId, marketplace, parcelId, videoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
+      const row = [rowTs, orderId, marketplace, parcelId, videoUrl, remark, itemsArr.length, ...itemsArr.slice(0, 500).map(String)];
       sheet.appendRow(row);
       newRow = sheet.getLastRow();
       if (idemToken) _markTokenCompleted(idemToken);

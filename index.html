@@ -3229,7 +3229,8 @@ function _flushOrderOnly(useBeacon) {
         remark: job.remarkNote || "",
         orderId: job.orderId || "",
         marketplace: job.marketplace || "",
-        idemToken: job.idemToken || ""
+        idemToken: job.idemToken || "",
+        ts: job.ts || Date.now()          // ⏱️ เวลาแพค → ใช้เป็น Timestamp ของ row
       });
       try {
         if (useBeacon && navigator.sendBeacon) {
@@ -3541,7 +3542,8 @@ async function retryFailedUploads(force) {
             parcelId: job.pId, items: job.itemsArr,
             videoEvidence: (job.hadVideo && job.videoBase64) ? _videoForSave(job.videoBase64) : "no_video",
             videoMimeType: job.videoMime || "video/webm", remark: job.remarkNote || "",
-            orderId: job.orderId || "", marketplace: job.marketplace || "", idemToken: job.idemToken || ""
+            orderId: job.orderId || "", marketplace: job.marketplace || "", idemToken: job.idemToken || "",
+            ts: job.ts || Date.now()        // ⏱️ เวลาแพค → ใช้เป็น Timestamp ของ row
           }, 120000);
           if (isGasSuccess(ores)) {
             job.orderSent = true;
