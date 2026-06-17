@@ -3186,6 +3186,9 @@ document.addEventListener('visibilitychange', () => {
     }
     // กลับมาแล้ว → retry queue ทันที (force ข้าม backoff)
     setTimeout(() => retryFailedUploads(true), 1000);
+    // 🔄 มือถือมักฆ่า SSE ตอน background → re-connect + ดึงข้อมูลตามที่อาจพลาดไปตอนปิดจอ
+    _startPendingSync();
+    _fetchOrderCacheBackground();
   }
 });
 
@@ -4219,6 +4222,7 @@ async function initScanner() {
       // fetch order cache + เช็ค product hash background (ไม่บล็อก UI)
       _fetchOrderCacheBackground();
       _checkProductCacheUpdate();
+      _startPendingSync(); // 🔄 ฟัง real-time — เครื่องอื่นอัปไฟล์ → ดึงใหม่อัตโนมัติ
     } else {
       // ✅ ไม่มี cache → fetch ทั้งคู่ก่อน แล้วค่อย setup
       btn.innerText = "กำลังโหลดข้อมูล...";
@@ -4227,6 +4231,7 @@ async function initScanner() {
       ['localOrdersCache','orderRemarkMap','orderInfoMap'].forEach(k => localStorage.removeItem(k));
       await Promise.all([_fetchProductCacheNow(), _fetchOrderCacheBackground()]);
       setupScanUI();
+      _startPendingSync(); // 🔄 ฟัง real-time — เครื่องอื่นอัปไฟล์ → ดึงใหม่อัตโนมัติ
     }
   } catch (err) {
     console.error('[initScanner error]', err);
@@ -4335,6 +4340,37 @@ async function _firebaseFetchPending() {
     const data = await res.json();
     return data || {}; // {} = ไม่มี pending (ปกติ), null = อ่านไม่ได้
   } catch(e) { return null; }
+}
+
+// ====== REAL-TIME SYNC — เครื่องอื่นอัปไฟล์ → ทุกเครื่องดึงข้อมูลใหม่อัตโนมัติ ======
+//   ฟัง Firebase /cacheMeta แบบ stream (SSE) — ts เปลี่ยนทุกครั้งที่ refreshPendingCache เขียน
+//   (รวมตอน "อัปไฟล์เสร็จ → refreshPending") → SSE ส่ง event → เครื่องนี้ดึง /pending+/products ใหม่เบื้องหลัง
+let _pendingSyncES = null;
+let _cacheRefreshTimer = null;
+function _debouncedCacheRefresh() {
+  clearTimeout(_cacheRefreshTimer);
+  _cacheRefreshTimer = setTimeout(() => {
+    console.log('[Sync] ดึงข้อมูลใหม่เบื้องหลัง (มีเครื่องอื่นอัปเดต)');
+    _fetchOrderCacheBackground();   // /pending → localOrdersCache + orderRemarkMap
+    _checkProductCacheUpdate();     // /products → productMap (ถ้าเปลี่ยน)
+  }, 1200); // debounce กันยิงถี่ถ้ามีหลาย event ติดกัน
+}
+function _startPendingSync() {
+  if (!FIREBASE_ENABLED() || typeof EventSource === 'undefined') return;
+  if (_pendingSyncES && _pendingSyncES.readyState !== 2) return; // มีอยู่แล้ว (ไม่ใช่ CLOSED)
+  try {
+    const es = new EventSource(`${FIREBASE_DB_URL}/cacheMeta.json`);
+    _pendingSyncES = es;
+    let first = true;
+    const onChange = () => {
+      if (first) { first = false; return; } // event แรก = ค่าปัจจุบันตอน connect (โหลดไปแล้วตอน start)
+      _debouncedCacheRefresh();
+    };
+    es.addEventListener('put', onChange);
+    es.addEventListener('patch', onChange);
+    es.onerror = () => { /* EventSource reconnect เองอัตโนมัติ — ไม่ต้องทำอะไร */ };
+    console.log('[Sync] เริ่มฟัง /cacheMeta (real-time) แล้ว');
+  } catch(e) { console.warn('[Sync] EventSource error:', e.message); }
 }
 
 async function _fetchOrderCacheBackground(retries = 2) {
