@@ -3507,7 +3507,7 @@ function _finalizeEntry(pId) {
   } catch(e) {}
 }
 
-// ✅ retry แบบ 2-phase ต่อรายการ — order (saveData) + video (uploadVideoForParcel) แยกกัน
+// ✅ retry ต่อรายการ — Firebase push + วิดีโอ (uploadVideoOnly→PATCH); saveData เป็น fallback เมื่อ Firebase ล่ม
 //    force=true → ข้าม backoff
 async function retryFailedUploads(force) {
   if (!navigator.onLine || _isRetrying) { _scheduleRetry(); return; }
@@ -5942,31 +5942,6 @@ function _announceRemark(tracking, remark) {
       speechSynthesis.speak(u);
     };
     speakWhenFree();
-  } catch(e) { isSpeakingRemark = false; }
-}
-
-// ยังเก็บไว้สำหรับกรณีที่เรียกจากที่อื่น (ถ้ามี)
-function _speakRemarkIfExists(tracking, delayMs = 1200) {
-  try {
-    const remark = _getRemarkForTracking(tracking);
-    if (!window.speechSynthesis) return;
-
-    const trySpeak = () => {
-      if (speechSynthesis.speaking || speechSynthesis.pending) {
-        setTimeout(trySpeak, 200);
-        return;
-      }
-
-      if (remark) {
-        isSpeakingRemark = true;
-        const u1 = new SpeechSynthesisUtterance('หมายเหตุลูกค้า ' + remark);
-        u1.lang = 'th-TH'; u1.rate = 1.3;
-        u1.onend = () => { isSpeakingRemark = false; };
-        speechSynthesis.speak(u1);
-      }
-    };
-
-    setTimeout(trySpeak, delayMs);
   } catch(e) { isSpeakingRemark = false; }
 }
 

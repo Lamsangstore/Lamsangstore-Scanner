@@ -316,15 +316,6 @@ function drainFirebaseInbox(opts) {
   }
 }
 
-function _firebaseDelete(cfg, key) {
-  try {
-    const url = cfg.url + "/inbox/" + encodeURIComponent(key) + ".json?auth=" + encodeURIComponent(cfg.secret);
-    UrlFetchApp.fetch(url, { method: "delete", muteHttpExceptions: true });
-  } catch(e) {
-    Logger.log("[_firebaseDelete] " + key + ": " + e.message);
-  }
-}
-
 // ตั้ง trigger drain ทุก 1 นาที (รันครั้งเดียวใน editor)
 function setupFirebaseTrigger() {
   ScriptApp.getProjectTriggers().forEach(t => {
