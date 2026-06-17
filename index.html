@@ -815,6 +815,10 @@
       from { opacity: 0; transform: translateY(8px); }
       to   { opacity: 1; transform: translateY(0); }
     }
+    @keyframes lsAlertPulse {
+      0%,100% { transform: scale(1);   opacity: 1; }
+      50%     { transform: scale(1.35); opacity: 0.65; }
+    }
 
     /* ===== EMOJI THEME TINTING ===== */
     /* ทำให้ emoji เข้าธีม gold/amber */
@@ -2349,7 +2353,7 @@
 
 <!-- TOP APP BAR -->
 <div id="app-header">
-  <div class="topbar-logo" onclick="showDiagnostic()" title="ตรวจสอบระบบ" style="font-family:'Inter',sans-serif; font-weight:800; font-size:0.9rem; color:white; letter-spacing:-0.5px; cursor:pointer;">LS</div>
+  <div class="topbar-logo" onclick="showDiagnostic()" title="ตรวจสอบระบบ" style="font-family:'Inter',sans-serif; font-weight:800; font-size:0.9rem; color:white; letter-spacing:-0.5px; cursor:pointer; position:relative;">LS<span id="lsAlertDot" style="display:none; position:absolute; top:-4px; right:-6px; width:10px; height:10px; border-radius:50%; background:#ff3b30; box-shadow:0 0 0 2px rgba(0,0,0,0.25); animation:lsAlertPulse 1.4s ease-in-out infinite;"></span></div>
   <div style="flex:1; margin-left:10px;">
     <div class="topbar-title" style="font-family:'Inter','Mitr',sans-serif; font-weight:800; letter-spacing:-0.3px;">LAMSANG <span style="font-weight:400; font-size:0.82em; opacity:0.7;">Scanner</span>
       <span class="topbar-sub">ระบบแพ็กและตรวจสอบพัสดุ</span>
@@ -3308,6 +3312,7 @@ function updateNetworkBadge() {
 window.addEventListener('online',  updateNetworkBadge);
 window.addEventListener('offline', updateNetworkBadge);
 updateNetworkBadge();
+_updateLogoAlert(); // จุดแดงบนโลโก้ถ้ามี videoFailed/ออเดอร์ค้างจาก session ก่อน
 
 // ✅ ขอ persistent storage — กัน iOS/Android evict localStorage queue ตอนพื้นที่เต็ม
 //    ทำให้ queue ออเดอร์ที่รอ sync อยู่รอดแม้เครื่องพื้นที่น้อย
@@ -3501,6 +3506,7 @@ function _finalizeEntry(pId) {
     const job = q.find(j => j.pId === pId);
     if (!job) return;
     if (_orderSafe(job) && _videoDone(job)) {
+      _checkVideoGiveup(job); // วิดีโอครบ 6 ครั้งไม่ขึ้น → บันทึกแจ้งที่โลโก้ LS
       _markSent(pId);
       _flushedIds.delete(pId);
       _removeFromFailQueue(pId);
@@ -3560,6 +3566,7 @@ async function retryFailedUploads(force) {
 
       // เสร็จครบ → ลบ; ยังไม่ครบ → backoff
       if (_orderSafe(job) && _videoDone(job)) {
+        _checkVideoGiveup(job); // วิดีโอครบ 6 ครั้งไม่ขึ้น → บันทึกแจ้งที่โลโก้ LS
         _markSent(job.pId); _flushedIds.delete(job.pId); _updateQueueItem(job.pId, () => null);
         synced++;
       } else {
@@ -3639,18 +3646,48 @@ function updateFailQueueBadge() {
     if (queueBanner) queueBanner.style.display = 'none';
     updateNetworkBadge();
   }
+  _updateLogoAlert(); // อัปเดตจุดแดงบนโลโก้ LS
+}
+
+// ====== วิดีโอที่ "อัป Drive ไม่สำเร็จถาวร" (ครบ 6 ครั้ง) — เก็บไว้แจ้งที่โลโก้ LS ======
+const VIDEO_FAILED_KEY = 'videoFailedLog';
+function _recordVideoFailed(pId) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(VIDEO_FAILED_KEY) || '[]');
+    if (arr.some(x => x.pId === pId)) return; // กันซ้ำ
+    arr.push({ pId: String(pId || ''), ts: Date.now() });
+    if (arr.length > 200) arr.splice(0, arr.length - 200);
+    localStorage.setItem(VIDEO_FAILED_KEY, JSON.stringify(arr));
+    _updateLogoAlert();
+  } catch(e) {}
+}
+// เรียกตอนจะลบ entry — ถ้าวิดีโอ "ครบ 6 ครั้งแล้วยังไม่ขึ้น" = ล้มถาวร → บันทึกแจ้ง
+function _checkVideoGiveup(job) {
+  if (job && job.hadVideo && !job.videoSent && (job.videoAttempts || 0) >= VIDEO_MAX_ATTEMPTS) _recordVideoFailed(job.pId);
+}
+// จุดแดงบนโลโก้ LS เมื่อมีปัญหา (วิดีโอล้มถาวร / ออเดอร์ค้าง) → ผู้ใช้รู้ว่าต้องแตะดู
+function _updateLogoAlert() {
+  try {
+    const dot = document.getElementById('lsAlertDot');
+    if (!dot) return;
+    const vf = JSON.parse(localStorage.getItem(VIDEO_FAILED_KEY) || '[]').length;
+    const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
+    const atRisk = q.filter(j => !j.orderSent && !j.fbPushed).length;
+    dot.style.display = (vf > 0 || atRisk > 0) ? 'block' : 'none';
+  } catch(e) {}
 }
 
 // 🔧 ตรวจสอบระบบ — แตะโลโก้ LS เพื่อเปิด (ไม่ต้องใช้ console)
-//   ทดสอบเขียน Firebase /inbox จริง + แสดงสถานะคิวบนจอ
+//   ทดสอบเขียน Firebase /inbox จริง + แสดงสถานะคิว + วิดีโอล้ม + /inbox ค้างบนจอ
 async function showDiagnostic() {
   const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
   const atRisk = q.filter(j => !j.orderSent && !j.fbPushed).length;
   const videoPending = q.filter(j => j.hadVideo && !j.videoSent).length;
+  const videoFailed = JSON.parse(localStorage.getItem(VIDEO_FAILED_KEY) || '[]');
 
   Swal.fire({ title: '🔧 กำลังตรวจสอบ...', html: 'ทดสอบเขียน Firebase', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
-  let fbStatus, fbColor;
+  let fbStatus, fbColor, inboxCount = null;
   if (!FIREBASE_ENABLED()) {
     fbStatus = '⚪ Firebase ปิด (ไม่ได้ตั้ง FIREBASE_DB_URL)'; fbColor = '#888';
   } else {
@@ -3666,7 +3703,29 @@ async function showDiagnostic() {
         fbStatus = `❌ เขียน Firebase ไม่ได้ (${res.status})\n→ ยังไม่ได้แก้ Rules /inbox (ดูที่แอดมินบอก)`; fbColor = '#c62828';
       }
     } catch(e) { fbStatus = '❌ ต่อ Firebase ไม่ได้: ' + e.message; fbColor = '#c62828'; }
+    // 📨 นับ doc ค้างใน /inbox (drain ยังไม่ดูดเข้าชีต) — ค้างเยอะ = drain อาจช้า/พัง
+    try {
+      const r2 = await fetch(`${FIREBASE_DB_URL}/inbox.json?shallow=true`);
+      if (r2.ok) { const d = await r2.json(); inboxCount = d ? Object.keys(d).filter(k => k !== '__DIAGTEST__').length : 0; }
+    } catch(e) {}
   }
+
+  // 🔴 วิดีโอที่อัป Drive ไม่สำเร็จถาวร (ครบ 6 ครั้ง) — จุดล้มเงียบที่เคยไม่แจ้ง
+  let videoFailedHtml = '';
+  if (videoFailed.length > 0) {
+    const items = videoFailed.slice(-20).reverse().map(v => {
+      const t = v.ts ? new Date(v.ts).toLocaleString('th-TH', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '';
+      return `<div style="font-size:0.8rem;">• ${escHtml(v.pId)} <span style="color:#999;">${t}</span></div>`;
+    }).join('');
+    videoFailedHtml = `<div style="margin-top:8px; padding:8px 10px; background:#fde4e4; border-left:3px solid #d33; border-radius:6px;">
+      <b style="color:#a00;">🔴 วิดีโออัป Drive ไม่สำเร็จ: ${videoFailed.length} ใบ</b>
+      <div style="font-size:0.78rem; color:#a00; margin:3px 0 6px;">วิดีโอใบเหล่านี้หาย (ลองครบแล้ว) — ควรแพคใหม่ถ้าต้องการคลิป</div>
+      <div style="max-height:120px; overflow-y:auto;">${items}</div>
+      <button onclick="_clearVideoFailedLog()" style="margin-top:6px; background:#d33; color:#fff; border:none; padding:4px 12px; border-radius:8px; font-family:'Mitr',sans-serif; font-size:0.78rem; cursor:pointer;">รับทราบ — ล้างรายการ</button>
+    </div>`;
+  }
+  const inboxLine = (inboxCount === null) ? '' :
+    `<b>📨 /inbox ค้าง:</b> ${inboxCount} ${inboxCount > 50 ? '<span style="color:#c62828;">(เยอะผิดปกติ — drain อาจช้า/พัง แจ้งแอดมิน)</span>' : '<span style="color:#2e7d32;">(ปกติ)</span>'}<br>`;
 
   Swal.fire({
     title: '🔧 ตรวจสอบระบบ',
@@ -3674,9 +3733,11 @@ async function showDiagnostic() {
       <div style="padding:8px 10px; background:${fbColor}15; border-left:3px solid ${fbColor}; border-radius:6px; white-space:pre-line; margin-bottom:8px;">${escHtml(fbStatus)}</div>
       <b>📦 ออเดอร์รอ sync:</b> ${atRisk} ${atRisk > 0 ? '<span style="color:#c62828;">(ค้าง)</span>' : '<span style="color:#2e7d32;">(เคลียร์)</span>'}<br>
       <b>🎬 วิดีโอรออัป:</b> ${videoPending}<br>
+      ${inboxLine}
       <b>📋 คิวทั้งหมด:</b> ${q.length}<br>
       <b>🌐 เน็ต:</b> ${navigator.onLine ? '✅ ออนไลน์' : '❌ ออฟไลน์'}<br>
       <b>📱 เครื่อง:</b> <span style="font-size:0.75rem;">${escHtml((DEVICE_ID||'').slice(0,8))}</span>
+      ${videoFailedHtml}
     </div>`,
     confirmButtonText: 'ปิด',
     showDenyButton: true,
@@ -3689,6 +3750,14 @@ async function showDiagnostic() {
     else if (r.isDenied) _forceUpdateApp();
   });
 }
+
+// รับทราบ + ล้างรายการวิดีโอล้ม (จาก diagnostic) → ดับจุดแดงบนโลโก้
+window._clearVideoFailedLog = function() {
+  try { localStorage.removeItem(VIDEO_FAILED_KEY); } catch(e) {}
+  _updateLogoAlert();
+  try { Swal.close(); } catch(e) {}
+  try { showSyncToast('ล้างรายการวิดีโอที่แจ้งแล้ว'); } catch(e) {}
+};
 
 // 🧹 ล้าง cache + SW + reload — แก้กรณีแอปติด cache เก่า (เช่น CSP เก่าบล็อก Firebase)
 async function _forceUpdateApp() {
