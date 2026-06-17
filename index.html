@@ -4373,7 +4373,31 @@ function _startPendingSync() {
   } catch(e) { console.warn('[Sync] EventSource error:', e.message); }
 }
 
+// ====== "พัสดุนี้แพคไปแล้ว" (ข้ามเครื่อง) — set ของ tracking ที่อยู่ในชีต ======
+//   โหลด keys ของ /orders แบบ shallow (เอาแค่ key ไม่เอา value = เบามาก) → เช็คตอนสแกนแบบ O(1)
+let _packedSet = new Set();
+async function _loadPackedSet() {
+  if (!FIREBASE_ENABLED()) return;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(`${FIREBASE_DB_URL}/orders.json?shallow=true`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && typeof data === 'object') {
+      const s = new Set();
+      for (const k in data) s.add(String(k).toUpperCase());
+      _packedSet = s;
+    }
+  } catch(e) {}
+}
+function _isParcelPacked(tracking) {
+  return _packedSet.has(String(tracking || '').toUpperCase());
+}
+
 async function _fetchOrderCacheBackground(retries = 2) {
+  _loadPackedSet(); // 🔄 รีเฟรช set "แพคแล้ว" คู่กับ order cache (start/sync/visible/หลังอัป)
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       // ⚡ ลอง Firebase /pending ก่อน (เร็ว) → ไม่ได้ค่อย fallback GAS (ช้า)
@@ -4973,6 +4997,10 @@ function processNewParcel(text, carrier) {
   const box = document.getElementById('parcelBox');
   if (box) { box.classList.remove('flash-new'); void box.offsetWidth; box.classList.add('flash-new'); }
   showCustomerRemark(text);
+  // ⚠️ เตือนถ้าพัสดุนี้ "แพคและลงชีตไปแล้ว" (ข้ามเครื่อง) — ไม่บล็อก เผื่อแพคแก้ไข
+  hideAlreadyPackedBanner();
+  const alreadyPacked = !wasEditing && _isParcelPacked(text);
+  if (alreadyPacked) { showAlreadyPackedBanner(text); beep('warn'); vibrate([120, 60, 120]); }
   const lastFour = text.length >= 4 ? text.slice(-4) : text;
 
   if (wasEditing) {
@@ -5006,8 +5034,9 @@ function processNewParcel(text, carrier) {
         _isRestartingCamera = false;
       }
     })();
-    // พูดทันที — "พัสดุ {carrier} ใหม่ ลงท้ายด้วย X X X X"
-    const parcelMsg = `พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`;
+    // พูดทันที — "พัสดุ {carrier} ใหม่ ลงท้ายด้วย X X X X" (+ เตือนถ้าแพคไปแล้ว)
+    const warnPrefix = alreadyPacked ? 'พัสดุนี้แพคไปแล้วนะคะ ' : '';
+    const parcelMsg = `${warnPrefix}พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`;
     _speakParcelThenRemark(parcelMsg, text, 1200);
     if (!cacheHit) checkExpectedItems(text); // cache miss → ดึง GAS (ช้ากว่า แต่จำเป็น)
   }
@@ -5252,6 +5281,7 @@ async function _doFinishWork(isManual = false) {
 
   const snapshotItems = [...items];
   const snapshotParcelId = pId;
+  try { _packedSet.add(String(pId).toUpperCase()); } catch(e) {} // รู้ทันทีว่าแพคใบนี้แล้ว
   const snapshotRemark = currentRemark;
   const count = snapshotItems.length;
   const summaryMsg = count > 0 ? `บันทึกสินค้า ${count} ชิ้น เรียบร้อยค่ะ` : `บันทึกพัสดุเบื้องหลังเรียบร้อยค่ะ`;
@@ -5466,6 +5496,7 @@ async function resetAppForNext() {
   undoStack = []; // ✅ ล้าง undo history เมื่อเริ่มพัสดุใหม่
   resetRemark();
   hideCustomerRemark();
+  hideAlreadyPackedBanner();
   hideOrderFetchErrorBanner();
   hideOrderNotFoundBanner();
   document.getElementById("orderChecklistPanel").style.display = "none";
@@ -5733,6 +5764,24 @@ function showOrderNotFoundBanner(tracking) {
 function hideOrderNotFoundBanner() {
   const banner = document.getElementById('orderNotFoundBanner');
   if (banner) banner.style.display = 'none';
+}
+
+// ⚠️ Banner: พัสดุนี้ถูกแพคและบันทึกลงชีตไปแล้ว (ข้ามเครื่อง — จาก /orders)
+function showAlreadyPackedBanner(tracking) {
+  let b = document.getElementById('alreadyPackedBanner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'alreadyPackedBanner';
+    b.style.cssText = 'margin-top:8px; padding:11px 13px; background:#fde4e4; border-left:5px solid #d33; border-radius:8px; font-size:0.88rem; color:#a00; font-weight:700; text-align:left; display:flex; align-items:center; gap:8px;';
+    const statusEl = document.getElementById('statusLabel');
+    if (statusEl && statusEl.parentNode) statusEl.parentNode.insertBefore(b, statusEl.nextSibling);
+  }
+  b.innerHTML = '⚠️ พัสดุนี้ถูกแพค + บันทึกลงชีตไปแล้ว';
+  b.style.display = 'flex';
+}
+function hideAlreadyPackedBanner() {
+  const b = document.getElementById('alreadyPackedBanner');
+  if (b) b.style.display = 'none';
 }
 
 // Banner แจ้งเตือนเมื่อดึงข้อมูลออเดอร์ไม่ได้ + ปุ่ม retry
