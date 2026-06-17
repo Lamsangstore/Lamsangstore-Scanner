@@ -4980,13 +4980,19 @@ function processNewParcel(text, carrier) {
     isSpeakingRemark = true;
     const parcelMsg = `แก้ไขเป็นรหัส ${lastFour.split('').join(' ')} เรียบร้อยค่ะ`;
     _speakParcelThenRemark(parcelMsg, text, 1000);
-    expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
     resetRemark();
-    document.getElementById("orderChecklistPanel").style.display = "none";
-    checkExpectedItems(text);
+    // ⚡ render จาก cache ทันที — ไม่เจอค่อยรีเซ็ต + ดึง GAS
+    if (!_tryRenderExpectedFromCache(text)) {
+      expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
+      document.getElementById("orderChecklistPanel").style.display = "none";
+      checkExpectedItems(text);
+    }
   } else {
     // ล็อคสแกนสินค้าตั้งแต่เริ่มพูดเลขพัสดุ
     isSpeakingRemark = true;
+    // ⚡ แสดงรายการสินค้าจาก cache "ทันที" (sync) ก่อน restart กล้อง
+    //   → ไม่ให้ getUserMedia แย่ง main thread หน่วง render (เดิมช้า 1-2 วิ)
+    const cacheHit = _tryRenderExpectedFromCache(text);
     // ✅ Restart วิดีโอแบบ async — บล็อคสแกนสินค้าจนกว่ากล้องใหม่จะ recording จริง
     // (ก่อนหน้านี้ fire-and-forget ทำให้สินค้า 1-2 ชิ้นแรกไม่ติดวิดีโอ ถ้าผู้ใช้สแกนเร็ว)
     _isRestartingCamera = true;
@@ -5003,7 +5009,7 @@ function processNewParcel(text, carrier) {
     // พูดทันที — "พัสดุ {carrier} ใหม่ ลงท้ายด้วย X X X X"
     const parcelMsg = `พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`;
     _speakParcelThenRemark(parcelMsg, text, 1200);
-    checkExpectedItems(text);
+    if (!cacheHit) checkExpectedItems(text); // cache miss → ดึง GAS (ช้ากว่า แต่จำเป็น)
   }
 }
 
@@ -5628,6 +5634,26 @@ async function _fetchExpectedItems(tracking) {
     console.warn("[GAS] getExpectedOrderDetails throw:", e.message);
     return null;
   }
+}
+
+// ✅ แสดงรายการสินค้า (+ checklist) จาก localOrdersCache แบบ "sync ทันที" — ไม่ await/ไม่ network
+//   ใช้ตอนสแกนพัสดุ → cache hit = ขึ้นทันที ไม่โดน camera restart (getUserMedia) หน่วง microtask
+//   คืน true ถ้าเจอใน cache (เรนเดอร์แล้ว), false ถ้าไม่เจอ (ให้ checkExpectedItems ไปดึง GAS ต่อ)
+function _tryRenderExpectedFromCache(tracking) {
+  try {
+    const cache = JSON.parse(localStorage.getItem('localOrdersCache') || '{}');
+    const expected = cache[String(tracking).toUpperCase()] || cache[tracking];
+    if (!Array.isArray(expected) || expected.length === 0) return false;
+    isStrictValidationMode = true;
+    expectedItemsArray = expected;
+    scannedItemsMap = {};
+    items.forEach(sku => { scannedItemsMap[sku] = (scannedItemsMap[sku] || 0) + 1; }); // คงสินค้าที่สแกนไปแล้ว
+    document.getElementById("orderChecklistPanel").style.display = "block";
+    updateChecklistUI();
+    hideOrderNotFoundBanner();
+    hideOrderFetchErrorBanner();
+    return true;
+  } catch(e) { return false; }
 }
 
 async function checkExpectedItems(tracking, _isRetry = false) {
