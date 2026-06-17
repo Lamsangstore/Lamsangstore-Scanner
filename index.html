@@ -3397,7 +3397,7 @@ function _enqueueForUpload(pId, itemsArr, remarkNote, orderId, marketplace, vide
     nextAt: 0,
     fbPushed: false,    // ✅ ขึ้น Firebase /inbox แล้ว
     orderSent: false,   // ✅ saveData สำเร็จ (order ลงชีต)
-    videoSent: false,   // ✅ uploadVideoForParcel สำเร็จ (วิดีโอติด URL)
+    videoSent: false,   // ✅ วิดีโอขึ้น Drive + PATCH videoUrl แล้ว (uploadVideoOnly)
     videoAttempts: 0,
     hadVideo: !!videoBase64
   };
@@ -4934,6 +4934,17 @@ async function processFinalScan(text) {
         return;
       }
     }
+    // ⚠️ พัสดุนี้แพคไปแล้ว (อยู่ในชีต) → ต้องยืนยันก่อนแพคซ้ำ (กันแพคซ้ำโดยไม่รู้ตัว)
+    if (!isEditingId && _isParcelPacked(upperText)) {
+      beep('warn'); vibrate([120, 60, 120]);
+      speak("พัสดุนี้แพคไปแล้วนะคะ", false);
+      const ok = await _confirmRepack(upperText);
+      if (!ok) {
+        setStatus(_S.warn + "ยกเลิก — พัสดุ " + upperText + " แพคไปแล้ว", "warning");
+        lastScanTime = Date.now();
+        return;
+      }
+    }
     processNewParcel(upperText, carrier);
   } else if (detection.type === "incomplete") {
     // ✅ สแกนได้เลขไม่ครบ (เช่น มือบัง barcode)
@@ -4997,10 +5008,9 @@ function processNewParcel(text, carrier) {
   const box = document.getElementById('parcelBox');
   if (box) { box.classList.remove('flash-new'); void box.offsetWidth; box.classList.add('flash-new'); }
   showCustomerRemark(text);
-  // ⚠️ เตือนถ้าพัสดุนี้ "แพคและลงชีตไปแล้ว" (ข้ามเครื่อง) — ไม่บล็อก เผื่อแพคแก้ไข
+  // ⚠️ banner เตือน "แพคไปแล้ว" (visual) — เสียง+beep+ยืนยันทำใน processFinalScan ก่อนถึงตรงนี้แล้ว
   hideAlreadyPackedBanner();
-  const alreadyPacked = !wasEditing && _isParcelPacked(text);
-  if (alreadyPacked) { showAlreadyPackedBanner(text); beep('warn'); vibrate([120, 60, 120]); }
+  if (!wasEditing && _isParcelPacked(text)) showAlreadyPackedBanner(text);
   const lastFour = text.length >= 4 ? text.slice(-4) : text;
 
   if (wasEditing) {
@@ -5034,9 +5044,8 @@ function processNewParcel(text, carrier) {
         _isRestartingCamera = false;
       }
     })();
-    // พูดทันที — "พัสดุ {carrier} ใหม่ ลงท้ายด้วย X X X X" (+ เตือนถ้าแพคไปแล้ว)
-    const warnPrefix = alreadyPacked ? 'พัสดุนี้แพคไปแล้วนะคะ ' : '';
-    const parcelMsg = `${warnPrefix}พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`;
+    // พูดทันที — "พัสดุ {carrier} ใหม่ ลงท้ายด้วย X X X X"
+    const parcelMsg = `พัสดุ ${carrier} ใหม่ ลงท้ายด้วย ${lastFour.split('').join(' ')}`;
     _speakParcelThenRemark(parcelMsg, text, 1200);
     if (!cacheHit) checkExpectedItems(text); // cache miss → ดึง GAS (ช้ากว่า แต่จำเป็น)
   }
@@ -5782,6 +5791,22 @@ function showAlreadyPackedBanner(tracking) {
 function hideAlreadyPackedBanner() {
   const b = document.getElementById('alreadyPackedBanner');
   if (b) b.style.display = 'none';
+}
+// ยืนยันก่อนแพคซ้ำ (พัสดุอยู่ในชีตแล้ว) — คืน true=แพคต่อ, false=ยกเลิก
+async function _confirmRepack(tracking) {
+  try {
+    const r = await Swal.fire({
+      icon: 'warning',
+      title: 'พัสดุนี้แพคไปแล้ว',
+      html: `<div style="font-size:0.95rem; line-height:1.6;"><strong>${escHtml(tracking)}</strong><br>ถูกแพค + บันทึกลงชีตไปแล้ว<br><span style="color:#a00;">ยืนยันจะแพคซ้ำหรือไม่?</span></div>`,
+      showCancelButton: true,
+      confirmButtonText: 'แพคซ้ำ',
+      cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: '#d33',
+      allowOutsideClick: false
+    });
+    return !!r.isConfirmed;
+  } catch(e) { return true; } // popup พัง → ปล่อยผ่าน ไม่บล็อกงาน
 }
 
 // Banner แจ้งเตือนเมื่อดึงข้อมูลออเดอร์ไม่ได้ + ปุ่ม retry

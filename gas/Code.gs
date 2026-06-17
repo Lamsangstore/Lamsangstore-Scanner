@@ -108,9 +108,8 @@ function menuMergeDup() {
 // กัน Drive bombing — base64 ~14MB ≈ raw video ~10MB
 const MAX_VIDEO_BASE64_LEN = 14 * 1024 * 1024;
 
-// ✅ Marker สำหรับ row ที่ video ถูก upload ก่อน order data
-//    uploadVideoForParcel ใส่ในคอลัมน์ remark (F) เพื่อให้ saveData ตรวจเจอ
-//    และ "upgrade" row นั้นด้วยข้อมูลเต็มแทนที่จะ skip เป็น duplicate
+// ✅ Marker สำหรับ row placeholder (legacy — ไม่มีการสร้างใหม่แล้ว)
+//    saveData ยังเช็ค/"upgrade" row แบบนี้ไว้ เผื่อมี placeholder เก่าค้างในชีต
 const PLACEHOLDER_MARKER = "__VIDEO_FIRST__ waiting for order data";
 
 // ✅ Cache-based dedup — แทนการอ่าน column tracking ทั้งหมดจาก sheet
@@ -656,8 +655,7 @@ function backfillAllStats() {
 }
 
 // ✅ หา row ของ parcelId — cache ก่อน, fallback scan
-//    fullScan=true → scan ทั้งชีต (ช้ากว่าแต่หาเจอเสมอ — ใช้ใน uploadVideoForParcel)
-//    fullScan=false → scan แค่ 2000 แถวล่าสุด (เร็ว — ใช้ใน saveData hot path)
+//    fullScan=true → scan ทั้งชีต; fullScan=false/undefined → scan แค่ 2000 แถวล่าสุด (saveData hot path)
 //    return: { rowIndex, isPlaceholder } หรือ null
 function _findParcelRow(sheet, parcelId, fullScan) {
   // Fast path: cache
@@ -706,7 +704,6 @@ const RATE_LIMITS = {
   getExpectedOrderDetails: 240,
   getSpreadsheetUrl: 30,
   getMarketplaceVersionUrl: 30,
-  uploadVideoForParcel: 120,
   uploadVideoOnly: 120,
   reconcileVideoUrls: 6,
   drainInbox: 60,            // on-demand drain — debounce ฝั่ง client คุมอีกชั้น
@@ -718,7 +715,7 @@ const ALLOWED_ACTIONS = new Set([
   "getProductData", "saveData", "searchData", "saveMarketplaceData",
   "getExpectedOrderDetails", "getReportData", "getAllPendingOrders",
   "getSpreadsheetUrl", "getMarketplaceVersionUrl",
-  "uploadVideoForParcel", "uploadVideoOnly", "reconcileVideoUrls", "drainInbox", "refreshPending"
+  "uploadVideoOnly", "reconcileVideoUrls", "drainInbox", "refreshPending"
 ]);
 
 // ============================================================
@@ -836,7 +833,6 @@ function doPost(e) {
     else if (action === "getAllPendingOrders")        result = getAllPendingOrders();
     else if (action === "getSpreadsheetUrl")          result = getSpreadsheetUrl();
     else if (action === "getMarketplaceVersionUrl")   result = getMarketplaceVersionUrl();
-    else if (action === "uploadVideoForParcel")       result = uploadVideoForParcel(body);
     else if (action === "uploadVideoOnly")            result = uploadVideoOnly(body);
     else if (action === "reconcileVideoUrls")         result = reconcileVideoUrls(body);
     else if (action === "drainInbox")                 result = drainFirebaseInbox(true);
@@ -856,7 +852,7 @@ function doPost(e) {
 function _logRequestRejected(parcelId, action, reason, detail) {
   try {
     // log เฉพาะ action ที่ใช้บันทึกข้อมูล — ไม่ log getProductData, searchData ฯลฯ
-    const WRITE_ACTIONS = new Set(["saveData", "uploadVideoForParcel", "saveMarketplaceData", ""]);
+    const WRITE_ACTIONS = new Set(["saveData", "saveMarketplaceData", ""]);
     if (action && !WRITE_ACTIONS.has(action)) return;
     _logSaveAttempt(parcelId, "", reason, 0, action + " | " + (detail || ""));
   } catch(e) {
@@ -1283,236 +1279,6 @@ function _tryUpdateVideoUrl(sheet, rowIndex, parcelId, videoBase64, videoMime, v
   }
 }
 
-// ============================================================
-// uploadVideoForParcel — phase 2 ของการบันทึก
-// frontend จะเรียก saveData ก่อน (ส่งแค่ order, เร็ว) แล้วเรียกฟังก์ชันนี้ตามมา
-// (ส่ง video, ช้ากว่า, retry แยกได้)
-// flow:
-//   1. หา row ของ parcelId ใน Orders sheet (ถ้าไม่พบ → saveData ยังไม่เสร็จ — error)
-//   2. ถ้า row มี videoUrl เป็น Drive URL อยู่แล้ว → skip (ส่ง retry เกินมา)
-//   3. อัปโหลด video ไป Drive (นอก lock — slow operation)
-//   4. ถือ lock แค่ตอน setValue → ปล่อย lock เร็ว
-// ============================================================
-// ============================================================
-// reconcileVideoUrls — patch up rows that show "no_video" but have a
-// matching file in Drive (filename = parcelId.webm / parcelId.mp4)
-// สาเหตุที่ row หาย videoUrl ทั้งที่ Drive มีไฟล์:
-//   - cache cold + fallback scan 2000 rows ไม่เจอ row เก่า
-//   - uploadVideoForParcel เลย "สร้าง placeholder ใหม่" แทนที่จะ update row เดิม
-//   - row เดิมยังคงแสดง no_video, placeholder มี Drive URL แยกอยู่
-// reconcile วิ่งดู Drive แล้ว map กลับมา fix ทุก row ที่ยัง no_video
-// ============================================================
-// ✅ nightly wrapper — เติม videoUrl ให้ row ที่ no_video แต่มีไฟล์ใน Drive (กู้อัตโนมัติ)
-//   ตั้ง trigger ใน setupDailyCleanupTrigger (รัน 04:30 หลัง stats rebuild)
-function nightlyVideoReconcile() {
-  try {
-    const res = reconcileVideoUrls({ sinceDays: 3 });
-    Logger.log("[nightlyVideoReconcile] fixed " + (res && res.fixed) + " rows");
-  } catch(e) {
-    Logger.log("[nightlyVideoReconcile] error: " + e.message);
-  }
-}
-
-// ✅ หาไฟล์วิดีโอใน Drive ด้วยชื่อ (เร็ว — ไม่ scan ทั้งโฟลเดอร์)
-//   ลองชื่อ: parcelId.webm / parcelId.mp4 / parcelId_retry.webm / parcelId_retry.mp4
-function _findDriveVideoUrl(folder, parcelId) {
-  const names = [parcelId + ".webm", parcelId + ".mp4", parcelId + "_retry.webm", parcelId + "_retry.mp4"];
-  let best = null, bestTs = -1;
-  for (const nm of names) {
-    const it = folder.getFilesByName(nm); // indexed lookup — เร็ว
-    while (it.hasNext()) {
-      const f = it.next();
-      const ts = f.getDateCreated().getTime();
-      if (ts > bestTs) { bestTs = ts; best = f.getUrl(); }
-    }
-  }
-  return best;
-}
-
-function reconcileVideoUrls(body) {
-  body = body || {};
-  const sinceDays = Math.max(1, Math.min(90, Number(body.sinceDays) || 7));
-
-  try {
-    const folder = DriveApp.getFolderById(TARGET_FOLDER_ID);
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_ORDERS);
-    if (!sheet) return { success: false, error: "Orders sheet ไม่พบ" };
-    const lastRow = sheet.getLastRow();
-    if (lastRow <= 1) return { success: true, fixed: 0, scanned: 0, found: 0, driveFiles: 0, sinceDays };
-
-    // 1) อ่าน "เฉพาะแถวท้ายชีต" ที่อยู่ในช่วง sinceDays — ไม่อ่านทั้งชีต
-    //    row append ต่อท้ายตามเวลาบันทึก → row ในช่วงวันที่อยู่ "ล่างสุด" เสมอ
-    //    อ่านจากล่างขึ้นบนทีละ chunk แล้วหยุดทันทีเมื่อเจอ ts เก่ากว่า cutoff
-    const cutoff = Date.now() - (sinceDays * 24 * 60 * 60 * 1000);
-    const CHUNK = 2000;
-    const candidates = []; // { row, parcelId }
-    let scanned = 0, skippedDateRange = 0, skippedHadVideo = 0;
-
-    let cur = lastRow, reachedOlder = false;
-    while (cur >= 2 && !reachedOlder) {
-      const from = Math.max(2, cur - CHUNK + 1);
-      const chunk = sheet.getRange(from, 1, cur - from + 1, 5).getValues();
-      for (let i = chunk.length - 1; i >= 0; i--) {  // ล่าง → บน
-        const ts = chunk[i][0];
-        if (ts instanceof Date && ts.getTime() < cutoff) { reachedOlder = true; break; } // พ้นช่วง → หยุด
-        const tracking = String(chunk[i][3] || "").trim().toUpperCase();
-        if (!tracking) continue;
-        scanned++;
-        const videoUrl = String(chunk[i][4] || "").trim();
-        if (videoUrl.indexOf('drive.google.com') !== -1) { skippedHadVideo++; continue; }
-        candidates.push({ row: from + i, parcelId: tracking });
-      }
-      cur = from - 1;
-    }
-
-    // 2) ค้นไฟล์ใน Drive "เฉพาะ tracking ที่ no_video" (getFilesByName — ไม่ scan ทั้งโฟลเดอร์)
-    const updates = [];
-    let noDriveMatch = 0;
-    candidates.forEach(c => {
-      const url = _findDriveVideoUrl(folder, c.parcelId);
-      if (url) updates.push({ row: c.row, url, parcelId: c.parcelId });
-      else noDriveMatch++;
-    });
-    const driveCount = candidates.length;
-
-    Logger.log("[reconcileVideoUrls] scanned=" + scanned + " no_video=" + candidates.length +
-               " toFix=" + updates.length + " noDriveMatch=" + noDriveMatch +
-               " skippedHadVideo=" + skippedHadVideo + " skippedDateRange=" + skippedDateRange);
-
-    // ✅ ไม่ใช้ script lock — แค่เติม URL ลง cell ที่ no_video (re-check ก่อนเขียน)
-    //    ถ้า saveData เขียน cell เดียวกันพร้อมกัน → ทั้งคู่เป็น Drive URL ที่ valid (ไม่เสียหาย)
-    //    (เดิมใช้ waitLock(30000) → ติด lock_timeout ตอนมีคนแพคอยู่ → เอาออก)
-    let written = 0;
-    for (const u of updates) {
-      try {
-        const current = String(sheet.getRange(u.row, 5).getValue()).trim();
-        if (current.indexOf('drive.google.com') !== -1) continue; // มี url แล้ว (เพิ่งถูกเติม) → ข้าม
-        sheet.getRange(u.row, 5).setValue(u.url);
-        written++;
-      } catch(e) {
-        Logger.log("[reconcileVideoUrls] setValue fail row=" + u.row + ": " + e.message);
-      }
-    }
-    if (written > 0) SpreadsheetApp.flush();
-    Logger.log("[reconcileVideoUrls] fixed " + written + " rows");
-    _logSaveAttempt("", "", "reconcile_done", written, "scanned=" + scanned + " sinceDays=" + sinceDays);
-    return { success: true, fixed: written, scanned, found: updates.length, driveFiles: driveCount, sinceDays };
-  } catch(e) {
-    Logger.log("[reconcileVideoUrls] error: " + e.message);
-    return { success: false, error: e.toString() };
-  }
-}
-
-function uploadVideoForParcel(body) {
-  const parcelId    = String(body.parcelId || "").trim();
-  const videoBase64 = String(body.videoEvidence || "");
-  const videoMimeIn = String(body.videoMimeType || "video/webm").toLowerCase().split(';')[0].trim();
-
-  if (!parcelId) {
-    _logSaveAttempt("", "", "video_invalid", 0, "parcelId ว่าง");
-    return { success: false, error: "parcelId ว่าง" };
-  }
-  if (parcelId.length > 64) {
-    _logSaveAttempt(parcelId, "", "video_invalid", 0, "parcelId ยาวเกินไป");
-    return { success: false, error: "parcelId ยาวเกินไป" };
-  }
-  if (!videoBase64 || videoBase64 === "no_video") {
-    _logSaveAttempt(parcelId, "", "video_invalid", 0, "ไม่มี video");
-    return { success: false, error: "ไม่มี video" };
-  }
-  if (videoBase64.length > MAX_VIDEO_BASE64_LEN) {
-    _logSaveAttempt(parcelId, "", "video_invalid", 0, "video too large: " + videoBase64.length);
-    return { success: false, error: "Video too large" };
-  }
-
-  const ALLOWED_VIDEO_MIMES = { 'video/mp4': 'mp4', 'video/webm': 'webm' };
-  const videoMime = ALLOWED_VIDEO_MIMES[videoMimeIn] ? videoMimeIn : 'video/webm';
-  const videoExt  = ALLOWED_VIDEO_MIMES[videoMime];
-
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_ORDERS) || ss.insertSheet(SHEET_ORDERS);
-
-    // ⚡ Fast lookup ด้วย cache (10ms) แทน scan tracking column
-    // ใช้ fullScan=true — Phase 2 ไม่ต้องเร็วมาก, ต้องหา row เก่าเจอเสมอ
-    const foundExisting = _findParcelRow(sheet, parcelId, true);
-    let rowIndex = foundExisting ? foundExisting.rowIndex : -1;
-
-    // ถ้า row มี Drive URL อยู่แล้ว → skip (retry ที่ส่งเกินมา)
-    if (rowIndex !== -1) {
-      const currentVideoUrl = String(sheet.getRange(rowIndex, 5).getValue()).trim();
-      if (currentVideoUrl && currentVideoUrl.indexOf('drive.google.com') !== -1) {
-        Logger.log("[uploadVideoForParcel] " + parcelId + " มี video แล้ว skip");
-        _logSaveAttempt(parcelId, "", "video_already_uploaded", 0, "row " + rowIndex);
-        return { success: true, note: "already_has_video", videoUrl: currentVideoUrl };
-      }
-    }
-
-    // อัปโหลด Drive (slow — นอก lock)
-    let videoUrl;
-    try {
-      const decoded = Utilities.base64Decode(videoBase64);
-      const blob    = Utilities.newBlob(decoded, videoMime, parcelId + "." + videoExt);
-      const folder  = DriveApp.getFolderById(TARGET_FOLDER_ID);
-      const file    = folder.createFile(blob);
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      videoUrl = file.getUrl();
-    } catch(uploadErr) {
-      Logger.log("[uploadVideoForParcel] อัปโหลด Drive fail: " + uploadErr.message);
-      _logSaveAttempt(parcelId, "", "video_drive_fail", 0, uploadErr.message);
-      return { success: false, error: "Drive upload fail: " + uploadErr.message };
-    }
-
-    // ✅ เคสปกติ: row มีอยู่แล้ว → เติม URL ลง cell เดียว "ไม่ใช้ lock"
-    //    (setValue 1 cell + re-check → ไม่แย่ง script lock กับการแพค → ไม่ timeout)
-    const found2 = _findParcelRow(sheet, parcelId, true);
-    if (found2) {
-      const r2 = found2.rowIndex;
-      const cur = String(sheet.getRange(r2, 5).getValue()).trim();
-      if (cur.indexOf('drive.google.com') !== -1) {
-        return { success: true, note: "already_has_video", videoUrl: cur };
-      }
-      sheet.getRange(r2, 5).setValue(videoUrl);
-      SpreadsheetApp.flush();
-      Logger.log("[uploadVideoForParcel] " + parcelId + " row=" + r2 + " ✓");
-      _logSaveAttempt(parcelId, "", "video_uploaded", 0, "row " + r2);
-      return { success: true, videoUrl, row: r2 };
-    }
-
-    // ✅ เคส rare: ยังไม่มี row (video มาก่อน order) → สร้าง placeholder
-    //    appendRow ต้องกัน concurrent overwrite → ใช้ script lock "สั้น" เฉพาะตรงนี้
-    const lock = LockService.getScriptLock();
-    try { lock.waitLock(20000); }
-    catch(e) {
-      // ไฟล์อยู่ใน Drive แล้ว — reconcile 15 นาทีจะเก็บกวาดให้ → ไม่ใช่ error ร้ายแรง
-      Logger.log("[uploadVideoForParcel] placeholder lock timeout — reconcile จะเก็บให้");
-      return { success: true, note: "video_in_drive_pending_attach", videoUrl };
-    }
-    try {
-      // re-check ใน lock — เผื่อ saveData เพิ่งเขียน row
-      const fin = _findParcelRow(sheet, parcelId, true);
-      if (fin) {
-        const r3 = fin.rowIndex;
-        const cur3 = String(sheet.getRange(r3, 5).getValue()).trim();
-        if (cur3.indexOf('drive.google.com') === -1) sheet.getRange(r3, 5).setValue(videoUrl);
-        return { success: true, videoUrl, row: r3 };
-      }
-      const placeholderRow = [new Date(), "", "", parcelId, videoUrl, PLACEHOLDER_MARKER, 0];
-      sheet.appendRow(placeholderRow);
-      const startRow = sheet.getLastRow();
-      _setCachedParcelRow(parcelId, startRow, true);
-      _logSaveAttempt(parcelId, "", "video_placeholder_created", 0, "row " + startRow);
-      return { success: true, note: "placeholder_created", row: startRow, videoUrl };
-    } finally {
-      try { lock.releaseLock(); } catch(_) {}
-    }
-  } catch(e) {
-    Logger.log("[uploadVideoForParcel] error: " + e.message);
-    return { success: false, error: e.toString() };
-  }
-}
 
 // ============================================================
 // searchData
