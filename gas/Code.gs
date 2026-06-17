@@ -1282,6 +1282,118 @@ function _tryUpdateVideoUrl(sheet, rowIndex, parcelId, videoBase64, videoMime, v
     Logger.log("[_tryUpdateVideoUrl] error: " + e.message);
   }
 }
+// ============================================================
+// reconcileVideoUrls — patch up rows that show "no_video" but have a
+// matching file in Drive (filename = parcelId.webm / parcelId.mp4)
+// สาเหตุที่ row หาย videoUrl ทั้งที่ Drive มีไฟล์:
+//   - cache cold + fallback scan 2000 rows ไม่เจอ row เก่า
+//   - uploadVideoForParcel เลย "สร้าง placeholder ใหม่" แทนที่จะ update row เดิม
+//   - row เดิมยังคงแสดง no_video, placeholder มี Drive URL แยกอยู่
+// reconcile วิ่งดู Drive แล้ว map กลับมา fix ทุก row ที่ยัง no_video
+// ============================================================
+// ✅ nightly wrapper — เติม videoUrl ให้ row ที่ no_video แต่มีไฟล์ใน Drive (กู้อัตโนมัติ)
+//   ตั้ง trigger ใน setupDailyCleanupTrigger (รัน 04:30 หลัง stats rebuild)
+function nightlyVideoReconcile() {
+  try {
+    const res = reconcileVideoUrls({ sinceDays: 3 });
+    Logger.log("[nightlyVideoReconcile] fixed " + (res && res.fixed) + " rows");
+  } catch(e) {
+    Logger.log("[nightlyVideoReconcile] error: " + e.message);
+  }
+}
+
+// ✅ หาไฟล์วิดีโอใน Drive ด้วยชื่อ (เร็ว — ไม่ scan ทั้งโฟลเดอร์)
+//   ลองชื่อ: parcelId.webm / parcelId.mp4 / parcelId_retry.webm / parcelId_retry.mp4
+function _findDriveVideoUrl(folder, parcelId) {
+  const names = [parcelId + ".webm", parcelId + ".mp4", parcelId + "_retry.webm", parcelId + "_retry.mp4"];
+  let best = null, bestTs = -1;
+  for (const nm of names) {
+    const it = folder.getFilesByName(nm); // indexed lookup — เร็ว
+    while (it.hasNext()) {
+      const f = it.next();
+      const ts = f.getDateCreated().getTime();
+      if (ts > bestTs) { bestTs = ts; best = f.getUrl(); }
+    }
+  }
+  return best;
+}
+
+function reconcileVideoUrls(body) {
+  body = body || {};
+  const sinceDays = Math.max(1, Math.min(90, Number(body.sinceDays) || 7));
+
+  try {
+    const folder = DriveApp.getFolderById(TARGET_FOLDER_ID);
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_ORDERS);
+    if (!sheet) return { success: false, error: "Orders sheet ไม่พบ" };
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: true, fixed: 0, scanned: 0, found: 0, driveFiles: 0, sinceDays };
+
+    // 1) อ่าน "เฉพาะแถวท้ายชีต" ที่อยู่ในช่วง sinceDays — ไม่อ่านทั้งชีต
+    //    row append ต่อท้ายตามเวลาบันทึก → row ในช่วงวันที่อยู่ "ล่างสุด" เสมอ
+    //    อ่านจากล่างขึ้นบนทีละ chunk แล้วหยุดทันทีเมื่อเจอ ts เก่ากว่า cutoff
+    const cutoff = Date.now() - (sinceDays * 24 * 60 * 60 * 1000);
+    const CHUNK = 2000;
+    const candidates = []; // { row, parcelId }
+    let scanned = 0, skippedDateRange = 0, skippedHadVideo = 0;
+
+    let cur = lastRow, reachedOlder = false;
+    while (cur >= 2 && !reachedOlder) {
+      const from = Math.max(2, cur - CHUNK + 1);
+      const chunk = sheet.getRange(from, 1, cur - from + 1, 5).getValues();
+      for (let i = chunk.length - 1; i >= 0; i--) {  // ล่าง → บน
+        const ts = chunk[i][0];
+        if (ts instanceof Date && ts.getTime() < cutoff) { reachedOlder = true; break; } // พ้นช่วง → หยุด
+        const tracking = String(chunk[i][3] || "").trim().toUpperCase();
+        if (!tracking) continue;
+        scanned++;
+        const videoUrl = String(chunk[i][4] || "").trim();
+        if (videoUrl.indexOf('drive.google.com') !== -1) { skippedHadVideo++; continue; }
+        candidates.push({ row: from + i, parcelId: tracking });
+      }
+      cur = from - 1;
+    }
+
+    // 2) ค้นไฟล์ใน Drive "เฉพาะ tracking ที่ no_video" (getFilesByName — ไม่ scan ทั้งโฟลเดอร์)
+    const updates = [];
+    let noDriveMatch = 0;
+    candidates.forEach(c => {
+      const url = _findDriveVideoUrl(folder, c.parcelId);
+      if (url) updates.push({ row: c.row, url, parcelId: c.parcelId });
+      else noDriveMatch++;
+    });
+    const driveCount = candidates.length;
+
+    Logger.log("[reconcileVideoUrls] scanned=" + scanned + " no_video=" + candidates.length +
+               " toFix=" + updates.length + " noDriveMatch=" + noDriveMatch +
+               " skippedHadVideo=" + skippedHadVideo + " skippedDateRange=" + skippedDateRange);
+
+    // ✅ ไม่ใช้ script lock — แค่เติม URL ลง cell ที่ no_video (re-check ก่อนเขียน)
+    //    ถ้า saveData เขียน cell เดียวกันพร้อมกัน → ทั้งคู่เป็น Drive URL ที่ valid (ไม่เสียหาย)
+    //    (เดิมใช้ waitLock(30000) → ติด lock_timeout ตอนมีคนแพคอยู่ → เอาออก)
+    let written = 0;
+    for (const u of updates) {
+      try {
+        const current = String(sheet.getRange(u.row, 5).getValue()).trim();
+        if (current.indexOf('drive.google.com') !== -1) continue; // มี url แล้ว (เพิ่งถูกเติม) → ข้าม
+        sheet.getRange(u.row, 5).setValue(u.url);
+        written++;
+      } catch(e) {
+        Logger.log("[reconcileVideoUrls] setValue fail row=" + u.row + ": " + e.message);
+      }
+    }
+    if (written > 0) SpreadsheetApp.flush();
+    Logger.log("[reconcileVideoUrls] fixed " + written + " rows");
+    _logSaveAttempt("", "", "reconcile_done", written, "scanned=" + scanned + " sinceDays=" + sinceDays);
+    return { success: true, fixed: written, scanned, found: updates.length, driveFiles: driveCount, sinceDays };
+  } catch(e) {
+    Logger.log("[reconcileVideoUrls] error: " + e.message);
+    return { success: false, error: e.toString() };
+  }
+}
+
 
 
 // ============================================================
