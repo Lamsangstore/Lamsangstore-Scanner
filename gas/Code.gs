@@ -119,6 +119,11 @@ const PLACEHOLDER_MARKER = "__VIDEO_FIRST__ waiting for order data";
 const PARCEL_CACHE_PREFIX = 'parcel_';
 const PARCEL_CACHE_TTL_SEC = 6 * 60 * 60; // 6 ชม.
 const FALLBACK_SCAN_RECENT_ROWS = 2000;   // ถ้า cache miss → scan แค่ 2000 แถวล่าสุด (ไม่ใช่ทั้ง 16K+)
+// ⏱️ Timestamp = "เวลาแพค" → ชีตไม่ได้เรียงเวลาเป๊ะ (drain ลำดับ ≠ เวลาแพค + มี straggler)
+//   bottom-up scan จึง "หยุดเมื่อเจอแถวเก่าติดกัน N แถว" แทนหยุดทันที → ทน straggler เดี่ยว/กลุ่มเล็ก
+const SCAN_OOO_LIMIT = 1500;
+// cleanUpOldOrders: ไม่ลบ row ที่อยู่ "ท้ายชีต" N แถว (เพิ่ง append) แม้เวลาแพคเก่า — กันลบ straggler ที่เพิ่งกู้เข้ามา
+const CLEANUP_PROTECT_TAIL_ROWS = 3000;
 
 function _getCachedParcelRow(parcelId) {
   try {
@@ -425,7 +430,7 @@ function _computeStatsForDates(dateSet) {
   const lastCol = sheet.getLastColumn();
   const CHUNK = 2000;
   let row = lastRow;
-  let stop = false;
+  let stop = false, oooRun = 0; // oooRun = แถวเก่ากว่าช่วงที่เจอ "ติดกัน"
   while (row >= 2 && !stop) {
     const from = Math.max(2, row - CHUNK + 1);
     const n = row - from + 1;
@@ -434,7 +439,8 @@ function _computeStatsForDates(dateSet) {
       const ts = data[i][0];
       if (!(ts instanceof Date)) continue;
       const dayKey = Utilities.formatDate(ts, tz, "yyyy-MM-dd");
-      if (dayKey < minDate) { stop = true; break; } // พ้นช่วงล่างสุดแล้ว
+      if (dayKey < minDate) { if (++oooRun >= SCAN_OOO_LIMIT) { stop = true; break; } continue; } // เก่ากว่าช่วง — ข้าม (ทน straggler)
+      oooRun = 0;
       if (!out[dayKey]) continue; // ไม่ใช่วันที่สนใจ
       const remark = String(data[i][5] || "");
       if (remark.indexOf("__VIDEO_FIRST__") === 0) continue; // placeholder ยังไม่ใช่ออเดอร์จริง
@@ -530,7 +536,7 @@ function _collectOrdersForDates(dateSet) {
 
   const lastCol = sheet.getLastColumn();
   const CHUNK = 2000;
-  let row = lastRow, stop = false;
+  let row = lastRow, stop = false, oooRun = 0; // oooRun = แถวเก่ากว่าช่วงที่เจอ "ติดกัน"
   while (row >= 2 && !stop) {
     const from = Math.max(2, row - CHUNK + 1);
     const data = sheet.getRange(from, 1, row - from + 1, lastCol).getValues();
@@ -538,7 +544,8 @@ function _collectOrdersForDates(dateSet) {
       const ts = data[i][0];
       if (!(ts instanceof Date)) continue;
       const dayKey = Utilities.formatDate(ts, tz, "yyyy-MM-dd");
-      if (dayKey < minDate) { stop = true; break; }
+      if (dayKey < minDate) { if (++oooRun >= SCAN_OOO_LIMIT) { stop = true; break; } continue; } // เก่ากว่าช่วง — ข้าม (ทน straggler)
+      oooRun = 0;
       if (dateSet.indexOf(dayKey) === -1) continue;
       const remark = String(data[i][5] || "");
       if (remark.indexOf("__VIDEO_FIRST__") === 0) continue;
@@ -1263,25 +1270,6 @@ function uploadVideoOnly(body) {
   return { success: true, videoUrl: url };
 }
 
-function _tryUpdateVideoUrl(sheet, rowIndex, parcelId, videoBase64, videoMime, videoExt) {
-  try {
-    const currentVideoUrl = String(sheet.getRange(rowIndex, 5).getValue()).trim();
-    if (currentVideoUrl !== "no_video") return;
-    if (videoBase64.length > MAX_VIDEO_BASE64_LEN) return;
-
-    const mime = videoMime || "video/webm";
-    const ext  = videoExt  || "webm";
-    const decoded = Utilities.base64Decode(videoBase64);
-    const blob    = Utilities.newBlob(decoded, mime, parcelId + "_retry." + ext);
-    const folder  = DriveApp.getFolderById(TARGET_FOLDER_ID);
-    const file    = folder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    sheet.getRange(rowIndex, 5).setValue(file.getUrl());
-    Logger.log("[saveData] อัปเดตวิดีโอให้แถว " + rowIndex + ": " + parcelId);
-  } catch(e) {
-    Logger.log("[_tryUpdateVideoUrl] error: " + e.message);
-  }
-}
 // ============================================================
 // reconcileVideoUrls — patch up rows that show "no_video" but have a
 // matching file in Drive (filename = parcelId.webm / parcelId.mp4)
@@ -1339,13 +1327,14 @@ function reconcileVideoUrls(body) {
     const candidates = []; // { row, parcelId }
     let scanned = 0, skippedDateRange = 0, skippedHadVideo = 0;
 
-    let cur = lastRow, reachedOlder = false;
+    let cur = lastRow, reachedOlder = false, oooRun = 0; // oooRun = แถวเก่ากว่าช่วงที่เจอ "ติดกัน"
     while (cur >= 2 && !reachedOlder) {
       const from = Math.max(2, cur - CHUNK + 1);
       const chunk = sheet.getRange(from, 1, cur - from + 1, 5).getValues();
       for (let i = chunk.length - 1; i >= 0; i--) {  // ล่าง → บน
         const ts = chunk[i][0];
-        if (ts instanceof Date && ts.getTime() < cutoff) { reachedOlder = true; break; } // พ้นช่วง → หยุด
+        if (ts instanceof Date && ts.getTime() < cutoff) { if (++oooRun >= SCAN_OOO_LIMIT) { reachedOlder = true; break; } continue; } // เก่า — ข้าม (ทน straggler)
+        if (ts instanceof Date) oooRun = 0;
         const tracking = String(chunk[i][3] || "").trim().toUpperCase();
         if (!tracking) continue;
         scanned++;
@@ -1896,7 +1885,8 @@ function cleanUpOldOrders() {
       if (!ts) continue; // ⚠️ ข้ามแถวที่ timestamp ว่าง — ไม่ลบ (กัน false positive)
       const d = ts instanceof Date ? ts : new Date(ts);
       if (isNaN(d.getTime())) continue; // ⚠️ ข้ามแถวที่ parse ไม่ได้ — ไม่ลบ
-      if (d < cutoff) rowsToDelete.push(i + 2); // sheet row = tsValues index + 2
+      // ⏱️ Timestamp = เวลาแพค → straggler เวลาแพคเก่าอาจเพิ่ง append → กันลบ row ท้ายชีต
+      if (d < cutoff && (i + 2) <= lastRow - CLEANUP_PROTECT_TAIL_ROWS) rowsToDelete.push(i + 2); // sheet row = tsValues index + 2
     }
 
     if (rowsToDelete.length === 0) {
