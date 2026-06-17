@@ -6761,7 +6761,11 @@ async function processFileUpload() {
   document.getElementById('fileInput').value = "";
   _selectedFiles = [];
   _renderDzList();
-  _fetchOrderCacheBackground();
+  // ✅ อัป Firebase /pending + /products "ทันที" (ไม่รอ trigger 5 นาที) → แล้วดึง cache ใหม่
+  //   → ออเดอร์ที่เพิ่งอัปเข้า scan-start cache เลย (ทุกเครื่อง) สแกนไม่ตกไป GAS รายตัว = เร็ว
+  callGAS("refreshPending", {}, 30000)
+    .catch(() => {})
+    .finally(() => _fetchOrderCacheBackground());
 
   const totalParseSkipped = results.reduce((s, r) => s + (r.skipped?.count || 0), 0);
   if (lastFailures.length === 0) {

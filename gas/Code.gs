@@ -719,6 +719,7 @@ const RATE_LIMITS = {
   uploadVideoOnly: 120,
   reconcileVideoUrls: 6,
   drainInbox: 60,            // on-demand drain — debounce ฝั่ง client คุมอีกชั้น
+  refreshPending: 12,        // on-demand pending refresh หลังอัปไฟล์ marketplace
   _default: 120
 };
 
@@ -726,7 +727,7 @@ const ALLOWED_ACTIONS = new Set([
   "getProductData", "saveData", "searchData", "saveMarketplaceData",
   "getExpectedOrderDetails", "getReportData", "getAllPendingOrders",
   "getSpreadsheetUrl", "getMarketplaceVersionUrl",
-  "uploadVideoForParcel", "uploadVideoOnly", "reconcileVideoUrls", "drainInbox"
+  "uploadVideoForParcel", "uploadVideoOnly", "reconcileVideoUrls", "drainInbox", "refreshPending"
 ]);
 
 // ============================================================
@@ -848,6 +849,7 @@ function doPost(e) {
     else if (action === "uploadVideoOnly")            result = uploadVideoOnly(body);
     else if (action === "reconcileVideoUrls")         result = reconcileVideoUrls(body);
     else if (action === "drainInbox")                 result = drainFirebaseInbox(true);
+    else if (action === "refreshPending")             { refreshPendingCache(true); result = { success: true }; }
 
     return _json(result);
 
