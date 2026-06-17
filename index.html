@@ -3062,6 +3062,7 @@ function _videoForSave(b64) {
 let productMap = {}, currentP = "", items = [], scanner, searchScanner, lastScanTime = 0;
 let sessionParcels = {}, scanBuffer = [], bufferTimeout = null, isFinishing = false, isEditingId = false;
 let isSpeakingRemark = false; // ✅ ล็อคสแกนสินค้าระหว่างพูดเลขพัสดุ + remark
+let _remarkAnnouncedFor = ''; // tracking (UPPERCASE) ที่พูดหมายเหตุไปแล้ว — กันพูดซ้ำ (สแกน vs late fetch)
 let _isRestartingCamera = false; // ✅ ล็อคสแกนสินค้าระหว่างกล้องกำลัง restart (กันสินค้าต้นๆ หายจากวิดีโอ)
 let duplicateParcelAlerts = {}; // ✅ ป้องกันแจ้งเตือนซ้ำ "ปิดงานไปแล้ว"
 const DUPLICATE_ALERT_COOLDOWN_MS = 15 * 1000; // 15 วินาที ก่อนแจ้งซ้ำ
@@ -4909,6 +4910,7 @@ function editParcelId() {
 function processNewParcel(text, carrier) {
   // ✅ มีพัสดุใหม่ → ยกเลิก auto-close timer
   _clearPostParcelIdleTimer();
+  _remarkAnnouncedFor = ''; // เริ่มพัสดุใหม่ → รีเซ็ตสถานะพูดหมายเหตุ
   const wasEditing = isEditingId;
   currentP = text;
   if (!wasEditing) items = [];
@@ -5626,7 +5628,10 @@ async function checkExpectedItems(tracking, _isRetry = false) {
         const tk = tracking.toUpperCase();
         const map = JSON.parse(localStorage.getItem('orderRemarkMap') || '{}');
         if (map[tk] !== rmk) { map[tk] = rmk; localStorage.setItem('orderRemarkMap', JSON.stringify(map)); }
-        if (currentP && currentP.toUpperCase() === tk) showCustomerRemark(tracking);
+        if (currentP && currentP.toUpperCase() === tk) {
+          showCustomerRemark(tracking);
+          _announceRemark(tracking, rmk); // 🔊 อ่านออกเสียง + ล็อกห้ามสแกนจนจบ (ถ้ายังไม่ได้พูดตอนสแกน)
+        }
       }
     } catch(e) {}
     return;
@@ -5780,6 +5785,7 @@ function _speakParcelThenRemark(parcelMsg, tracking, remarkDelayMs = 1200) {
 
     if (remark) {
       // ✅ มีหมายเหตุ: ล็อคไว้จนพูดหมายเหตุจบ (พฤติกรรมเดิม)
+      _remarkAnnouncedFor = String(tracking).toUpperCase(); // พูดแล้ว → กัน late fetch พูดซ้ำ
       uParcel.onend = () => {
         setTimeout(() => {
           const uRemark = new SpeechSynthesisUtterance('หมายเหตุลูกค้า ' + remark);
@@ -5800,6 +5806,31 @@ function _speakParcelThenRemark(parcelMsg, tracking, remarkDelayMs = 1200) {
     }
 
     speechSynthesis.speak(uParcel);
+  } catch(e) { isSpeakingRemark = false; }
+}
+
+// ✅ พูดหมายเหตุที่ "มาทีหลัง" (remark โหลดเสร็จหลังสแกน — cache เย็น/เครื่องไม่ได้อัปไฟล์)
+//   ล็อค isSpeakingRemark = true → ห้ามสแกนสินค้าจนพูดหมายเหตุจบ (ตามที่ผู้ใช้ขอ)
+//   กันพูดซ้ำด้วย _remarkAnnouncedFor (ถ้า _speakParcelThenRemark พูดไปแล้วตอนสแกน)
+function _announceRemark(tracking, remark) {
+  try {
+    const tk = String(tracking).toUpperCase();
+    if (!remark || _remarkAnnouncedFor === tk) return; // ไม่มี / พูดไปแล้ว
+    _remarkAnnouncedFor = tk;
+    if (!window.speechSynthesis) return;
+    isSpeakingRemark = true; // 🔒 บล็อกสแกนสินค้า
+    const safety = setTimeout(() => { isSpeakingRemark = false; }, 12000); // กันค้างถาวร
+    const u = new SpeechSynthesisUtterance('หมายเหตุลูกค้า ' + remark);
+    u.lang = 'th-TH'; u.rate = 1.3;
+    u.onend = () => { clearTimeout(safety); isSpeakingRemark = false; };
+    u.onerror = () => { clearTimeout(safety); isSpeakingRemark = false; };
+    // ถ้ากำลังพูดเลขพัสดุอยู่ → รอให้จบก่อนค่อยพูดหมายเหตุ (ไม่ตัดทับ)
+    const speakWhenFree = () => {
+      if (currentP && currentP.toUpperCase() !== tk) { clearTimeout(safety); isSpeakingRemark = false; return; } // เปลี่ยนพัสดุแล้ว
+      if (speechSynthesis.speaking || speechSynthesis.pending) { setTimeout(speakWhenFree, 150); return; }
+      speechSynthesis.speak(u);
+    };
+    speakWhenFree();
   } catch(e) { isSpeakingRemark = false; }
 }
 
