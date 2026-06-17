@@ -5616,6 +5616,19 @@ async function checkExpectedItems(tracking, _isRetry = false) {
     document.getElementById("orderChecklistPanel").style.display = "block";
     updateChecklistUI();
     hideOrderNotFoundBanner();
+
+    // ✅ หมายเหตุลูกค้า — remark มากับ expectedData (GAS/cache) ทีหลัง showCustomerRemark ครั้งแรก
+    //   ตอนสแกน showCustomerRemark(text) อ่าน cache ที่อาจยังว่าง (เครื่องไม่ได้อัปไฟล์/cache ยังไม่อุ่น)
+    //   → เก็บ remark ลง orderRemarkMap แล้วเด้งโชว์ซ้ำ ถ้ายังเป็นพัสดุใบเดิม
+    try {
+      const rmk = (expectedData.find(it => it.remark) || {}).remark || '';
+      if (rmk) {
+        const tk = tracking.toUpperCase();
+        const map = JSON.parse(localStorage.getItem('orderRemarkMap') || '{}');
+        if (map[tk] !== rmk) { map[tk] = rmk; localStorage.setItem('orderRemarkMap', JSON.stringify(map)); }
+        if (currentP && currentP.toUpperCase() === tk) showCustomerRemark(tracking);
+      }
+    } catch(e) {}
     return;
   }
 
