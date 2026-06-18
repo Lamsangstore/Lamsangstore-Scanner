@@ -4365,9 +4365,13 @@ async function _ensureProductMap() {
   if (Object.keys(_productNameUpper).length === 0) _rebuildProductNameIndex();
 }
 
-// ✅ ดึง productMap จาก Firebase /products ล้วน (mirror จากชีตทุก 5 นาที — ไม่ fallback GAS)
+// ✅ ดึง productMap: Firebase /products ก่อน (เร็ว); ว่าง → fallback GAS getProductData (ดึงชื่อจากชีตตรง)
+//   ชื่อสินค้าสำคัญต่อการแพค → ต้องไม่โชว์ SKU เพราะ /products ยังไม่ถูก mirror
 async function _fetchProductCacheNow() {
-  const prodRes = await _firebaseFetchProducts();
+  let prodRes = await _firebaseFetchProducts();
+  if (!prodRes || Object.keys(prodRes).length === 0) {
+    prodRes = await callGAS("getProductData").catch(() => null);
+  }
   if (prodRes && Object.keys(prodRes).length > 0) {
     productMap = prodRes;
     _rebuildProductNameIndex();
