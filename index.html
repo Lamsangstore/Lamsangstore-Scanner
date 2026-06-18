@@ -2597,6 +2597,7 @@
       <button class="preset-btn" onclick="setPreset('last7',this)">7 วัน</button>
       <button class="preset-btn" onclick="setPreset('thisMonth',this)">เดือนนี้</button>
       <button class="preset-btn" onclick="setPreset('lastMonth',this)">เดือนก่อน</button>
+      <button class="preset-btn" onclick="showOrdersTable()" style="background:#457b9d; color:#fff; border-color:#457b9d;">📋 ตาราง</button>
     </div>
     <!-- Date Range Picker -->
     <div class="dash-datepicker mb-3">
@@ -7424,6 +7425,95 @@ function _fbOrderToRow(d) {
   const tsStr = dt ? `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}` : '';
   const items = Array.isArray(d.it) ? d.it : [];
   return [tsStr, d.oid || '', d.mp || '', d.tk || '', d.v || '', d.rm || '', items.length, ...items];
+}
+
+// 📋 ตาราง Orders ทั้งหมด (จาก Firebase /orders — ย้อนหลัง 90 วัน) — ปุ่มในแถบรายงาน
+async function showOrdersTable() {
+  Swal.fire({ title: '📋 กำลังโหลดตาราง...', html: 'ดึง orders จาก Firebase', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+  await _ensureProductMap();
+  // ดึง orders "ทั้งหมด" ในช่วง 90 วัน (limit สูงกว่า search cache เพื่อให้ครบ) — ต้องมี rule ".indexOn":"ts"
+  let orders = null;
+  if (FIREBASE_ENABLED()) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 20000);
+      const res = await fetch(`${FIREBASE_DB_URL}/orders.json?orderBy=${encodeURIComponent('"ts"')}&limitToLast=40000`, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        const raw = await res.json();
+        orders = [];
+        if (raw) for (const k in raw) orders.push(raw[k]);
+        orders.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      }
+    } catch(e) {}
+  }
+  if (!orders) { Swal.fire('โหลดไม่ได้', 'ดึง /orders จาก Firebase ไม่ได้ — เช็คเน็ต/Rules', 'error'); return; }
+  const total = orders.length;
+  const MAX_SHOW = 1500; // กัน DOM หนักบนมือถือ
+  const shown = orders.slice(0, MAX_SHOW);
+  const p2 = n => String(n).padStart(2, '0');
+  const rowsHtml = shown.map(d => {
+    const dt = d.ts ? new Date(d.ts) : null;
+    const tstr = dt ? `${p2(dt.getDate())}/${p2(dt.getMonth()+1)} ${p2(dt.getHours())}:${p2(dt.getMinutes())}` : '';
+    const items = Array.isArray(d.it) ? d.it : [];
+    const vid = (d.v && String(d.v).indexOf('drive.google.com') !== -1)
+      ? `<a href="${escHtml(d.v)}" target="_blank" style="color:#c2185b;text-decoration:none;">▶</a>` : '';
+    return `<tr style="border-bottom:1px solid #eee;">
+      <td style="padding:4px 6px;white-space:nowrap;color:#888;">${tstr}</td>
+      <td style="padding:4px 6px;white-space:nowrap;font-weight:600;">${escHtml(d.tk || '')}</td>
+      <td style="padding:4px 6px;">${escHtml(d.mp || '')}</td>
+      <td style="padding:4px 6px;text-align:center;">${items.length}</td>
+      <td style="padding:4px 6px;text-align:center;">${vid}</td>
+    </tr>`;
+  }).join('');
+  Swal.fire({
+    title: `📋 Orders (${total} รายการ)`,
+    html: `<div style="text-align:left;">
+      <div style="font-size:0.76rem;color:#999;margin-bottom:6px;">${total > MAX_SHOW ? `แสดง ${MAX_SHOW} ล่าสุด — กด Export เพื่อดูครบ ${total}` : `ทั้งหมด ${total} รายการ (ย้อนหลัง 90 วัน)`}</div>
+      <div style="max-height:62vh;overflow:auto;border:1px solid #eee;border-radius:8px;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.76rem;">
+          <thead><tr style="position:sticky;top:0;background:#fde4ee;z-index:1;">
+            <th style="padding:6px;text-align:left;">เวลา</th>
+            <th style="padding:6px;text-align:left;">Tracking</th>
+            <th style="padding:6px;text-align:left;">ร้าน</th>
+            <th style="padding:6px;">ชิ้น</th>
+            <th style="padding:6px;">คลิป</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>`,
+    width: '95%',
+    confirmButtonText: 'ปิด',
+    showDenyButton: true,
+    denyButtonText: '⬇️ Export CSV',
+    denyButtonColor: '#2e7d32',
+    customClass: { popup: 'swal-popup' },
+  }).then(r => { if (r.isDenied) _exportOrdersCsv(orders); });
+}
+
+// ⬇️ Export orders ทั้งหมดเป็น CSV (รวมชื่อสินค้า)
+function _exportOrdersCsv(orders) {
+  try {
+    const p2 = n => String(n).padStart(2, '0');
+    const head = ['เวลา','Tracking','ร้าน','OrderId','จำนวน','วิดีโอ','หมายเหตุ','สินค้า'];
+    const rows = [head];
+    orders.forEach(d => {
+      const dt = d.ts ? new Date(d.ts) : null;
+      const tstr = dt ? `${dt.getFullYear()}-${p2(dt.getMonth()+1)}-${p2(dt.getDate())} ${p2(dt.getHours())}:${p2(dt.getMinutes())}` : '';
+      const items = Array.isArray(d.it) ? d.it : [];
+      const names = items.map(s => _productName(s)).join(' | ');
+      rows.push([tstr, d.tk||'', d.mp||'', d.oid||'', items.length, d.v||'', d.rm||'', names]);
+    });
+    const csv = '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'orders-' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) { Swal.fire('Export ไม่สำเร็จ', e.message, 'error'); }
 }
 
 // ค้นใน cache → คืน row arrays (เรียงใหม่→เก่า) หรือ null ถ้าใช้ Firebase ไม่ได้
