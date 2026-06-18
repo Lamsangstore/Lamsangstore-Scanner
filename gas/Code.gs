@@ -322,6 +322,79 @@ function drainFirebaseInbox(opts) {
   }
 }
 
+// ====== DRAIN /mpInbox → MarketplaceData sheet (อัปไฟล์ marketplace ผ่าน Firebase) ======
+//   client อัปไฟล์ → push /mpInbox (เร็ว) → ฟังก์ชันนี้เขียนลงชีต (dedup อ่านครั้งเดียว) แล้วลบ doc
+//   คืนจำนวนแถวที่เขียนใหม่ — caller ค่อยเรียก refreshPendingCache(true) ให้ /pending + ทุกเครื่องอัปเดต
+function drainMpInbox() {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) return 0;
+  const lock = LockService.getDocumentLock();
+  try { if (!lock.tryLock(3000)) return 0; } catch(e) { return 0; }
+  try {
+    const resp = UrlFetchApp.fetch(cfg.url + "/mpInbox.json?auth=" + encodeURIComponent(cfg.secret), { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) return 0;
+    const body = resp.getContentText();
+    if (!body || body === "null") return 0;
+    let docs; try { docs = JSON.parse(body); } catch(e) { return 0; }
+    const keys = Object.keys(docs || {});
+    if (keys.length === 0) return 0;
+
+    const sheet = setupMarketplaceSheet();
+    // dedup keys (tracking|sku|orderId) — อ่านทั้งชีต "ครั้งเดียว" ต่อ drain (ไม่ใช่ต่อ chunk เหมือนเดิม)
+    const existingKeys = new Set();
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const slice = sheet.getRange(2, 3, lastRow - 1, 5).getValues(); // C..G
+      for (let i = 0; i < slice.length; i++) {
+        existingKeys.add(numToStr(slice[i][0]).toUpperCase() + '|' + numToStr(slice[i][1]).toUpperCase() + '|' + numToStr(slice[i][4]));
+      }
+    }
+
+    const ts = new Date();
+    const newRows = [];
+    const delKeys = {};
+    keys.forEach(k => {
+      delKeys[k] = null;
+      const d = docs[k] || {};
+      const mp = String(d.marketplace || "").slice(0, 32);
+      let rows = Array.isArray(d.rows) ? d.rows : (d.rows && typeof d.rows === 'object' ? Object.values(d.rows) : []);
+      rows.forEach(item => {
+        if (!item || typeof item !== 'object') return;
+        const t   = String(item.tracking || "").trim().toUpperCase();
+        const sku = String(item.sku || "").trim().toUpperCase();
+        const oid = String(item.orderId || "").trim();
+        if (!t || !sku) return;
+        const key = t + '|' + sku + '|' + oid;
+        if (existingKeys.has(key)) return;
+        existingKeys.add(key);
+        newRows.push([ts, mp || String(item.marketplace || ""), "'" + t, "'" + sku,
+                      Number(item.qty) || 1, String(item.remark || "").trim().slice(0, 500), "'" + oid]);
+      });
+    });
+
+    if (newRows.length > 0) {
+      const slock = LockService.getScriptLock();
+      try { slock.waitLock(30000); } catch(e) { Logger.log("[drainMpInbox] script lock timeout"); return 0; }
+      try {
+        const startRow = sheet.getLastRow() + 1;
+        sheet.getRange(startRow, 1, newRows.length, 7).setValues(newRows);
+        SpreadsheetApp.flush();
+      } finally { try { slock.releaseLock(); } catch(_) {} }
+    }
+
+    // ลบ batch ที่ process แล้วทั้งหมด
+    UrlFetchApp.fetch(cfg.url + "/mpInbox.json?auth=" + encodeURIComponent(cfg.secret), {
+      method: "patch", contentType: "application/json", payload: JSON.stringify(delKeys), muteHttpExceptions: true
+    });
+    Logger.log("[drainMpInbox] เขียน " + newRows.length + " แถว จาก " + keys.length + " batch");
+    if (newRows.length > 0) _logSaveAttempt("", "", "mp_drain", newRows.length, "batches=" + keys.length);
+    return newRows.length;
+  } catch(e) {
+    Logger.log("[drainMpInbox] error: " + e.message);
+    return 0;
+  } finally { try { lock.releaseLock(); } catch(_) {} }
+}
+
 // ตั้ง trigger drain ทุก 1 นาที (รันครั้งเดียวใน editor)
 function setupFirebaseTrigger() {
   ScriptApp.getProjectTriggers().forEach(t => {
@@ -367,6 +440,7 @@ function refreshPendingCache(force) {
   const cfg = _firebaseCfg();
   if (!cfg.url || !cfg.secret) return;
   try {
+    drainMpInbox(); // backup: ดูดไฟล์ marketplace ที่ค้างใน /mpInbox เข้าชีตก่อน mirror /pending
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const ordSheet = ss.getSheetByName(SHEET_ORDERS);
     const mpSheet  = ss.getSheetByName(SHEET_MARKETPLACE);
@@ -734,6 +808,7 @@ const RATE_LIMITS = {
   reconcileVideoUrls: 6,
   drainInbox: 60,            // on-demand drain — debounce ฝั่ง client คุมอีกชั้น
   refreshPending: 12,        // on-demand pending refresh หลังอัปไฟล์ marketplace
+  drainMpInbox: 30,          // on-demand drain ไฟล์ marketplace จาก /mpInbox
   _default: 120
 };
 
@@ -741,7 +816,7 @@ const ALLOWED_ACTIONS = new Set([
   "getProductData", "saveData", "searchData", "saveMarketplaceData",
   "getExpectedOrderDetails", "getReportData", "getAllPendingOrders",
   "getSpreadsheetUrl", "getMarketplaceVersionUrl",
-  "uploadVideoOnly", "reconcileVideoUrls", "drainInbox", "refreshPending"
+  "uploadVideoOnly", "reconcileVideoUrls", "drainInbox", "refreshPending", "drainMpInbox"
 ]);
 
 // ============================================================
@@ -863,6 +938,7 @@ function doPost(e) {
     else if (action === "reconcileVideoUrls")         result = reconcileVideoUrls(body);
     else if (action === "drainInbox")                 result = drainFirebaseInbox(true);
     else if (action === "refreshPending")             { refreshPendingCache(true); result = { success: true }; }
+    else if (action === "drainMpInbox")               { const n = drainMpInbox(); if (n > 0) refreshPendingCache(true); result = { success: true, written: n }; }
 
     return _json(result);
 

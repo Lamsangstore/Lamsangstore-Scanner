@@ -6762,6 +6762,26 @@ async function _uploadResultsParallel(items, concurrency = 1) {
   return agg;
 }
 
+// 🔥 อัปไฟล์ marketplace ขึ้น Firebase /mpInbox (เร็ว) — drain เขียนชีต + /pending เบื้องหลัง
+//   คืน true ถ้า push ครบทุกไฟล์, false ถ้าล้ม (ให้ fallback ไปทางเขียนชีตตรง)
+async function _firebasePushMarketplace(results) {
+  if (!FIREBASE_ENABLED()) return false;
+  try {
+    const ts = Date.now();
+    for (const r of results) {
+      const rows = r.extractData || [];
+      if (rows.length === 0) continue;
+      const batchId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (ts + '-' + Math.random().toString(36).slice(2));
+      const res = await fetch(`${FIREBASE_DB_URL}/mpInbox/${encodeURIComponent(batchId)}.json`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ k: FIREBASE_WRITE_KEY, marketplace: r.marketplace, fileName: r.file.name, ts, rows })
+      });
+      if (!res.ok) return false;
+    }
+    return true;
+  } catch(e) { console.warn('[mpInbox] push fail:', e.message); return false; }
+}
+
 async function processFileUpload() {
   const fileInput = document.getElementById('fileInput');
   // อ่านจาก _selectedFiles (จาก drag-drop หรือ click) — fallback ไป input.files
@@ -6910,6 +6930,25 @@ async function processFileUpload() {
     localStorage.setItem('orderInfoMap', JSON.stringify(mergedInfo));
   } catch(e) { console.warn('[OrderInfo] บันทึก localStorage ไม่ได้:', e.message); }
 
+  // ===== Phase 2 (หลัก): Firebase-first — push ขึ้น /mpInbox (เร็ว) → drain เขียนชีต + /pending เบื้องหลัง
+  //   → admin ไม่ต้องรอเขียนชีต + เครื่องอื่นดึงจาก Firebase ลง cache อัตโนมัติ (real-time sync)
+  if (await _firebasePushMarketplace(results)) {
+    callGAS("drainMpInbox", {}, 60000).catch(() => {}); // เตะ drain → เขียนชีต + refresh /pending + เตะ cacheMeta → ทุกเครื่องดึง
+    document.getElementById('fileInput').value = ""; _selectedFiles = []; _renderDzList();
+    _fetchOrderCacheBackground(); // เครื่องนี้ก็ดึง /pending ใหม่
+    let totalRows = 0; const tset = new Set();
+    results.forEach(r => (r.extractData || []).forEach(d => { totalRows++; if (d.tracking) tset.add(d.tracking); }));
+    Swal.fire({
+      icon: 'success', title: 'อัปขึ้น Firebase แล้ว',
+      html: `<div style="text-align:left; font-size:0.9rem; color:#7a6440; line-height:1.7;">
+        📦 ${tset.size} พัสดุ · ${totalRows} รายการ จาก ${results.length} ไฟล์<br>
+        <span style="font-size:0.82rem; color:#2e7d32;">กำลังเขียนลงชีต + อัปเดตทุกเครื่องเบื้องหลัง (ไม่กี่วินาที)</span>
+      </div>`,
+      confirmButtonText: 'เรียบร้อย', customClass: { popup: 'swal-popup' },
+    });
+    return;
+  }
+  // ⬇️ fallback: Firebase push ล้ม → เขียนชีตตรงผ่าน GAS (ทางเดิม)
   // ===== Phase 2: อัปโหลด — concurrency 1 (sequential)
   // ⚠️ GAS saveMarketplaceData อ่าน sheet.getLastRow() แล้วเขียนต่อ — ถ้าขนานกัน 2+ request
   //    จะอ่าน lastRow ค่าเดียวกัน → เขียนทับกัน → ข้อมูลหาย
