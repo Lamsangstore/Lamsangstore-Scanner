@@ -4351,7 +4351,16 @@ function _productName(sku) {
 // ✅ บังคับให้ productMap พร้อมก่อนเปิด report/search (เผื่อยังไม่กด "เริ่ม" → ยังไม่โหลด)
 async function _ensureProductMap() {
   if (!productMap || Object.keys(productMap).length === 0) {
-    try { await _fetchProductCacheNow(); } catch(e) {}
+    // 1) localStorage cache ก่อน (เร็ว — เผื่อเปิดรายงานโดยไม่กด "เริ่ม" → productMap ยังว่าง)
+    try {
+      const cached = localStorage.getItem('productMap_cache');
+      if (cached) { const m = JSON.parse(cached); if (m && Object.keys(m).length) productMap = m; }
+    } catch(e) {}
+    // 2) ยังว่าง → ดึง Firebase /products
+    if (!productMap || Object.keys(productMap).length === 0) {
+      try { await _fetchProductCacheNow(); } catch(e) {}
+    }
+    _rebuildProductNameIndex();
   }
   if (Object.keys(_productNameUpper).length === 0) _rebuildProductNameIndex();
 }
@@ -7457,17 +7466,17 @@ async function showOrdersTable() {
     const tstr = dt ? `${p2(dt.getDate())}/${p2(dt.getMonth()+1)} ${p2(dt.getHours())}:${p2(dt.getMinutes())}` : '';
     const items = Array.isArray(d.it) ? d.it : [];
     const vid = (d.v && String(d.v).indexOf('drive.google.com') !== -1)
-      ? `<a href="${escHtml(d.v)}" target="_blank" onclick="event.stopPropagation()" style="color:#c2185b;text-decoration:none;font-size:0.95rem;">▶</a>`
+      ? `<a href="${escHtml(d.v)}" target="_blank" onclick="event.stopPropagation()" style="color:var(--pink);text-decoration:none;font-size:0.95rem;">▶</a>`
       : '<span style="color:#ccc;">–</span>';
     const itemsHtml = items.length
-      ? items.map((s, j) => `<div style="padding:2px 0;"><span style="color:#c2185b;font-weight:600;">${j+1}.</span> ${escHtml(_productName(s))}</div>`).join('')
+      ? items.map((s, j) => `<div style="padding:2px 0;"><span style="color:var(--pink);font-weight:600;">${j+1}.</span> ${escHtml(_productName(s))}</div>`).join('')
       : '<div style="color:#999;">— ไม่มีรายการสินค้า —</div>';
     const meta = [d.oid ? `🧾 #${escHtml(d.oid)}` : '', d.rm ? `📝 ${escHtml(d.rm)}` : ''].filter(Boolean).join('   ·   ');
     return `<tr class="ot-row ${i % 2 ? 'ot-odd' : 'ot-even'}" onclick="_toggleOrderRow(this)">
         <td class="ot-time">▸ ${tstr}</td>
         <td class="ot-tk">${escHtml(d.tk || '')}</td>
         <td>${escHtml(d.mp || '')}</td>
-        <td style="text-align:center;font-weight:700;color:#c2185b;">${items.length}</td>
+        <td style="text-align:center;font-weight:700;color:var(--pink);">${items.length}</td>
         <td style="text-align:center;">${vid}</td>
       </tr>
       <tr class="ot-detail" style="display:none;"><td colspan="5">
@@ -7479,19 +7488,19 @@ async function showOrdersTable() {
     title: `📋 Orders (${total} รายการ)`,
     html: `<style>
       #otWrap table{width:100%;border-collapse:collapse;font-size:0.77rem;}
-      #otWrap thead th{position:sticky;top:0;z-index:2;background:linear-gradient(135deg,#ec4899,#c2185b);color:#fff;padding:9px 7px;text-align:left;font-weight:600;letter-spacing:0.2px;}
+      #otWrap thead th{position:sticky;top:0;z-index:2;background:var(--pink);color:#fff;padding:9px 7px;text-align:left;font-weight:600;letter-spacing:0.2px;}
       #otWrap thead th.c{text-align:center;}
-      #otWrap td{padding:6px 7px;}
-      #otWrap .ot-row{cursor:pointer;border-bottom:1px solid #f3e3ec;}
-      #otWrap .ot-even{background:#ffffff;}
-      #otWrap .ot-odd{background:#fdeef6;}
-      #otWrap .ot-row:hover,#otWrap .ot-row:active{background:#f9d3e6;}
-      #otWrap .ot-time{white-space:nowrap;color:#9a8a92;}
-      #otWrap .ot-tk{white-space:nowrap;font-weight:700;color:#333;}
-      #otWrap .ot-detail td{background:#fff8fb;border-left:3px solid #ec4899;padding:9px 12px 9px 14px;color:#444;line-height:1.5;}
+      #otWrap td{padding:6px 7px;color:#333;}
+      #otWrap .ot-row{cursor:pointer;border-bottom:1px solid var(--pink-light);}
+      #otWrap .ot-even{background:#fff;}
+      #otWrap .ot-odd{background:var(--pink-light);}
+      #otWrap .ot-row:hover,#otWrap .ot-row:active{background:var(--pink-light);filter:brightness(0.95);}
+      #otWrap .ot-time{white-space:nowrap;color:#888;}
+      #otWrap .ot-tk{white-space:nowrap;font-weight:700;color:#222;}
+      #otWrap .ot-detail td{background:#faf6f8;border-left:3px solid var(--pink);padding:9px 12px 9px 14px;color:#444;line-height:1.5;}
     </style>
     <div style="text-align:left;">
-      <div style="font-size:0.75rem;color:#999;margin-bottom:7px;">${total > MAX_SHOW ? `แสดง ${MAX_SHOW} ล่าสุด — กด Export เพื่อดูครบ ${total}` : `ทั้งหมด ${total} รายการ (ย้อนหลัง 90 วัน)`} · <b style="color:#c2185b;">แตะแถวเพื่อดูสินค้า</b></div>
+      <div style="font-size:0.75rem;color:#999;margin-bottom:7px;">${total > MAX_SHOW ? `แสดง ${MAX_SHOW} ล่าสุด — กด Export เพื่อดูครบ ${total}` : `ทั้งหมด ${total} รายการ (ย้อนหลัง 90 วัน)`} · <b style="color:var(--pink);">แตะแถวเพื่อดูสินค้า</b></div>
       <div id="otWrap" style="max-height:62vh;overflow:auto;border:1px solid #f0d8e4;border-radius:10px;box-shadow:0 1px 4px rgba(194,24,91,0.08);">
         <table>
           <thead><tr>
