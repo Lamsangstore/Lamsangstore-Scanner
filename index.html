@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Permissions-Policy" content="camera=*">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com https://raw.githubusercontent.com https://*.firebasedatabase.app https://*.firebaseio.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob:; frame-src 'self' https://drive.google.com https://*.google.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com https://raw.githubusercontent.com https://*.firebasedatabase.app https://*.firebaseio.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';">
   <title>Lamsangstore — Scanner</title>
   <!-- PWA -->
   <link rel="manifest" href="manifest.json?v=2">
@@ -7465,8 +7465,9 @@ async function showOrdersTable() {
     const dt = d.ts ? new Date(d.ts) : null;
     const tstr = dt ? `${p2(dt.getDate())}/${p2(dt.getMonth()+1)} ${p2(dt.getHours())}:${p2(dt.getMinutes())}` : '';
     const items = Array.isArray(d.it) ? d.it : [];
-    const vid = (d.v && String(d.v).indexOf('drive.google.com') !== -1)
-      ? `<a href="${escHtml(d.v)}" target="_blank" onclick="event.stopPropagation()" style="color:var(--pink);text-decoration:none;font-size:0.95rem;">▶</a>`
+    const fid = _videoFileId(d.v);
+    const vid = fid
+      ? `<span onclick="event.stopPropagation();_playVideo('${fid}')" style="color:var(--pink);cursor:pointer;font-size:0.95rem;">▶</span>`
       : '<span style="color:#ccc;">–</span>';
     const itemsHtml = items.length
       ? items.map((s, j) => `<div style="padding:2px 0;"><span style="color:var(--pink);font-weight:600;">${j+1}.</span> ${escHtml(_productName(s))}</div>`).join('')
@@ -7542,6 +7543,26 @@ function _exportOrdersCsv(orders) {
     URL.revokeObjectURL(url);
   } catch(e) { Swal.fire('Export ไม่สำเร็จ', e.message, 'error'); }
 }
+
+// ดึง Drive file id จาก URL (รองรับ /file/d/{id}/view และ ?id={id})
+function _videoFileId(url) {
+  const s = String(url || '');
+  const m = s.match(/\/d\/([-\w]+)/) || s.match(/[?&]id=([-\w]+)/);
+  return m ? m[1] : '';
+}
+// 🎬 พรีวิววิดีโอในแอป (iframe Drive preview) — ไม่ต้องเปิดแท็บใหม่
+window._playVideo = function(fileId) {
+  if (!fileId) return;
+  Swal.fire({
+    html: `<div style="font-size:0.85rem;color:var(--text2,#7a6440);margin-bottom:6px;">🎬 พรีวิววิดีโอ</div>
+      <iframe src="https://drive.google.com/file/d/${fileId}/preview" style="width:100%;height:62vh;border:0;border-radius:10px;background:#000;" allow="autoplay" allowfullscreen></iframe>
+      <div style="margin-top:8px;"><a href="https://drive.google.com/file/d/${fileId}/view" target="_blank" style="font-size:0.8rem;color:var(--pink);text-decoration:none;">เปิดใน Google Drive ↗</a></div>`,
+    width: '94%',
+    showConfirmButton: true,
+    confirmButtonText: 'ปิด',
+    customClass: { popup: 'swal-popup' },
+  });
+};
 
 // แตะแถวในตาราง Orders → กาง/พับ แถวรายละเอียดสินค้า
 window._toggleOrderRow = function(tr) {
@@ -8096,8 +8117,9 @@ function _renderSearchCards(rows) {
       ? `<div style="font-size:0.73rem; color:#c06030; margin-top:4px;"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/></svg> ${escHtml(remark)}</div>`
       : '';
 
-    const videoBtn = hasVideo
-      ? `<a href="${escHtml(videoUrl)}" target="_blank" class="btn-neu-gold" style="font-size:0.72rem; padding:4px 10px; text-decoration:none; display:inline-block;">▶ ดูคลิป</a>`
+    const _vfid = hasVideo ? _videoFileId(videoUrl) : '';
+    const videoBtn = _vfid
+      ? `<button type="button" onclick="_playVideo('${_vfid}')" class="btn-neu-gold" style="font-size:0.72rem; padding:4px 10px; border:none; cursor:pointer; display:inline-block;">▶ ดูคลิป</button>`
       : '';
 
     // ✅ Copy + Share buttons
