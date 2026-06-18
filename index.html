@@ -7461,10 +7461,13 @@ async function fetchReport() {
   document.getElementById('dashContent').style.display = 'none';
   try {
     await _ensureProductMap(); // ให้ชื่อสินค้าพร้อมก่อน render (เผื่อยังไม่กด "เริ่ม")
-    // ⚡ ลอง Firebase ก่อน (เร็ว ~100ms) → ไม่ได้ค่อย fallback GAS
-    let data = await _firebaseReadStats(start, end);
-    if (!data) data = await callGAS("getReportData", { start, end }, 45000);
-    else console.log('[Report] served from Firebase ⚡');
+    // ⚡ Firebase ล้วน — ดึงไม่ได้ → แจ้ง error (ไม่ fallback GAS ที่ช้า)
+    const data = await _firebaseReadStats(start, end);
+    if (!data) {
+      document.getElementById('dashLoading').style.display = 'none';
+      Swal.fire('โหลดรายงานไม่ได้', 'ดึงข้อมูลจาก Firebase ไม่ได้ — เช็คเน็ต/Rules แล้วลองใหม่', 'error');
+      return;
+    }
     lastReportFetchTime = Date.now();
     lastReportParams = `${start}|${end}`;
     renderReport(data, start, end);
@@ -7568,8 +7571,7 @@ async function _renderComparePrevPeriod(start, end, curOrders, curItems) {
     const prevEnd   = new Date(s); prevEnd.setDate(s.getDate() - 1);
     const prevStart = new Date(prevEnd); prevStart.setDate(prevEnd.getDate() - (days - 1));
     const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    let prev = await _firebaseReadStats(fmt(prevStart), fmt(prevEnd));
-    if (!prev) prev = await callGAS("getReportData", { start: fmt(prevStart), end: fmt(prevEnd) }, 45000);
+    const prev = await _firebaseReadStats(fmt(prevStart), fmt(prevEnd)); // Firebase ล้วน — ดึงไม่ได้ → ข้ามการเทียบ
     if (token !== _prevPeriodToken) return; // มี fetch ใหม่แทรกแล้ว
     if (!prev || prev.error) return;
     _setCompareDelta('d-box', _calcDelta(curOrders, prev.totalOrders || 0));
@@ -7622,9 +7624,8 @@ async function showDayDetail(dateStr) {
     customClass: { popup: 'swal-popup' },
   });
   try {
-    let data = await _firebaseReadStats(dateStr, dateStr);
-    if (!data) data = await callGAS("getReportData", { start: dateStr, end: dateStr }, 45000);
-    if (!data || data.error) throw new Error(data?.error || 'ไม่พบข้อมูล');
+    const data = await _firebaseReadStats(dateStr, dateStr); // Firebase ล้วน (ไม่ fallback GAS)
+    if (!data || data.error) throw new Error(data?.error || 'ดึงข้อมูลจาก Firebase ไม่ได้ — เช็คเน็ต/Rules');
 
     const mpStyle = {
       shopee: { name: 'Shopee', color: '#ee4d2d' },
@@ -7896,10 +7897,13 @@ async function runSearch() {
   document.getElementById("tableHead").innerHTML = "";
   try {
     await _ensureProductMap(); // ให้ชื่อสินค้าพร้อมก่อนแสดงผลค้นหา
-    // ⚡ ลอง Firebase ก่อน (เร็ว) → ไม่ได้ค่อย fallback GAS
-    let res = await _firebaseSearch(q);
-    if (res === null) res = await callGAS("searchData", { query: q });
-    else console.log('[Search] served from Firebase ⚡');
+    // ⚡ Firebase ล้วน — ดึงไม่ได้ (null) → แจ้ง error (ไม่ fallback GAS ที่ช้า)
+    const res = await _firebaseSearch(q);
+    if (res === null) {
+      document.getElementById("loadingSearch").style.display = "none";
+      Swal.fire('ค้นหาไม่ได้', 'ดึงข้อมูลจาก Firebase ไม่ได้ — เช็คเน็ต/Rules แล้วลองใหม่', 'error');
+      return;
+    }
     document.getElementById("loadingSearch").style.display = "none";
     if (!res || res.length === 0) {
       document.getElementById("emptySearch").style.display = "block";
