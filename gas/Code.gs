@@ -105,8 +105,8 @@ function menuMergeDup() {
   }
 }
 
-// กัน Drive bombing — base64 ~14MB ≈ raw video ~10MB
-const MAX_VIDEO_BASE64_LEN = 14 * 1024 * 1024;
+// กัน Drive bombing — base64 ~24MB ≈ raw video ~18MB
+const MAX_VIDEO_BASE64_LEN = 24 * 1024 * 1024; // ~18MB raw — client อัดที่ 1.2Mbps พอ ~2 นาที/ใบ
 
 // ✅ Marker สำหรับ row placeholder (legacy — ไม่มีการสร้างใหม่แล้ว)
 //    saveData ยังเช็ค/"upgrade" row แบบนี้ไว้ เผื่อมี placeholder เก่าค้างในชีต

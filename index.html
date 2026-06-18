@@ -3056,7 +3056,7 @@ const FAIL_QUEUE_KEY = 'failedUploadQueue';
 let _isRetrying = false;
 let _flushedIds = new Set(); // ป้องกัน duplicate flush
 let _videoConvertInFlight = 0; // จำนวนวิดีโอที่กำลังแปลง base64 (ยังไม่ลง queue) — กันปิดแอประหว่างแปลง
-const MAX_VIDEO_B64_LEN = 14 * 1024 * 1024; // ตรงกับ GAS — ใหญ่กว่านี้ saveData จะ reject ทั้งออเดอร์
+const MAX_VIDEO_B64_LEN = 24 * 1024 * 1024; // ตรงกับ GAS — ที่ 1.2Mbps พอ ~2 นาที/ใบ
 // ส่งวิดีโอให้ saveData อย่างปลอดภัย: ใหญ่เกิน → "video_too_large", ไม่มี → "no_video"
 //   กัน video ใหญ่ทำให้ "ออเดอร์" เขียนไม่ได้ (ออเดอร์ต้องลงชีตเสมอ)
 function _videoForSave(b64) {
@@ -4118,8 +4118,13 @@ async function startCameraRecording(resetChunks = true) {
     videoEl.srcObject = cameraStream;
     await videoEl.play();
     
-    canvas.width = videoEl.videoWidth || 640;
-    canvas.height = videoEl.videoHeight || 480;
+    // ⬇️ cap ที่ 720p — กล้องบางรุ่นให้ 1080p → ลดขนาดไฟล์ + encode เร็วขึ้น (กัน "วิดีโอใหญ่เกิน")
+    {
+      let _vw = videoEl.videoWidth || 640, _vh = videoEl.videoHeight || 480;
+      const _scale = Math.min(1, 1280 / _vw, 720 / _vh);
+      canvas.width = Math.round(_vw * _scale);
+      canvas.height = Math.round(_vh * _scale);
+    }
     // ✅ reset chunks เฉพาะเมื่อ resetChunks=true (พัสดุใบใหม่)
     // ถ้า resetChunks=false (กลับจาก visibilitychange) → ต่อ chunks เดิม
     if (resetChunks) recordedChunks = [];
@@ -4191,13 +4196,15 @@ async function startCameraRecording(resetChunks = true) {
     const canvasStream = canvas.captureStream(30);
     currentVideoMime = pickBestVideoMime();
     currentVideoExt  = currentVideoMime.indexOf('mp4') >= 0 ? 'mp4' : 'webm';
+    // 1.2 Mbps (~0.15 MB/วิ) → 24MB ลิมิตพอ ~2 นาที (เดิม 2.5Mbps เต็มใน ~33 วิ) — กันวิดีโอใหญ่เกินหาย
+    const VIDEO_BITRATE = 1200000;
     try {
-      mediaRecorder = new MediaRecorder(canvasStream, { mimeType: currentVideoMime, videoBitsPerSecond: 2500000 });
+      mediaRecorder = new MediaRecorder(canvasStream, { mimeType: currentVideoMime, videoBitsPerSecond: VIDEO_BITRATE });
     } catch(e) {
       console.warn('[Recorder] mime', currentVideoMime, 'failed, fallback:', e.message);
       currentVideoMime = 'video/webm';
       currentVideoExt  = 'webm';
-      mediaRecorder = new MediaRecorder(canvasStream, { videoBitsPerSecond: 2500000 });
+      mediaRecorder = new MediaRecorder(canvasStream, { videoBitsPerSecond: VIDEO_BITRATE });
     }
     console.log('[Recorder] using mime:', currentVideoMime, 'ext:', currentVideoExt);
     mediaRecorder._stopDraw = () => { drawActive = false; }; // เก็บ ref เพื่อหยุด loop
