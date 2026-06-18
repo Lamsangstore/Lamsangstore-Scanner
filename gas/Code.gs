@@ -356,6 +356,13 @@ function frequentVideoReconcile() {
 //   มือถืออ่านตรง ~100ms ไม่ต้องรอ scan MarketplaceData + cold start
 //   ✅ ข้ามถ้า Orders/MarketplaceData ไม่เปลี่ยนตั้งแต่รอบก่อน — กัน GAS quota หมด
 // ============================================================
+// hash สั้นๆ สำหรับเช็คว่าเนื้อหาเปลี่ยนไหม
+function _strHash(s) {
+  let h = 0; s = String(s);
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return h.toString(36);
+}
+
 function refreshPendingCache(force) {
   const cfg = _firebaseCfg();
   if (!cfg.url || !cfg.secret) return;
@@ -364,25 +371,35 @@ function refreshPendingCache(force) {
     const ordSheet = ss.getSheetByName(SHEET_ORDERS);
     const mpSheet  = ss.getSheetByName(SHEET_MARKETPLACE);
     const pSheet   = ss.getSheetByName(SHEET_PRODUCTS);
+    const props = PropertiesService.getScriptProperties();
+    let bumped = false;
+
+    // 🔄 products — mirror "ทุกครั้งที่เนื้อหาเปลี่ยน" (จับการแก้ชื่อในแถวเดิม ไม่ใช่แค่เพิ่ม/ลบแถว)
+    //    Product sheet เล็ก → อ่านทุกรอบถูก; PUT เฉพาะตอน hash เปลี่ยน → ไม่เปลือง bandwidth
+    //    client อ่าน /products ล้วน (ไม่ fallback GAS) → ชีตยังแก้ได้ + mirror ดึงจากชีตตลอด
+    const products = getProductData();
+    const pHash = _strHash(JSON.stringify(products));
+    if (force || props.getProperty('productsHash') !== pHash) {
+      _fbPut(cfg, "/products.json", products);
+      props.setProperty('productsHash', pHash);
+      bumped = true;
+      Logger.log("[refreshPendingCache] products mirrored: " + Object.keys(products).length);
+    }
+
+    // 📦 pending (แพง — scan Orders) — ข้ามถ้า sheet sig เดิม
     const sig = (ordSheet ? ordSheet.getLastRow() : 0) + ":" +
                 (mpSheet ? mpSheet.getLastRow() : 0) + ":" +
                 (pSheet ? pSheet.getLastRow() : 0);
-
-    const props = PropertiesService.getScriptProperties();
-    if (!force && props.getProperty('pendingCacheSig') === sig) {
-      // ไม่มีอะไรเปลี่ยน → ข้าม (ออกเร็ว <1s กัน quota)
-      return;
+    if (force || props.getProperty('pendingCacheSig') !== sig) {
+      const pending = getAllPendingOrders();
+      _fbPut(cfg, "/pending.json", pending);
+      props.setProperty('pendingCacheSig', sig);
+      bumped = true;
+      Logger.log("[refreshPendingCache] pending mirrored: " + Object.keys(pending).length + " sig=" + sig);
     }
 
-    const pending = getAllPendingOrders();   // ✅ reuse logic เดิม
-    const products = getProductData();
-
-    _fbPut(cfg, "/pending.json", pending);
-    _fbPut(cfg, "/products.json", products);
-    _fbPut(cfg, "/cacheMeta.json", { ts: Date.now() });
-    props.setProperty('pendingCacheSig', sig);
-    Logger.log("[refreshPendingCache] pending=" + Object.keys(pending).length +
-               " products=" + Object.keys(products).length + " sig=" + sig);
+    // เตะ real-time sync เฉพาะตอนมีอะไรเปลี่ยนจริง → client refresh /products+/pending
+    if (bumped) _fbPut(cfg, "/cacheMeta.json", { ts: Date.now() });
   } catch(e) {
     Logger.log("[refreshPendingCache] error: " + e.message);
   }

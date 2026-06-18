@@ -4355,10 +4355,9 @@ async function _ensureProductMap() {
   if (Object.keys(_productNameUpper).length === 0) _rebuildProductNameIndex();
 }
 
-// ✅ ดึง productMap (Firebase ก่อน → fallback GAS) แล้วบันทึก cache
+// ✅ ดึง productMap จาก Firebase /products ล้วน (mirror จากชีตทุก 5 นาที — ไม่ fallback GAS)
 async function _fetchProductCacheNow() {
-  let prodRes = await _firebaseFetchProducts();
-  if (!prodRes) prodRes = await callGAS("getProductData").catch(() => ({}));
+  const prodRes = await _firebaseFetchProducts();
   if (prodRes && Object.keys(prodRes).length > 0) {
     productMap = prodRes;
     _rebuildProductNameIndex();
@@ -4371,11 +4370,10 @@ async function _fetchProductCacheNow() {
   }
 }
 
-// ✅ เช็คว่า productMap ใน GAS เปลี่ยนไปไหม ถ้าเปลี่ยนค่อย replace cache (background)
+// ✅ เช็คว่า /products เปลี่ยนไหม (background) — Firebase ล้วน, mirror จากชีตให้แล้ว
 async function _checkProductCacheUpdate() {
   try {
-    let prodRes = await _firebaseFetchProducts();
-    if (!prodRes) prodRes = await callGAS("getProductData").catch(() => null);
+    const prodRes = await _firebaseFetchProducts();
     if (!prodRes || Object.keys(prodRes).length === 0) return;
     const newJson = JSON.stringify(prodRes);
     const newHash = _simpleHash(newJson);
