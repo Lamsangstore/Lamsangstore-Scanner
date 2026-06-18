@@ -7473,9 +7473,13 @@ async function showOrdersTable() {
       ? items.map((s, j) => `<div style="padding:2px 0;"><span style="color:var(--pink);font-weight:600;">${j+1}.</span> ${escHtml(_productName(s))}</div>`).join('')
       : '<div style="color:#999;">— ไม่มีรายการสินค้า —</div>';
     const meta = [d.oid ? `🧾 #${escHtml(d.oid)}` : '', d.rm ? `📝 ${escHtml(d.rm)}` : ''].filter(Boolean).join('   ·   ');
+    const trkUrl = _buildTrackingLink(d.tk);
+    const tkCell = trkUrl
+      ? `<a href="${escHtml(trkUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--pink);text-decoration:none;font-weight:700;">${escHtml(d.tk || '')} ↗</a>`
+      : escHtml(d.tk || '');
     return `<tr class="ot-row ${i % 2 ? 'ot-odd' : 'ot-even'}" onclick="_toggleOrderRow(this)">
         <td class="ot-time">▸ ${tstr}</td>
-        <td class="ot-tk">${escHtml(d.tk || '')}</td>
+        <td class="ot-tk">${tkCell}</td>
         <td>${escHtml(d.mp || '')}</td>
         <td style="text-align:center;font-weight:700;color:var(--pink);">${items.length}</td>
         <td style="text-align:center;">${vid}</td>
