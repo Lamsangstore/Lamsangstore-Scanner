@@ -8234,6 +8234,16 @@ function dismissOnboarding() {
   }).catch(() => {});
 })();
 
+// ===== PRELOAD ชื่อสินค้า — เปิดแอปปุ๊บมีชื่อเลย (ไม่ต้องกด "เริ่ม") =====
+//   report/search/ตาราง ใช้ productMap ได้ทันที — cache ในเครื่องก่อน แล้ว refresh จาก Firebase /products
+(function _preloadProducts() {
+  try {
+    const cached = localStorage.getItem('productMap_cache');
+    if (cached) { const m = JSON.parse(cached); if (m && Object.keys(m).length) { productMap = m; _rebuildProductNameIndex(); } }
+  } catch(e) {}
+  _checkProductCacheUpdate(); // background → ดึง /products ล่าสุด (เผื่อไม่มี cache / มีอัปเดต)
+})();
+
 
 // ===== DAY THEME =====
 const DAY_NAMES = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
