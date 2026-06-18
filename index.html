@@ -6764,8 +6764,10 @@ async function _uploadResultsParallel(items, concurrency = 1) {
 
 // 🔥 อัปไฟล์ marketplace ขึ้น Firebase /mpInbox (เร็ว) — drain เขียนชีต + /pending เบื้องหลัง
 //   คืน true ถ้า push ครบทุกไฟล์, false ถ้าล้ม (ให้ fallback ไปทางเขียนชีตตรง)
+let _mpPushFailReason = '';
 async function _firebasePushMarketplace(results) {
-  if (!FIREBASE_ENABLED()) return false;
+  _mpPushFailReason = '';
+  if (!FIREBASE_ENABLED()) { _mpPushFailReason = 'Firebase ปิด (FIREBASE_DB_URL ว่าง)'; return false; }
   try {
     const ts = Date.now();
     for (const r of results) {
@@ -6776,10 +6778,15 @@ async function _firebasePushMarketplace(results) {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ k: FIREBASE_WRITE_KEY, marketplace: r.marketplace, fileName: r.file.name, ts, rows })
       });
-      if (!res.ok) return false;
+      if (!res.ok) {
+        let t = ''; try { t = await res.text(); } catch(e) {}
+        _mpPushFailReason = `เขียน /mpInbox ไม่ได้ (${res.status}) — ยังไม่ได้เปิด Firebase Rules /mpInbox`;
+        console.warn('[mpInbox] PUT fail', res.status, t.slice(0, 150));
+        return false;
+      }
     }
     return true;
-  } catch(e) { console.warn('[mpInbox] push fail:', e.message); return false; }
+  } catch(e) { _mpPushFailReason = 'push error: ' + e.message; console.warn('[mpInbox] push fail:', e.message); return false; }
 }
 
 async function processFileUpload() {
@@ -6948,7 +6955,9 @@ async function processFileUpload() {
     });
     return;
   }
-  // ⬇️ fallback: Firebase push ล้ม → เขียนชีตตรงผ่าน GAS (ทางเดิม)
+  // ⬇️ fallback: Firebase push ล้ม → เขียนชีตตรงผ่าน GAS (ทางเดิม "ช้า")
+  console.warn('[mp] Firebase push ล้ม → ใช้โหมดเขียนชีตตรง (ช้า):', _mpPushFailReason);
+  try { showSyncToast('⚠️ ' + (_mpPushFailReason || 'Firebase /mpInbox เขียนไม่ได้') + ' — ใช้โหมดช้า'); } catch(e) {}
   // ===== Phase 2: อัปโหลด — concurrency 1 (sequential)
   // ⚠️ GAS saveMarketplaceData อ่าน sheet.getLastRow() แล้วเขียนต่อ — ถ้าขนานกัน 2+ request
   //    จะอ่าน lastRow ค่าเดียวกัน → เขียนทับกัน → ข้อมูลหาย
