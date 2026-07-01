@@ -32,13 +32,21 @@ const TARGET_FOLDER_ID  = "1uC2i5w5p9MhEYK2DhV6LGh1KfZF-GlVG";
 //   (ครั้งแรกต้องกด Authorize + reload ชีต 1 ครั้ง)
 // ============================================================
 function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('🔧 Scanner Tools')
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('🔧 Scanner Tools')
     .addItem('🎬 เติมลิงก์วิดีโอ (reconcile)', 'menuReconcileVideos')
     .addSeparator()
     .addItem('🔥 ดูด Firebase inbox → ชีต', 'menuDrainInbox')
     .addItem('🔍 หาออเดอร์ที่หาย', 'menuFindLost')
     .addItem('🧩 รวม row ซ้ำ (merge duplicates)', 'menuMergeDup')
+    .addItem('🏷️ ดันชื่อสินค้าขึ้น Firebase (แก้ขึ้น SKU)', 'menuForceMirrorProducts')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('🧹 แก้ข้อมูลซ้ำ/เกิน')
+      .addItem('1️⃣ พรีวิว: Page365 ซ้ำกับ native', 'menu365Preview')
+      .addItem('2️⃣ ลบ Page365 ซ้ำ (แก้จริง)', 'menu365Apply')
+      .addSeparator()
+      .addItem('3️⃣ พรีวิว: ออเดอร์แสกนสินค้าเกิน', 'menuOverScanPreview')
+      .addItem('4️⃣ แก้สินค้าเกิน + อัปเดต Firebase (แก้จริง)', 'menuOverScanApply'))
     .addToUi();
 }
 
@@ -103,6 +111,77 @@ function menuMergeDup() {
   } catch(e) {
     ui.alert('❌ เกิดข้อผิดพลาด', String(e && e.message || e), ui.ButtonSet.OK);
   }
+}
+
+// 🏷️ ดันชื่อสินค้าขึ้น Firebase (แก้เคสเครื่องขึ้น SKU)
+function menuForceMirrorProducts() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().toast('กำลังดันชื่อสินค้าขึ้น Firebase...', '🏷️', 30);
+    const n = forceMirrorProducts();
+    ui.alert(n > 0 ? '✅ เสร็จ' : '⚠️ ไม่ได้ทำ',
+      n > 0 ? ('ดันชื่อสินค้า ' + n + ' รายการขึ้น Firebase + เตะให้ทุกเครื่องดึงใหม่แล้ว\nให้เครื่องที่ขึ้น SKU รีเฟรช/สลับมาหน้าจอ')
+            : 'product sheet ว่าง — ไม่ทำ (กันลบของดี)', ui.ButtonSet.OK);
+  } catch(e) { ui.alert('❌ ผิดพลาด', String(e && e.message || e), ui.ButtonSet.OK); }
+}
+
+// 1️⃣ พรีวิว: Page365 ที่ tracking ซ้ำกับ native (ไม่ลบ)
+function menu365Preview() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().toast('กำลังตรวจ Page365 ซ้ำ...', '🧹', 30);
+    const r = removePage365Duplicates(); // dry-run
+    ui.alert('🔍 พรีวิว Page365 ซ้ำ',
+      'พบแถว Page365 ที่ tracking ซ้ำกับ marketplace อื่น: ' + (r.candidates || 0) + ' แถว\n\n' +
+      (r.candidates > 0 ? 'กด "2️⃣ ลบ Page365 ซ้ำ" เพื่อแก้จริง' : 'ไม่มีของซ้ำ ✅'), ui.ButtonSet.OK);
+  } catch(e) { ui.alert('❌ ผิดพลาด', String(e && e.message || e), ui.ButtonSet.OK); }
+}
+
+// 2️⃣ ลบ Page365 ซ้ำจริง (มี confirm)
+function menu365Apply() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const pre = removePage365Duplicates(); // นับก่อน
+    if (!pre.candidates) { ui.alert('✅ ไม่มี Page365 ซ้ำ', 'ไม่ต้องแก้อะไร', ui.ButtonSet.OK); return; }
+    const ok = ui.alert('⚠️ ยืนยันลบ Page365 ซ้ำ',
+      'จะลบแถว Page365 ที่ tracking ซ้ำกับ native จำนวน ' + pre.candidates + ' แถว\n' +
+      '(เก็บ native ไว้) แล้วอัปเดตหน้าแสกนให้\n\nยืนยันลบ?', ui.ButtonSet.YES_NO);
+    if (ok !== ui.Button.YES) return;
+    SpreadsheetApp.getActiveSpreadsheet().toast('กำลังลบ + อัปเดต /pending...', '🧹', 60);
+    const r = removePage365Duplicates({ apply: true });
+    ui.alert('✅ ลบเสร็จ', 'ลบ ' + (r.removed || 0) + ' แถว + อัปเดตหน้าแสกนแล้ว', ui.ButtonSet.OK);
+  } catch(e) { ui.alert('❌ ผิดพลาด', String(e && e.message || e), ui.ButtonSet.OK); }
+}
+
+// 3️⃣ พรีวิว: ออเดอร์ที่แพคแล้วแสกนสินค้าเกิน (ไม่แก้)
+function menuOverScanPreview() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().toast('กำลังตรวจออเดอร์แสกนเกิน (วันนี้)...', '🩹', 60);
+    const r = auditOverScannedOrders(); // dry-run, วันนี้
+    const sample = (r.detail || []).slice(0, 15)
+      .map(d => '• ' + d.tracking + ': ' + d.before + '→' + d.after + ' [' + d.cap + ']').join('\n');
+    ui.alert('🔍 พรีวิว สินค้าเกิน (วันนี้)',
+      'ตรวจ ' + (r.scanned || 0) + ' ออเดอร์ · เจอเกิน ' + (r.overScanned || 0) + ' ใบ\n\n' +
+      (r.overScanned > 0 ? sample + ((r.detail || []).length > 15 ? '\n...อีก ' + (r.detail.length - 15) + ' ใบ' : '') +
+        '\n\nกด "4️⃣ แก้สินค้าเกิน" เพื่อแก้จริง' : 'ไม่มีออเดอร์เกิน ✅'), ui.ButtonSet.OK);
+  } catch(e) { ui.alert('❌ ผิดพลาด', String(e && e.message || e), ui.ButtonSet.OK); }
+}
+
+// 4️⃣ แก้สินค้าเกินจริง + rebuild Firebase (มี confirm)
+function menuOverScanApply() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const pre = auditOverScannedOrders(); // นับก่อน (วันนี้)
+    if (!pre.overScanned) { ui.alert('✅ ไม่มีออเดอร์เกิน', 'ไม่ต้องแก้อะไร (วันนี้)', ui.ButtonSet.OK); return; }
+    const ok = ui.alert('⚠️ ยืนยันแก้สินค้าเกิน',
+      'จะ cap จำนวนสินค้าใน ' + pre.overScanned + ' ออเดอร์ (วันนี้) ลงเหลือค่าจริง\n' +
+      'แล้วอัปเดต Firebase (รายงาน + ค้นหา) ให้\n\n💡 ทำ "2️⃣ ลบ Page365 ซ้ำ" ก่อนเสมอ\n\nยืนยันแก้?', ui.ButtonSet.YES_NO);
+    if (ok !== ui.Button.YES) return;
+    SpreadsheetApp.getActiveSpreadsheet().toast('กำลังแก้ + rebuild Firebase...', '🩹', 120);
+    const r = auditOverScannedOrders({ apply: true });
+    ui.alert('✅ แก้เสร็จ', 'แก้ ' + (r.fixed || 0) + ' ออเดอร์ + อัปเดต Firebase /stats + /orders แล้ว', ui.ButtonSet.OK);
+  } catch(e) { ui.alert('❌ ผิดพลาด', String(e && e.message || e), ui.ButtonSet.OK); }
 }
 
 // กัน Drive bombing — base64 ~24MB ≈ raw video ~18MB
@@ -230,6 +309,8 @@ function drainFirebaseInbox(opts) {
     const newTokens = [];            // token ที่ต้อง mark completed
     const ordersMirror = {};         // 🔍 เขียน /orders มิเรอร์พร้อมกัน → search เห็นทันที (ไม่รอ mirror 5 นาที)
     const seenInBatch = new Set();
+    const statsDelta = {};           // 📊 "date/path" -> จำนวน → atomic increment เข้า /stats (รายงานสดทันที)
+    const statsTz = Session.getScriptTimeZone();
     let processed = 0;
 
     for (let i = 0; i < keys.length && processed < MAX_PER_RUN; i++) {
@@ -269,6 +350,24 @@ function drainFirebaseInbox(opts) {
         mp: String(d.marketplace || "").trim().toLowerCase(), v: videoUrl || "",
         rm: String(d.remark || ""), it: itemsArr.slice(0, 500).map(String)
       };
+      // 📊 สะสม stats delta — นับ "เป๊ะเหมือน" _computeStatsForDates (date=เวลาแพค, mp lowercase, sku=_fbKey)
+      //    → atomic increment เข้า /stats หลังเขียน row สำเร็จ ทำให้รายงานสดทันทีไม่ต้องรอรอบ 5 นาที
+      const dayKey = Utilities.formatDate(packTime, statsTz, "yyyy-MM-dd");
+      const mpKey  = (String(d.marketplace || "").trim().toLowerCase()) || "other";
+      statsDelta[dayKey + "/orders"] = (statsDelta[dayKey + "/orders"] || 0) + 1;
+      statsDelta[dayKey + "/mp/" + mpKey + "/orders"] = (statsDelta[dayKey + "/mp/" + mpKey + "/orders"] || 0) + 1;
+      let itemCnt = 0;
+      itemsArr.slice(0, 500).forEach(it => {
+        const v = String(it).trim();
+        if (!v) return;
+        itemCnt++;
+        const sk = _fbKey(v.toUpperCase());
+        statsDelta[dayKey + "/sku/" + sk] = (statsDelta[dayKey + "/sku/" + sk] || 0) + 1;
+      });
+      if (itemCnt > 0) {
+        statsDelta[dayKey + "/items"] = (statsDelta[dayKey + "/items"] || 0) + itemCnt;
+        statsDelta[dayKey + "/mp/" + mpKey + "/items"] = (statsDelta[dayKey + "/mp/" + mpKey + "/items"] || 0) + itemCnt;
+      }
       if (d.idemToken) newTokens.push({ token: d.idemToken, parcelId: parcelId });
       delKeys[key] = null;
     }
@@ -280,13 +379,19 @@ function drainFirebaseInbox(opts) {
         Logger.log("[drainFirebase] ไม่ได้ script lock — ข้ามรอบนี้"); return { success: true, skipped: "script lock" };
       }
       try {
-        for (let r = 0; r < newRows.length; r++) {
-          sheet.appendRow(newRows[r]);
-          const nr = sheet.getLastRow();
-          const t = newTokens.find(x => x.parcelId === newRows[r][3]);
-          _setCachedParcelRow(newRows[r][3], nr, false);
-        }
+        // เขียนทีเดียวด้วย setValues (เร็วกว่า appendRow-ต่อแถวหลายสิบเท่า — กัน timeout/quota ตอน backlog เยอะ)
+        //   row ยาวไม่เท่ากัน (จำนวน item ต่างกัน) → หา maxCols แล้ว pad ด้วย "" ให้เป็นสี่เหลี่ยม
+        //   setValues ไม่ auto-extend → ต้องเพิ่ม row/column ให้พอเองก่อน (appendRow ทำให้อัตโนมัติ)
+        let maxCols = 0;
+        for (let r = 0; r < newRows.length; r++) if (newRows[r].length > maxCols) maxCols = newRows[r].length;
+        const startRow = sheet.getLastRow() + 1;
+        const needRows = startRow + newRows.length - 1;
+        if (sheet.getMaxRows() < needRows) sheet.insertRowsAfter(sheet.getMaxRows(), needRows - sheet.getMaxRows());
+        if (sheet.getMaxColumns() < maxCols) sheet.insertColumnsAfter(sheet.getMaxColumns(), maxCols - sheet.getMaxColumns());
+        const padded = newRows.map(row => row.length < maxCols ? row.concat(new Array(maxCols - row.length).fill("")) : row);
+        sheet.getRange(startRow, 1, padded.length, maxCols).setValues(padded);
         SpreadsheetApp.flush();
+        for (let r = 0; r < newRows.length; r++) _setCachedParcelRow(newRows[r][3], startRow + r, false);
         newTokens.forEach(x => _markTokenCompleted(x.token));
       } finally { try { slock.releaseLock(); } catch(_) {} }
 
@@ -298,6 +403,20 @@ function drainFirebaseInbox(opts) {
           payload: JSON.stringify(ordersMirror), muteHttpExceptions: true
         });
       } catch(e) { Logger.log("[drainFirebase] /orders mirror error: " + e.message); }
+
+      // 📊 atomic increment /stats — รายงานเด้งทันที (refreshRecentStats ยัง PUT ค่า exact กัน drift)
+      //    multi-path PATCH: key เป็น deep path, value เป็น server-value increment
+      const statPaths = Object.keys(statsDelta);
+      if (statPaths.length > 0) {
+        const incPayload = {};
+        statPaths.forEach(p => { incPayload[p] = { ".sv": { "increment": statsDelta[p] } }; });
+        try {
+          UrlFetchApp.fetch(cfg.url + "/stats.json?auth=" + encodeURIComponent(cfg.secret), {
+            method: "patch", contentType: "application/json",
+            payload: JSON.stringify(incPayload), muteHttpExceptions: true
+          });
+        } catch(e) { Logger.log("[drainFirebase] /stats increment error: " + e.message); }
+      }
     }
 
     // ลบ doc ที่ process แล้วทั้งหมด "ทีเดียว" (multi-path PATCH = null)
@@ -322,6 +441,27 @@ function drainFirebaseInbox(opts) {
   }
 }
 
+// 🔧 เคลียร์ /inbox ที่กองค้างทั้งหมดในรันเดียว — ใช้ตอน backlog เยอะ (รันจาก editor)
+//    drainFirebaseInbox ทำได้รอบละ ≤500 ใบ → ตัวนี้วนเรียกจนเกลี้ยง
+//    แนะนำ: ลบ trigger drainFirebaseInbox 1 นาทีชั่วคราวก่อนรัน กันยิงซ้อนแย่ง lock
+function drainInboxUntilEmpty() {
+  let total = 0, busy = 0;
+  for (let i = 0; i < 40; i++) {              // กันลูปไม่จบ — 40 × 500 = 20,000 ใบ
+    const r = drainFirebaseInbox();           // blocking mode (รอ lock 5s)
+    if (r && r.skipped === "busy") {          // มี drain อื่นถือ lock อยู่ (เช่น trigger) → รอแล้วลองใหม่
+      if (++busy > 10) { Logger.log("[drainAll] busy เกินไป — หยุด (ลบ trigger 1 นาทีก่อนแล้วลองใหม่)"); break; }
+      Utilities.sleep(3000); continue;
+    }
+    busy = 0;
+    total += (r && r.drained) || 0;
+    Logger.log("[drainAll] รอบ " + (i + 1) + ": drained=" + ((r && r.drained) || 0) +
+               " deleted=" + ((r && r.deleted) || 0) + " | รวม " + total);
+    if (!r || (r.deleted || 0) === 0) break;  // ไม่มี doc ให้ลบแล้ว = เกลี้ยง (เหลือแต่ที่ติด grace 25s รอรอบ trigger)
+  }
+  Logger.log("[drainAll] ✅ เสร็จ — เขียนชีตรวม " + total + " แถว");
+  return total;
+}
+
 // ====== DRAIN /mpInbox → MarketplaceData sheet (อัปไฟล์ marketplace ผ่าน Firebase) ======
 //   client อัปไฟล์ → push /mpInbox (เร็ว) → ฟังก์ชันนี้เขียนลงชีต (dedup อ่านครั้งเดียว) แล้วลบ doc
 //   คืนจำนวนแถวที่เขียนใหม่ — caller ค่อยเรียก refreshPendingCache(true) ให้ /pending + ทุกเครื่องอัปเดต
@@ -340,49 +480,53 @@ function drainMpInbox() {
     if (keys.length === 0) return 0;
 
     const sheet = setupMarketplaceSheet();
-    // dedup keys (tracking|sku|orderId) — อ่านทั้งชีต "ครั้งเดียว" ต่อ drain (ไม่ใช่ต่อ chunk เหมือนเดิม)
-    const existingKeys = new Set();
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      const slice = sheet.getRange(2, 3, lastRow - 1, 5).getValues(); // C..G
-      for (let i = 0; i < slice.length; i++) {
-        existingKeys.add(numToStr(slice[i][0]).toUpperCase() + '|' + numToStr(slice[i][1]).toUpperCase() + '|' + numToStr(slice[i][4]));
-      }
-    }
 
+    // 🔒 ถือ ScriptLock "ครอบทั้ง dedup-read + write" = lock ตัวเดียวกับ saveMarketplaceData
+    //    กัน cross-path race: เดิม drainMpInbox อ่าน existingKeys "นอก lock" + ใช้ DocumentLock
+    //    ส่วน saveMarketplaceData ใช้ ScriptLock → ทั้งคู่ dedup-read เห็น "ยังไม่มี" พร้อมกัน → เขียนซ้ำ
+    const slock = LockService.getScriptLock();
+    try { slock.waitLock(30000); } catch(e) { Logger.log("[drainMpInbox] script lock timeout"); return 0; }
     const ts = new Date();
     const newRows = [];
     const delKeys = {};
-    keys.forEach(k => {
-      delKeys[k] = null;
-      const d = docs[k] || {};
-      const mp = String(d.marketplace || "").slice(0, 32);
-      let rows = Array.isArray(d.rows) ? d.rows : (d.rows && typeof d.rows === 'object' ? Object.values(d.rows) : []);
-      rows.forEach(item => {
-        if (!item || typeof item !== 'object') return;
-        const t   = String(item.tracking || "").trim().toUpperCase();
-        const sku = String(item.sku || "").trim().toUpperCase();
-        const oid = String(item.orderId || "").trim();
-        if (!t || !sku) return;
-        const key = t + '|' + sku + '|' + oid;
-        if (existingKeys.has(key)) return;
-        existingKeys.add(key);
-        newRows.push([ts, mp || String(item.marketplace || ""), "'" + t, "'" + sku,
-                      Number(item.qty) || 1, String(item.remark || "").trim().slice(0, 500), "'" + oid]);
+    try {
+      // dedup keys (tracking|sku|orderId) — อ่านทั้งชีต "ครั้งเดียว" ใต้ lock
+      const existingKeys = new Set();
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        const slice = sheet.getRange(2, 3, lastRow - 1, 5).getValues(); // C..G
+        for (let i = 0; i < slice.length; i++) {
+          existingKeys.add(numToStr(slice[i][0]).toUpperCase() + '|' + numToStr(slice[i][1]).toUpperCase() + '|' + numToStr(slice[i][4]));
+        }
+      }
+      keys.forEach(k => {
+        delKeys[k] = null;
+        const d = docs[k] || {};
+        const mp = String(d.marketplace || "").slice(0, 32);
+        let rows = Array.isArray(d.rows) ? d.rows : (d.rows && typeof d.rows === 'object' ? Object.values(d.rows) : []);
+        rows.forEach(item => {
+          if (!item || typeof item !== 'object') return;
+          const t   = String(item.tracking || "").trim().toUpperCase();
+          const sku = String(item.sku || "").trim().toUpperCase();
+          const oid = String(item.orderId || "").trim();
+          if (!t || !sku) return;
+          const key = t + '|' + sku + '|' + oid;
+          if (existingKeys.has(key)) return;
+          existingKeys.add(key);
+          newRows.push([ts, mp || String(item.marketplace || ""), "'" + t, "'" + sku,
+                        Number(item.qty) || 1, String(item.remark || "").trim().slice(0, 500), "'" + oid]);
+        });
       });
-    });
-
-    if (newRows.length > 0) {
-      const slock = LockService.getScriptLock();
-      try { slock.waitLock(30000); } catch(e) { Logger.log("[drainMpInbox] script lock timeout"); return 0; }
-      try {
+      if (newRows.length > 0) {
         const startRow = sheet.getLastRow() + 1;
+        const needRows = startRow + newRows.length - 1; // setValues ไม่ auto-extend → เพิ่มแถวให้พอก่อน (กัน error เกินขอบชีตตอนไฟล์ใหญ่)
+        if (sheet.getMaxRows() < needRows) sheet.insertRowsAfter(sheet.getMaxRows(), needRows - sheet.getMaxRows());
         sheet.getRange(startRow, 1, newRows.length, 7).setValues(newRows);
         SpreadsheetApp.flush();
-      } finally { try { slock.releaseLock(); } catch(_) {} }
-    }
+      }
+    } finally { try { slock.releaseLock(); } catch(_) {} }
 
-    // ลบ batch ที่ process แล้วทั้งหมด
+    // ลบ batch ที่ process แล้วทั้งหมด (Firebase — นอก lock)
     UrlFetchApp.fetch(cfg.url + "/mpInbox.json?auth=" + encodeURIComponent(cfg.secret), {
       method: "patch", contentType: "application/json", payload: JSON.stringify(delKeys), muteHttpExceptions: true
     });
@@ -394,6 +538,258 @@ function drainMpInbox() {
     return 0;
   } finally { try { lock.releaseLock(); } catch(_) {} }
 }
+
+// 🧹 ลบแถวซ้ำใน MarketplaceData (key = tracking|sku|orderId) — เก็บแถว "แรก" ของแต่ละ key
+//   ใช้แก้ข้อมูลที่ซ้ำไปแล้ว (รันครั้งเดียวจาก editor) — getAllPendingOrders รวม qty ตาม tracking+sku
+//   ⇒ แถวซ้ำ exact-key ทำให้ qty บานตามจำนวนครั้งที่อัปซ้ำ ; ลบแล้ว qty กลับมาถูก
+//   รักษา order line ที่ orderId ต่างกันไว้ (ไม่ถือว่าซ้ำ) ; ลบเฉพาะ key เป๊ะเดียวกัน
+function dedupeMarketplaceData() {
+  let deleted = 0;
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(60000); } catch(e) { Logger.log("[dedupeMP] ไม่ได้ lock: " + e.message); return 0; }
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_MARKETPLACE);
+    if (!sheet) { Logger.log("[dedupeMP] ไม่พบชีต"); return 0; }
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 3) { Logger.log("[dedupeMP] แถวน้อย ข้าม"); return 0; }
+    const data = sheet.getRange(2, 3, lastRow - 1, 5).getValues(); // C..G (tracking, sku, qty, remark, orderId)
+    const seen = new Set();
+    const dupRows = []; // sheet row numbers ที่ต้องลบ
+    for (let i = 0; i < data.length; i++) {
+      const t = numToStr(data[i][0]).toUpperCase();
+      const s = numToStr(data[i][1]).toUpperCase();
+      const o = numToStr(data[i][4]);
+      if (!t || !s) continue;
+      const key = t + '|' + s + '|' + o;
+      if (seen.has(key)) dupRows.push(i + 2); // ซ้ำ → คิวลบ (เก็บตัวแรกไว้)
+      else seen.add(key);
+    }
+    if (dupRows.length === 0) { Logger.log("[dedupeMP] ✅ ไม่มีแถวซ้ำ (unique " + seen.size + ")"); return 0; }
+    // ลบจากล่างขึ้นบนแบบ contiguous ranges (เร็ว + index ไม่เลื่อน)
+    dupRows.sort((a, b) => b - a);
+    let i = 0;
+    while (i < dupRows.length) {
+      const top = dupRows[i]; let count = 1;
+      while (i + 1 < dupRows.length && dupRows[i + 1] === top - count) { count++; i++; }
+      sheet.deleteRows(top - count + 1, count);
+      deleted += count;
+      i++;
+    }
+    SpreadsheetApp.flush();
+    Logger.log("[dedupeMP] ✅ ลบแถวซ้ำ " + deleted + " แถว เหลือ unique " + seen.size);
+  } catch(e) {
+    Logger.log("[dedupeMP] error: " + e.message);
+  } finally { try { lock.releaseLock(); } catch(_) {} }
+  // refresh /pending หลังลบ (นอก lock) → หน้าแสกนเห็น qty ถูกทันที
+  if (deleted > 0) { try { refreshPendingCache(true); } catch(e) { Logger.log("[dedupeMP] refresh fail: " + e.message); } }
+  return deleted;
+}
+
+// ลบแถว page365 ที่ tracking ซ้ำกับ marketplace native — Page365 รวมออเดอร์ tiktok/shopee/lazada มาด้วย
+//   พนักงานอัปไฟล์ 365 "ทั้งไฟล์" (ไม่กรองเฉพาะ 365) → tracking เดียวมาทั้งจาก 365 + native → ซ้ำ
+//   กฎ: 1 tracking = 1 พัสดุ ; ถ้ามี native (tiktok/shopee/lazada) แล้ว → แถว page365 ของ tracking นั้น = ซ้ำ
+//   คืน { candidates, removed } ; ไม่ refresh /pending (ให้ caller จัดการ — กัน recursion)
+// หา sheet row numbers ของแถว page365 ที่ tracking มี native ด้วย (อ่านอย่างเดียว)
+function _scan365DupRows(sheet) {
+  if (sheet.getLastRow() < 2) return [];
+  const data = sheet.getRange(2, 2, sheet.getLastRow() - 1, 2).getValues(); // B,C = marketplace, tracking
+  const hasNative = {}; // tracking → มี marketplace ที่ไม่ใช่ page365
+  for (let i = 0; i < data.length; i++) {
+    const mk = String(data[i][0] || "").trim().toLowerCase();
+    const tk = numToStr(data[i][1]).toUpperCase();
+    if (tk && mk && mk !== "page365") hasNative[tk] = true;
+  }
+  const delRows = [];
+  for (let i = 0; i < data.length; i++) {
+    const mk = String(data[i][0] || "").trim().toLowerCase();
+    const tk = numToStr(data[i][1]).toUpperCase();
+    if (mk === "page365" && tk && hasNative[tk]) delRows.push(i + 2);
+  }
+  return delRows;
+}
+
+function _removePage365DupRows(apply) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_MARKETPLACE);
+  if (!sheet) return { candidates: 0, removed: 0 };
+  // pre-check แบบ lock-free → ส่วนใหญ่ไม่มีซ้ำ จะได้ไม่จับ lock เปล่าทุกรอบ refresh
+  const pre = _scan365DupRows(sheet);
+  if (!apply || pre.length === 0) {
+    Logger.log("[rm365] page365 ที่ซ้ำกับ native: " + pre.length + " แถว" + (apply ? "" : " (DRY-RUN)"));
+    return { candidates: pre.length, removed: 0 };
+  }
+  const slock = LockService.getScriptLock();
+  try { slock.waitLock(45000); } catch(e) { Logger.log("[rm365] ไม่ได้ lock"); return { candidates: pre.length, removed: 0, error: "lock" }; }
+  try {
+    const delRows = _scan365DupRows(sheet); // re-scan ใต้ lock (กัน index เลื่อนจาก write ระหว่างนั้น)
+    if (delRows.length === 0) return { candidates: 0, removed: 0 };
+    delRows.sort((a, b) => b - a); // ลบล่าง→บน แบบ contiguous ranges
+    let removed = 0, i = 0;
+    while (i < delRows.length) {
+      const top = delRows[i]; let count = 1;
+      while (i + 1 < delRows.length && delRows[i + 1] === top - count) { count++; i++; }
+      sheet.deleteRows(top - count + 1, count);
+      removed += count; i++;
+    }
+    SpreadsheetApp.flush();
+    Logger.log("[rm365] ✅ ลบแถว page365 ซ้ำ (มี native แล้ว) " + removed + " แถว");
+    return { candidates: delRows.length, removed: removed };
+  } catch(e) {
+    Logger.log("[rm365] error: " + e.message);
+    return { candidates: 0, removed: 0, error: e.message };
+  } finally { try { slock.releaseLock(); } catch(_) {} }
+}
+
+// public — dry-run (ดีฟอลต์) / apply + refresh /pending ; เรียกจาก editor
+//   removePage365Duplicates()  หรือ  removePage365Duplicates({ apply: true })
+function removePage365Duplicates(opts) {
+  opts = opts || {};
+  const r = _removePage365DupRows(opts.apply === true);
+  if (opts.apply === true && r.removed > 0) {
+    try { refreshPendingCache(true); } catch(e) { Logger.log("[rm365] refresh fail: " + e.message); }
+  }
+  return r;
+}
+
+// normalize SKU เหมือนฝั่ง client (index.html normSku) — tiktok ตัวเลขล้วน → เติม "B"
+function _normSku(sku, marketplace) {
+  const s = String(sku || "").trim().toUpperCase();
+  if (!s) return "";
+  if (String(marketplace || "").toLowerCase() === "tiktok" && /^\d+$/.test(s)) return "B" + s;
+  return s;
+}
+
+// 🩹 แก้ออเดอร์ "แสกนสินค้าเกิน" (พนักงานแสกนชิ้นเดิมซ้ำเพื่อปิดงาน ตอน expected บานจาก MarketplaceData ซ้ำ)
+//   หลักการ: แอปบล็อกการแสกนเกิน reqItem.qty → จำนวนที่ stored = "expected ที่บาน" พอดี
+//            ⇒ cap จำนวนแต่ละ sku ในแถว Orders ลงเหลือ "expected จริง (dedup)" = ได้ค่าถูกต้อง
+//   - expected จริง = qty ต่อ (tracking, normSku) จาก MarketplaceData แบบ dedup key tracking|sku|orderId
+//   - cap เฉพาะ sku ที่ตรง expected ; sku ที่ไม่อยู่ใน expected = ไม่แตะ (ปลอดภัย)
+//   - dryRun (ดีฟอลต์) = รายงานเฉยๆ ; apply:true = แก้ชีต + rebuild /orders + /stats (Firebase แก้ตาม)
+//   เรียก: auditOverScannedOrders()  หรือ  auditOverScannedOrders({ sinceDays: 1, apply: true })
+function auditOverScannedOrders(opts) {
+  opts = opts || {};
+  const sinceDays = Number(opts.sinceDays) > 0 ? Number(opts.sinceDays) : 1;
+  const apply = (opts.apply === true);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ordSheet = ss.getSheetByName(SHEET_ORDERS);
+  const mpSheet  = ss.getSheetByName(SHEET_MARKETPLACE);
+  if (!ordSheet || !mpSheet) { Logger.log("[overscan] ไม่พบชีต"); return { error: "no sheet" }; }
+
+  let slock = null;
+  if (apply) {
+    slock = LockService.getScriptLock();
+    try { slock.waitLock(60000); } catch(e) { Logger.log("[overscan] ไม่ได้ lock — ยกเลิก"); return { error: "lock" }; }
+  }
+  try {
+    // 1) expected[trackingUpper][normSku] = qty (dedup exact-key tracking|rawSku|orderId กัน row ซ้ำ)
+    const expected = {};
+    const mpLast = mpSheet.getLastRow();
+    if (mpLast > 1) {
+      const mp = mpSheet.getRange(2, 2, mpLast - 1, 6).getValues(); // B..G: marketplace, tracking, sku, qty, remark, orderId
+      const seen = new Set();
+      for (let i = 0; i < mp.length; i++) {
+        const mk = String(mp[i][0] || "");
+        const t  = numToStr(mp[i][1]).toUpperCase();
+        const rawS = numToStr(mp[i][2]).toUpperCase();
+        const q  = parseInt(mp[i][3]) || 1;
+        const o  = numToStr(mp[i][5]);
+        if (!t || !rawS) continue;
+        const dk = t + '|' + rawS + '|' + o;
+        if (seen.has(dk)) continue;       // row ซ้ำ exact-key → ไม่นับซ้ำ (= expected จริง)
+        seen.add(dk);
+        const ns = _normSku(rawS, mk);
+        if (!expected[t]) expected[t] = {};
+        expected[t][ns] = (expected[t][ns] || 0) + q;
+      }
+    }
+
+    // 2) สแกน Orders ในช่วง sinceDays (bottom-up, ทน straggler) → หาแถวที่แสกนเกิน
+    const tz = Session.getScriptTimeZone();
+    const cutoff = Utilities.formatDate(new Date(Date.now() - (sinceDays - 1) * 86400000), tz, "yyyy-MM-dd");
+    const lastRow = ordSheet.getLastRow();
+    const lastCol = ordSheet.getLastColumn();
+    const report = [];
+    const affectedDates = {};
+    let scanned = 0, fixedRows = 0, oooRun = 0, stop = false, row = lastRow;
+    const CHUNK = 2000;
+    while (row >= 2 && !stop) {
+      const from = Math.max(2, row - CHUNK + 1);
+      const data = ordSheet.getRange(from, 1, row - from + 1, lastCol).getValues();
+      for (let i = data.length - 1; i >= 0; i--) {
+        const ts = data[i][0];
+        if (!(ts instanceof Date)) continue;
+        const dayKey = Utilities.formatDate(ts, tz, "yyyy-MM-dd");
+        if (dayKey < cutoff) { if (++oooRun >= SCAN_OOO_LIMIT) { stop = true; break; } continue; }
+        oooRun = 0;
+        const remark = String(data[i][5] || "");
+        if (remark.indexOf("__VIDEO_FIRST__") === 0) continue;
+        const tracking = numToStr(data[i][3]).toUpperCase();
+        if (!tracking) continue;
+        const exp = expected[tracking];
+        if (!exp) continue;                // ไม่มี expected (MarketplaceData ถูก prune ฯลฯ) → ข้าม ไม่เสี่ยงแก้
+        scanned++;
+        // นับ sku ที่แสกนในแถวนี้ (col 8+)
+        const counts = {}; const order = [];
+        for (let c = 7; c < data[i].length; c++) {
+          const v = String(data[i][c]).trim().toUpperCase();
+          if (!v) continue;
+          if (counts[v] === undefined) order.push(v);
+          counts[v] = (counts[v] || 0) + 1;
+        }
+        // cap แต่ละ sku ที่ตรง expected
+        let changed = false; const cap = []; const newCounts = {};
+        order.forEach(sku => {
+          const c = counts[sku], e = exp[sku];
+          if (e !== undefined && c > e) { newCounts[sku] = e; changed = true; cap.push(sku + ' ' + c + '→' + e); }
+          else newCounts[sku] = c;
+        });
+        if (!changed) continue;
+        const sheetRow = from + i;
+        const before = order.reduce((s, k) => s + counts[k], 0);
+        const newItems = [];
+        order.forEach(sku => { for (let k = 0; k < newCounts[sku]; k++) newItems.push(sku); });
+        report.push({ row: sheetRow, tracking: tracking, date: dayKey, before: before, after: newItems.length, cap: cap.join(', ') });
+        affectedDates[dayKey] = true;
+        if (apply) {
+          const oldWidth = data[i].length - 7;                // จำนวนช่อง item เดิม (รวมช่องว่างท้าย)
+          const out = [newItems.length].concat(newItems);     // col7=count, col8+=items
+          while (out.length < 1 + oldWidth) out.push("");      // pad ลบ item เก่าที่เกิน
+          ordSheet.getRange(sheetRow, 7, 1, out.length).setValues([out]);
+          fixedRows++;
+        }
+      }
+      row = from - 1;
+    }
+
+    Logger.log("[overscan] scanned=" + scanned + " ออเดอร์ใน " + sinceDays + " วัน | เกิน=" + report.length +
+               (apply ? (" | แก้แล้ว=" + fixedRows) : " (DRY-RUN — ยังไม่แก้)"));
+    report.slice(0, 80).forEach(r => Logger.log("  • " + r.tracking + " (" + r.date + ") row " + r.row + ": " + r.before + "→" + r.after + " [" + r.cap + "]"));
+    if (report.length > 80) Logger.log("  ...อีก " + (report.length - 80) + " ออเดอร์");
+
+    if (apply && fixedRows > 0) {
+      SpreadsheetApp.flush();
+      const dates = Object.keys(affectedDates);
+      _putStatsForDates(dates);     // 📊 recompute /stats exact → ทับค่า inline ที่บาน
+      _mirrorOrdersForDates(dates); // 🔍 rebuild /orders → search/ตาราง เห็น item ถูก
+      Logger.log("[overscan] ✅ rebuild Firebase /stats + /orders แล้ว: " + dates.join(", "));
+    }
+    return { scanned: scanned, overScanned: report.length, fixed: apply ? fixedRows : 0, dryRun: !apply, detail: report.slice(0, 200) };
+  } catch(e) {
+    Logger.log("[overscan] error: " + e.message);
+    return { error: e.message };
+  } finally { if (slock) { try { slock.releaseLock(); } catch(_) {} } }
+}
+
+// ============================================================
+// ▶️ ปุ่มรันจาก editor — เลือกชื่อจาก dropdown บนสุด แล้วกด Run (รันตามเลข 1→4)
+//    editor ส่ง argument ไม่ได้ → ใช้ wrapper พวกนี้แทนการพิมพ์ {apply:true}
+//    ดูผลที่ "Execution log" (View → Logs / ปุ่มล่าง)
+// ============================================================
+function RUN_1_ลบ365ซ้ำ_พรีวิว()    { const r = removePage365Duplicates();              Logger.log("ผล: " + JSON.stringify(r)); return r; }
+function RUN_2_ลบ365ซ้ำ_แก้จริง()   { const r = removePage365Duplicates({ apply: true }); Logger.log("ผล: " + JSON.stringify(r)); return r; }
+function RUN_3_แก้สินค้าเกิน_พรีวิว() { const r = auditOverScannedOrders();                Logger.log("ผล: " + JSON.stringify({scanned:r.scanned, overScanned:r.overScanned, dryRun:r.dryRun})); return r; }
+function RUN_4_แก้สินค้าเกิน_แก้จริง(){ const r = auditOverScannedOrders({ apply: true }); Logger.log("ผล: " + JSON.stringify({scanned:r.scanned, overScanned:r.overScanned, fixed:r.fixed})); return r; }
 
 // ตั้ง trigger drain ทุก 1 นาที (รันครั้งเดียวใน editor)
 function setupFirebaseTrigger() {
@@ -441,6 +837,8 @@ function refreshPendingCache(force) {
   if (!cfg.url || !cfg.secret) return;
   try {
     drainMpInbox(); // backup: ดูดไฟล์ marketplace ที่ค้างใน /mpInbox เข้าชีตก่อน mirror /pending
+    _removePage365DupRows(true); // 🧹 กันซ้ำ: ลบแถว page365 ที่ tracking ซ้ำกับ native (ก่อนคำนวณ /pending)
+    _prunePendingLive(cfg); // 🧹 ลบ overlay ที่เก่า (ตอนนี้ /pending ตัวจริงครอบคลุมแล้ว)
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const ordSheet = ss.getSheetByName(SHEET_ORDERS);
     const mpSheet  = ss.getSheetByName(SHEET_MARKETPLACE);
@@ -452,12 +850,22 @@ function refreshPendingCache(force) {
     //    Product sheet เล็ก → อ่านทุกรอบถูก; PUT เฉพาะตอน hash เปลี่ยน → ไม่เปลือง bandwidth
     //    client อ่าน /products ล้วน (ไม่ fallback GAS) → ชีตยังแก้ได้ + mirror ดึงจากชีตตลอด
     const products = getProductData();
+    const productsHaveData = products && Object.keys(products).length > 0;
     const pHash = _strHash(JSON.stringify(products));
-    if (force || props.getProperty('productsHash') !== pHash) {
+    // ⚠️ เช็คว่า /products ใน Firebase "ว่างจริง" ไหม — กันเคส property บอก mirror แล้ว แต่ข้อมูลหาย
+    //    (เคยเจอ: Firebase ถูกล้าง/รีเซ็ต แต่ productsHash ค้าง → ไม่ re-mirror → ทุกเครื่องขึ้น SKU)
+    let fbProductsEmpty = false;
+    try {
+      const pr = UrlFetchApp.fetch(cfg.url + "/products.json?shallow=true&auth=" + encodeURIComponent(cfg.secret), { muteHttpExceptions: true });
+      const b = (pr.getResponseCode() === 200) ? pr.getContentText() : "x";
+      fbProductsEmpty = (b === "null" || b === "" || b === "{}");
+    } catch(e) {}
+    // PUT เมื่อ: บังคับ / เนื้อหาเปลี่ยน / Firebase ว่าง — แต่ "ห้าม PUT ทับด้วยของว่าง" (กันลบชื่อทิ้ง)
+    if (productsHaveData && (force || fbProductsEmpty || props.getProperty('productsHash') !== pHash)) {
       _fbPut(cfg, "/products.json", products);
       props.setProperty('productsHash', pHash);
       bumped = true;
-      Logger.log("[refreshPendingCache] products mirrored: " + Object.keys(products).length);
+      Logger.log("[refreshPendingCache] products mirrored: " + Object.keys(products).length + (fbProductsEmpty ? " (เติมเพราะ /products ว่าง)" : ""));
     }
 
     // 📦 pending (แพง — scan Orders) — ข้ามถ้า sheet sig เดิม
@@ -477,6 +885,45 @@ function refreshPendingCache(force) {
   } catch(e) {
     Logger.log("[refreshPendingCache] error: " + e.message);
   }
+}
+
+// 🧹 prune /pendingLive — ลบ overlay ที่ PC เขียนไว้แต่เก่ากว่า 30 นาที (ป่านนี้ /pending ตัวจริง mirror แล้ว)
+//   node เล็ก (เฉพาะที่เพิ่งอัป) → อ่านทั้งก้อนถูก
+function _prunePendingLive(cfg) {
+  try {
+    const resp = UrlFetchApp.fetch(cfg.url + "/pendingLive.json?auth=" + encodeURIComponent(cfg.secret), { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) return;
+    const body = resp.getContentText();
+    if (!body || body === "null") return;
+    let docs; try { docs = JSON.parse(body); } catch(e) { return; }
+    const cutoff = Date.now() - 30 * 60 * 1000;
+    const del = {};
+    Object.keys(docs || {}).forEach(tk => {
+      const ts = Number(docs[tk] && docs[tk].ts) || 0;
+      if (ts < cutoff) del[tk] = null;
+    });
+    if (Object.keys(del).length > 0) {
+      UrlFetchApp.fetch(cfg.url + "/pendingLive.json?auth=" + encodeURIComponent(cfg.secret), {
+        method: "patch", contentType: "application/json", payload: JSON.stringify(del), muteHttpExceptions: true
+      });
+      Logger.log("[prunePendingLive] ลบ overlay เก่า " + Object.keys(del).length + " รายการ");
+    }
+  } catch(e) { Logger.log("[prunePendingLive] error: " + e.message); }
+}
+
+// 🏷️ บังคับ mirror /products ขึ้น Firebase เดี๋ยวนี้ — แก้เคส /products ว่าง → ทุกเครื่องขึ้น SKU
+//    (ไม่ PUT ทับด้วยของว่าง) + เตะ /cacheMeta ให้ทุกเครื่องดึงชื่อใหม่ทันที
+function forceMirrorProducts() {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) { Logger.log("[forceMirrorProducts] ไม่มี firebase cfg"); return 0; }
+  const products = getProductData();
+  const n = products ? Object.keys(products).length : 0;
+  if (n === 0) { Logger.log("[forceMirrorProducts] product sheet ว่าง — ไม่ทำ (กันลบของดี)"); return 0; }
+  _fbPut(cfg, "/products.json", products);
+  PropertiesService.getScriptProperties().setProperty('productsHash', _strHash(JSON.stringify(products)));
+  _fbPut(cfg, "/cacheMeta.json", { ts: Date.now() }); // เตะ real-time sync → ทุกเครื่องดึงชื่อใหม่
+  Logger.log("[forceMirrorProducts] ✅ mirror " + n + " สินค้า + เตะ cacheMeta");
+  return n;
 }
 
 function _fbPut(cfg, path, obj) {
@@ -592,6 +1039,67 @@ function refreshRecentStats() {
   const dates = [Utilities.formatDate(y, tz, "yyyy-MM-dd"), Utilities.formatDate(today, tz, "yyyy-MM-dd")];
   _putStatsForDates(dates);
   _mirrorOrdersForDates(dates); // 🔍 mirror ออเดอร์ลง /orders ให้ search เร็ว
+  checkDrainBacklog();          // 🚨 เฝ้า /inbox + /mpInbox ค้าง → เมลเตือนเจ้าของก่อนกองเป็นพัน
+}
+
+// ============================================================
+// 🚨 checkDrainBacklog — เฝ้า backlog ใน Firebase แล้วเมลเตือนถ้า drain ตามไม่ทัน/พัง
+//   ปกติ /inbox ใกล้ 0 (drain ทุก 1 นาทีเคลียร์) — ค้างเยอะต่อเนื่อง = trigger ถูก quota ปิด/พัง
+//   เงื่อนไข: ค้างเกิน threshold "ต่อเนื่อง >10 นาที" + cooldown เมล 30 นาที (กัน burst ปกติ/สแปม)
+// ============================================================
+const DRAIN_BACKLOG_THRESHOLD = 200;            // /inbox ค้างเกินนี้ = ผิดปกติ
+const MP_BACKLOG_THRESHOLD = 50;                // /mpInbox ค้างเกินนี้ = drain marketplace มีปัญหา
+const BACKLOG_SUSTAIN_MS = 10 * 60 * 1000;      // ต้องค้างต่อเนื่องเกินนี้ถึงเตือน
+const BACKLOG_ALERT_COOLDOWN_MS = 30 * 60 * 1000; // เตือนซ้ำได้ทุก 30 นาที
+
+function checkDrainBacklog() {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) return;
+  try {
+    const inboxN = _fbCountShallow(cfg, "/inbox");
+    const mpN    = _fbCountShallow(cfg, "/mpInbox");
+    const props = PropertiesService.getScriptProperties();
+    const problems = [];
+    if (inboxN > DRAIN_BACKLOG_THRESHOLD) problems.push("/inbox ค้าง " + inboxN + " ออเดอร์ (ปกติใกล้ 0)");
+    if (mpN > MP_BACKLOG_THRESHOLD)       problems.push("/mpInbox ค้าง " + mpN + " batch ไฟล์ marketplace");
+
+    if (problems.length === 0) {                 // ปกติ → รีเซ็ตตัวจับเวลา/cooldown ให้เหตุครั้งหน้าเตือนทันที
+      props.deleteProperty('backlogHighSince');
+      props.deleteProperty('backlogAlertAt');
+      return;
+    }
+    const now = Date.now();
+    let since = Number(props.getProperty('backlogHighSince') || 0);
+    if (!since) { props.setProperty('backlogHighSince', String(now)); since = now; }
+    if (now - since < BACKLOG_SUSTAIN_MS) {       // เพิ่งค้าง — รอดูว่าต่อเนื่องไหม (กัน burst ชั่วคราว)
+      Logger.log("[checkDrainBacklog] ค้างแต่ยังไม่ถึง " + (BACKLOG_SUSTAIN_MS/60000) + " นาที: " + problems.join("; "));
+      return;
+    }
+    const lastAlert = Number(props.getProperty('backlogAlertAt') || 0);
+    if (now - lastAlert < BACKLOG_ALERT_COOLDOWN_MS) return; // ยัง cooldown
+    props.setProperty('backlogAlertAt', String(now));
+    _alertOwner("⚠️ Drain ค้าง — ข้อมูลยังไม่เข้าชีต",
+      "พบข้อมูลค้างใน Firebase ที่ drain ยังไม่ได้ดูดเข้าชีต (ค้างต่อเนื่องเกิน " + (BACKLOG_SUSTAIN_MS/60000) + " นาที):\n\n" +
+      "  • " + problems.join("\n  • ") + "\n\n" +
+      "ควรเช็ก:\n" +
+      "  1. Apps Script → Triggers: drainFirebaseInbox / refreshPendingCache ยังทำงานไหม (อาจถูก quota ปิด)\n" +
+      "  2. Executions: มี error ค้างไหม\n" +
+      "  3. กู้: รัน drainInboxUntilEmpty (เคลียร์ /inbox) และ refreshPendingCache (เคลียร์ /mpInbox) ใน editor\n\n" +
+      "(เตือนซ้ำได้อีกครั้งหลัง 30 นาทีถ้ายังไม่หาย)");
+    Logger.log("[checkDrainBacklog] 📧 ส่งเมลเตือนแล้ว: " + problems.join("; "));
+  } catch(e) { Logger.log("[checkDrainBacklog] error: " + e.message); }
+}
+
+// นับจำนวน key แบบ shallow (เบามาก — ไม่โหลด value) ใช้กับ secret (อ่านได้แม้ rules ปิด)
+function _fbCountShallow(cfg, path) {
+  try {
+    const resp = UrlFetchApp.fetch(cfg.url + path + ".json?shallow=true&auth=" + encodeURIComponent(cfg.secret), { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) return 0;
+    const body = resp.getContentText();
+    if (!body || body === "null") return 0;
+    const obj = JSON.parse(body);
+    return (obj && typeof obj === 'object') ? Object.keys(obj).length : 0;
+  } catch(e) { return 0; }
 }
 
 // nightly — rebuild 3 วันล่าสุด exact (กัน drift จาก merge/late edits) + prune /orders เก่า
@@ -1458,6 +1966,10 @@ function reconcileVideoUrls(body) {
     let written = 0;
     for (const u of updates) {
       try {
+        // 🛡️ re-validate ว่าแถวยังเป็น tracking เดิม — กัน sortOrdersByDate/ลบแถว ย้าย index ระหว่าง scan→write
+        //    (ไม่มี lock → ถ้าไม่เช็ค อาจเขียน videoUrl ลงผิดแถว) ; แถวย้าย → ข้าม รอบหน้าเก็บตก
+        const tkNow = numToStr(sheet.getRange(u.row, 4).getValue()).toUpperCase();
+        if (tkNow !== String(u.parcelId).toUpperCase()) continue;
         const current = String(sheet.getRange(u.row, 5).getValue()).trim();
         if (current.indexOf('drive.google.com') !== -1) continue; // มี url แล้ว (เพิ่งถูกเติม) → ข้าม
         sheet.getRange(u.row, 5).setValue(u.url);
@@ -1606,6 +2118,8 @@ function saveMarketplaceData(body) {
     let verified = 0;
     if (newRows.length > 0) {
       const startRow = sheet.getLastRow() + 1;
+      const needRows = startRow + newRows.length - 1; // setValues ไม่ auto-extend → เพิ่มแถวให้พอ (กัน error เกินขอบชีตตอนไฟล์ใหญ่)
+      if (sheet.getMaxRows() < needRows) sheet.insertRowsAfter(sheet.getMaxRows(), needRows - sheet.getMaxRows());
       sheet.getRange(startRow, 1, newRows.length, 7).setValues(newRows);
       // ✅ force commit ทันที — ไม่ให้ค้างใน batch ที่อาจ rollback
       SpreadsheetApp.flush();
@@ -2043,17 +2557,46 @@ function cleanUpOldOrders() {
 }
 
 // ============================================================
+// 🗂️ sortOrdersByDate — เรียง Orders sheet ตาม Timestamp (คอลัมน์ A) เก่า→ใหม่ — รันทุกตี 5
+//   เพราะ row Timestamp = "เวลาแพค" ไม่ใช่เวลา drain เขียน → ลำดับ append ไม่ตรงเวลา (มี straggler)
+//   เรียงคืนให้ "ใหม่อยู่ล่างสุด" → bottom-up scan (stats/report/reconcile/findRow) แม่นขึ้น
+//   ถือ getScriptLock = exclusive กับ append ของ drain/saveData (กันเรียงทับตอนกำลังเขียน)
+//   หมายเหตุ: parcel row cache (CacheService) จะ stale หลัง sort แต่ _findParcelRow re-validate
+//            col D เองอยู่แล้ว (เจอ mismatch → ล้าง+scan ใหม่) → ไม่ต้องล้าง cache
+// ============================================================
+function sortOrdersByDate() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_ORDERS);
+  if (!sheet) { Logger.log("[sortOrders] ไม่พบชีต Orders"); return; }
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(120000); } // ตี 5 ไม่มีคนแพค → รอ lock ได้นาน
+  catch(e) { Logger.log("[sortOrders] ไม่ได้ lock: " + e.message); return; }
+  try {
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    if (lastRow < 3) { Logger.log("[sortOrders] แถวน้อยเกินไป ข้าม"); return; }
+    sheet.getRange(2, 1, lastRow - 1, lastCol).sort({ column: 1, ascending: true }); // ข้าม header แถว 1
+    SpreadsheetApp.flush();
+    Logger.log("[sortOrders] ✅ เรียง " + (lastRow - 1) + " แถวตาม Timestamp เก่า→ใหม่");
+  } catch(e) {
+    Logger.log("[sortOrders] error: " + e.message);
+  } finally { try { lock.releaseLock(); } catch(_) {} }
+}
+
+// ============================================================
 // setupDailyCleanupTrigger — ตั้ง triggers ทั้งหมด
 //   01:00 น. → backupOrdersDaily         (สำรอง Orders เก็บย้อนหลัง 30 วัน)
 //   02:00 น. → cleanUpOldOrders          (ลบ Orders ที่เก่ากว่า 90 วัน)
 //   03:00 น. → cleanUpOldMarketplaceData (ลบ MarketplaceData ที่เก่ากว่า 2 วัน)
+//   05:00 น. → sortOrdersByDate          (เรียง Orders ตามวันที่)
 // รันฟังก์ชันนี้ครั้งเดียวใน Apps Script editor หลัง deploy
 // ============================================================
 function setupDailyCleanupTrigger() {
   // ลบ trigger เดิม (กันซ้ำซ้อนถ้ารันหลายรอบ)
   const HANDLERS = ["cleanUpOldOrders", "backupOrdersDaily",
                     "cleanUpOldMarketplaceData", "reconcileSaveLogVsOrders",
-                    "mergeDuplicateOrders", "nightlyStatsRebuild", "nightlyVideoReconcile"];
+                    "mergeDuplicateOrders", "nightlyStatsRebuild", "nightlyVideoReconcile",
+                    "sortOrdersByDate"];
   ScriptApp.getProjectTriggers().forEach(t => {
     if (HANDLERS.indexOf(t.getHandlerFunction()) !== -1) {
       ScriptApp.deleteTrigger(t);
@@ -2072,9 +2615,13 @@ function setupDailyCleanupTrigger() {
   ScriptApp.newTrigger("nightlyStatsRebuild")
     .timeBased().everyDays(1).atHour(4).create();
 
-  // ✅ เติม videoUrl ให้ row ที่ no_video แต่มีไฟล์ใน Drive (กู้ race ที่ scan พลาด) — 05:00
-  ScriptApp.newTrigger("nightlyVideoReconcile")
+  // 🗂️ เรียง Orders ตาม Timestamp เก่า→ใหม่ — 05:00 (ถือ script lock, exclusive กับ append)
+  ScriptApp.newTrigger("sortOrdersByDate")
     .timeBased().everyDays(1).atHour(5).create();
+
+  // ✅ เติม videoUrl ให้ row ที่ no_video แต่มีไฟล์ใน Drive (กู้ race ที่ scan พลาด) — 06:00 (หลัง sort)
+  ScriptApp.newTrigger("nightlyVideoReconcile")
+    .timeBased().everyDays(1).atHour(6).create();
 
   // Backup ก่อน cleanup 1 ชั่วโมง — backup ล่าสุดจะเป็น snapshot ก่อนถูกตัด
   ScriptApp.newTrigger("backupOrdersDaily")
@@ -2095,7 +2642,8 @@ function setupDailyCleanupTrigger() {
   Logger.log("   02:00 น. → cleanUpOldOrders (เก็บ " + CLEANUP_ORDERS_RETENTION_DAYS + " วัน)");
   Logger.log("   03:00 น. → cleanUpOldMarketplaceData (เก็บ 2 วัน)");
   Logger.log("   04:00 น. → nightlyStatsRebuild (rebuild Firebase stats 3 วันล่าสุด)");
-  Logger.log("   05:00 น. → nightlyVideoReconcile (เติม videoUrl จาก Drive ให้ row no_video)");
+  Logger.log("   05:00 น. → sortOrdersByDate (เรียง Orders ตาม Timestamp เก่า→ใหม่)");
+  Logger.log("   06:00 น. → nightlyVideoReconcile (เติม videoUrl จาก Drive ให้ row no_video)");
 }
 
 // ============================================================
