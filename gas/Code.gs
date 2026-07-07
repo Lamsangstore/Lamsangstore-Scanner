@@ -1317,6 +1317,12 @@ const RATE_LIMITS = {
   drainInbox: 60,            // on-demand drain — debounce ฝั่ง client คุมอีกชั้น
   refreshPending: 12,        // on-demand pending refresh หลังอัปไฟล์ marketplace
   drainMpInbox: 30,          // on-demand drain ไฟล์ marketplace จาก /mpInbox
+  // 🔧 เครื่องมือแอดมิน (เรียกจากหน้าเว็บ) — admin ใช้เป็นครั้งคราว
+  forceMirrorProducts: 20,
+  removePage365Dup: 20,
+  auditOverScan: 12,
+  mergeDuplicates: 6,
+  findLost: 6,
   _default: 120
 };
 
@@ -1324,7 +1330,9 @@ const ALLOWED_ACTIONS = new Set([
   "getProductData", "saveData", "searchData", "saveMarketplaceData",
   "getExpectedOrderDetails", "getReportData", "getAllPendingOrders",
   "getSpreadsheetUrl", "getMarketplaceVersionUrl",
-  "uploadVideoOnly", "reconcileVideoUrls", "drainInbox", "refreshPending", "drainMpInbox"
+  "uploadVideoOnly", "reconcileVideoUrls", "drainInbox", "refreshPending", "drainMpInbox",
+  // 🔧 เครื่องมือแอดมิน
+  "forceMirrorProducts", "removePage365Dup", "auditOverScan", "mergeDuplicates", "findLost"
 ]);
 
 // ============================================================
@@ -1447,6 +1455,12 @@ function doPost(e) {
     else if (action === "drainInbox")                 result = drainFirebaseInbox(true);
     else if (action === "refreshPending")             { refreshPendingCache(true); result = { success: true }; }
     else if (action === "drainMpInbox")               { const n = drainMpInbox(); if (n > 0) refreshPendingCache(true); result = { success: true, written: n }; }
+    // 🔧 เครื่องมือแอดมิน (เรียกจากหน้าเว็บ)
+    else if (action === "forceMirrorProducts")        { result = { success: true, mirrored: forceMirrorProducts() }; }
+    else if (action === "removePage365Dup")           { result = removePage365Duplicates({ apply: body.apply === true }); }
+    else if (action === "auditOverScan")              { result = auditOverScannedOrders({ apply: body.apply === true, sinceDays: Number(body.sinceDays) || 1 }); }
+    else if (action === "mergeDuplicates")            { mergeDuplicateOrders(); result = { success: true }; }
+    else if (action === "findLost")                   { result = findLostOrders(); }
 
     return _json(result);
 

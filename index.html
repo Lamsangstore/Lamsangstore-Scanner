@@ -3760,6 +3760,9 @@ async function showDiagnostic() {
       <b>📋 คิวทั้งหมด:</b> ${q.length}<br>
       <b>🌐 เน็ต:</b> ${navigator.onLine ? '✅ ออนไลน์' : '❌ ออฟไลน์'}<br>
       <b>📱 เครื่อง:</b> <span style="font-size:0.75rem;">${escHtml((DEVICE_ID||'').slice(0,8))}</span>
+      <div style="margin-top:10px; padding-top:8px; border-top:1px solid #e0d8c0;">
+        <button onclick="showAdminTools()" style="width:100%; background:#6b5010; color:#fff; border:none; padding:9px 12px; border-radius:10px; font-family:'Mitr',sans-serif; font-size:0.85rem; cursor:pointer;">🔧 เครื่องมือแอดมิน (เมนู Scanner Tools)</button>
+      </div>
       ${mpRetryBtn}
       ${videoFailedHtml}
     </div>`,
@@ -3782,6 +3785,75 @@ window._clearVideoFailedLog = function() {
   try { Swal.close(); } catch(e) {}
   try { showSyncToast('ล้างรายการวิดีโอที่แจ้งแล้ว'); } catch(e) {}
 };
+
+// ===== 🔧 เครื่องมือแอดมิน (เรียก GAS จากหน้าเว็บ) — เหมือนเมนู Scanner Tools ในชีต =====
+function showAdminTools() {
+  const btn = (fn, label, bg) => `<button onclick="${fn}" style="width:100%; text-align:left; padding:10px 12px; border:none; border-radius:10px; background:${bg||'#f0ebe0'}; color:#4a3f2a; font-family:'Mitr',sans-serif; font-size:0.85rem; cursor:pointer;">${label}</button>`;
+  Swal.fire({
+    title: '🔧 เครื่องมือแอดมิน',
+    html: `<div style="display:flex; flex-direction:column; gap:7px; text-align:left; max-height:62vh; overflow-y:auto;">
+      ${btn('_admForceMirrorProducts()', '🏷️ ดันชื่อสินค้าขึ้น Firebase (แก้ขึ้น SKU)', '#e8f0f6')}
+      <div style="font-size:0.72rem; color:#999; margin-top:4px;">— แก้ข้อมูลซ้ำ/เกิน —</div>
+      ${btn('_admRemove365(false)', '1️⃣ พรีวิว: Page365 ซ้ำกับ native')}
+      ${btn('_admRemove365(true)', '2️⃣ ลบ Page365 ซ้ำ (แก้จริง)', '#fde8e8')}
+      ${btn('_admOverScan(false)', '3️⃣ พรีวิว: ออเดอร์แสกนสินค้าเกิน')}
+      ${btn('_admOverScan(true)', '4️⃣ แก้สินค้าเกิน + Firebase (แก้จริง)', '#fde8e8')}
+      <div style="font-size:0.72rem; color:#999; margin-top:4px;">— ระบบ —</div>
+      ${btn('_admSimple(\'drainInbox\',\'ดูด Firebase inbox\')', '🔥 ดูด Firebase inbox → ชีต')}
+      ${btn('_admSimple(\'mergeDuplicates\',\'รวม row ซ้ำ\')', '🧩 รวม row ซ้ำ (merge duplicates)')}
+      ${btn('_admFindLost()', '🔍 หาออเดอร์ที่หาย')}
+      ${btn('_admReconcile()', '🎬 เติมลิงก์วิดีโอ (reconcile 7 วัน)')}
+    </div>`,
+    showConfirmButton: false, showCloseButton: true, width: 380,
+    customClass: { popup: 'swal-popup' }
+  });
+}
+async function _admRun(action, payload, opts) {
+  opts = opts || {};
+  try {
+    if (opts.confirm) {
+      const c = await Swal.fire({ title: '⚠️ ยืนยัน', html: opts.confirm, icon: 'warning',
+        showCancelButton: true, confirmButtonText: 'ยืนยัน', cancelButtonText: 'ยกเลิก', reverseButtons: true });
+      if (!c.isConfirmed) { showAdminTools(); return; }
+    }
+    Swal.fire({ title: 'กำลังทำงาน...', html: opts.busy || 'รอสักครู่', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    const r = await callGAS(action, payload || {}, opts.timeout || 90000);
+    const isErr = !r || r.error || r.success === false;
+    await Swal.fire({ icon: isErr ? 'error' : 'success', title: isErr ? 'ไม่สำเร็จ' : 'เสร็จแล้ว',
+      html: isErr ? ((r && r.error) || 'GAS ไม่ตอบ — เช็คว่า deploy เวอร์ชันใหม่แล้วหรือยัง') : (opts.render ? opts.render(r) : 'เรียบร้อย'),
+      confirmButtonText: 'ปิด' });
+    showAdminTools(); // กลับเมนู
+  } catch(e) { Swal.fire('ผิดพลาด', e.message || String(e), 'error'); }
+}
+function _admForceMirrorProducts() {
+  _admRun('forceMirrorProducts', {}, { busy: 'กำลังดันชื่อสินค้าขึ้น Firebase...',
+    render: r => 'ดันชื่อสินค้า <b>' + (r.mirrored || 0) + '</b> รายการ + เตะทุกเครื่องดึงใหม่แล้ว' });
+}
+function _admRemove365(apply) {
+  if (!apply) return _admRun('removePage365Dup', { apply: false }, { busy: 'กำลังตรวจ Page365 ซ้ำ...',
+    render: r => 'พบ Page365 ที่ tracking ซ้ำกับ native: <b>' + (r.candidates || 0) + '</b> แถว' + (r.candidates > 0 ? '<br>กด 2️⃣ เพื่อลบจริง' : ' ✅ ไม่มีซ้ำ') });
+  _admRun('removePage365Dup', { apply: true }, { confirm: 'ลบแถว Page365 ที่ tracking ซ้ำกับ native (เก็บ native ไว้) + อัปเดตหน้าแสกน?',
+    busy: 'กำลังลบ + อัปเดต /pending...', render: r => 'ลบ <b>' + (r.removed || 0) + '</b> แถว + อัปเดตหน้าแสกนแล้ว' });
+}
+function _admOverScan(apply) {
+  if (!apply) return _admRun('auditOverScan', { apply: false, sinceDays: 1 }, { busy: 'กำลังตรวจออเดอร์แสกนเกิน (วันนี้)...', timeout: 120000,
+    render: r => { const s = (r.detail || []).slice(0, 12).map(d => '• ' + escHtml(d.tracking) + ': ' + d.before + '→' + d.after).join('<br>');
+      return 'ตรวจ ' + (r.scanned || 0) + ' ออเดอร์ · เกิน <b>' + (r.overScanned || 0) + '</b> ใบ' + (r.overScanned > 0 ? '<br><div style="font-size:0.78rem;max-height:120px;overflow:auto;">' + s + ((r.detail || []).length > 12 ? '<br>...' : '') + '</div>กด 4️⃣ เพื่อแก้จริง' : ' ✅'); } });
+  _admRun('auditOverScan', { apply: true, sinceDays: 1 }, { confirm: 'cap สินค้าที่แสกนเกิน (วันนี้) ลงเหลือค่าจริง + อัปเดต Firebase?<br><small>💡 ทำ 2️⃣ ก่อนเสมอ</small>',
+    busy: 'กำลังแก้ + rebuild Firebase...', timeout: 180000, render: r => 'แก้ <b>' + (r.fixed || 0) + '</b> ออเดอร์ + อัปเดต Firebase แล้ว' });
+}
+function _admSimple(action, label) {
+  _admRun(action, {}, { busy: 'กำลัง' + label + '...', render: () => label + ' เสร็จแล้ว ✅' });
+}
+function _admFindLost() {
+  _admRun('findLost', {}, { busy: 'กำลังเทียบ SaveLog vs Orders...', timeout: 120000,
+    render: r => { const lost = (r.lost || []); return lost.length === 0 ? '✅ ไม่มีออเดอร์หาย' :
+      ('⚠ พบหาย <b>' + lost.length + '</b> ใบ<br><div style="max-height:120px;overflow:auto;font-size:0.78rem;">' + lost.slice(0, 30).map(escHtml).join('<br>') + '</div>(รายละเอียดส่งอีเมลแล้ว)'); } });
+}
+function _admReconcile() {
+  _admRun('reconcileVideoUrls', { sinceDays: 7 }, { busy: 'กำลังเติมลิงก์วิดีโอจาก Drive...', timeout: 180000,
+    render: r => 'เติมลิงก์ <b>' + (r.fixed || 0) + '</b> แถว (สแกน ' + (r.scanned || 0) + ', ไฟล์ Drive ' + (r.driveFiles || 0) + ')' });
+}
 
 // 🧹 ล้าง cache + SW + reload — แก้กรณีแอปติด cache เก่า (เช่น CSP เก่าบล็อก Firebase)
 async function _forceUpdateApp() {
