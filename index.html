@@ -4915,7 +4915,11 @@ function detectCarrier(code) {
   const t = code.trim().toUpperCase();
 
   // --- 1. สินค้า (Product SKU) ---
+  // ขึ้นต้น "B" (SKU มาตรฐาน) หรือ เป็นรหัสที่รู้จักใน productMap (รองรับ SKU ที่ไม่ขึ้นต้น B)
+  //   เช็คก่อน courier เพื่อไม่ให้ SKU ที่บังเอิญเข้ารูปแบบเลขพัสดุถูกมองเป็นพัสดุ
   if (t.startsWith("B")) return { type: "product" };
+  if ((typeof _productNameUpper === 'object' && _productNameUpper[t]) ||
+      (typeof productMap === 'object' && productMap[t])) return { type: "product" };
 
   // --- 2. ไปรษณีย์ไทย (EMS / ลงทะเบียน) — ลงท้าย TH เสมอ ---
   // EMS: 2 ตัวอักษร + 9 ตัวเลข + TH  เช่น ED123456789TH, EG123456789TH
@@ -4972,7 +4976,7 @@ function detectCarrier(code) {
 
 async function processFinalScan(text) {
   touchWakeLock(); // ต่ออายุ wake lock ทุกครั้งที่สแกน
-  const upperText = text.trim().toUpperCase();
+  let upperText = text.trim().toUpperCase();
 
   // ✅ ข้าม QR ที่เป็น URL ร้านค้าบนซองพัสดุ — ไม่แจ้งเตือนอะไรเลย
   const lowerText = text.trim().toLowerCase();
@@ -4984,6 +4988,14 @@ async function processFinalScan(text) {
   if (lowerText.startsWith("http://") || lowerText.startsWith("https://") || lowerText.startsWith("www.")) {
     console.log('[Scan] ข้าม URL:', text);
     return;
+  }
+
+  // 🔖 TikTok: บาร์โค้ดสินค้าเป็น "เลขล้วน" (ไม่มี B) แต่ SKU ในระบบเติม B → เติมให้ตรงถ้ารู้จัก
+  //   เติมเฉพาะเมื่อ "B"+เลข อยู่ใน productMap จริง → ไม่กระทบเลขพัสดุที่เป็นตัวเลข (courier ไม่อยู่ใน productMap)
+  if (/^\d+$/.test(upperText) &&
+      ((typeof _productNameUpper === 'object' && _productNameUpper["B" + upperText]) ||
+       (typeof productMap === 'object' && productMap["B" + upperText]))) {
+    upperText = "B" + upperText;
   }
 
   // ✅ ตรวจสอบรหัสพัสดุด้วยระบบ detectCarrier
