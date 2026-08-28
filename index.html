@@ -3067,6 +3067,10 @@ function _videoForSave(b64) {
 let productMap = {}, currentP = "", items = [], scanner, searchScanner, lastScanTime = 0;
 let sessionParcels = {}, scanBuffer = [], bufferTimeout = null, isFinishing = false, isEditingId = false;
 let isSpeakingRemark = false; // ✅ ล็อคสแกนสินค้าระหว่างพูดเลขพัสดุ + remark
+let isSpeakingQtyGuide = false; // 🔒 ล็อคสแกน "ทุกชนิด" ระหว่างพูดจำนวนสินค้าที่ลูกค้าสั่ง (ต้องฟังให้จบก่อน)
+let _qtyGuideSafety = null;     // safety timeout กันล็อคค้างถ้า TTS เงียบหาย
+let _qtyGuideSeq = 0;           // ชุดข้อความล่าสุด — กัน callback ชุดเก่าปลดล็อคผิดจังหวะ
+let _qtyGuideSuppressComplete = false; // กันพูด "สินค้าครบถ้วนแล้วค่ะ" ซ้ำ (รวมไว้ในชุดข้อความแล้ว)
 let _remarkAnnouncedFor = ''; // tracking (UPPERCASE) ที่พูดหมายเหตุไปแล้ว — กันพูดซ้ำ (สแกน vs late fetch)
 let _isRestartingCamera = false; // ✅ ล็อคสแกนสินค้าระหว่างกล้องกำลัง restart (กันสินค้าต้นๆ หายจากวิดีโอ)
 let duplicateParcelAlerts = {}; // ✅ ป้องกันแจ้งเตือนซ้ำ "ปิดงานไปแล้ว"
@@ -4179,6 +4183,60 @@ function speak(t, priority = true) {
   speechSynthesis.speak(m);
 }
 
+// 🔒 พูดข้อความเป็นชุด "ให้จบทั้งชุด" พร้อมล็อคการสแกนไว้ตลอด
+//   ใช้กับสินค้าที่ลูกค้าสั่งมากกว่า 1 ชิ้น — กัน QR ใบเดิมถูกอ่านซ้ำจนนับเกิน
+//   ทั้งที่ยังหยิบของได้ชิ้นเดียว (ต้องฟังจำนวนให้จบก่อนถึงจะสแกนต่อ/ปิดงานได้)
+function _speakQtyGuide(messages, maxLockMs = 15000) {
+  const list = (messages || []).filter(Boolean);
+  if (!list.length) return;
+  if (!window.speechSynthesis) return; // ไม่มี TTS → ไม่ล็อค (ไม่งั้นสแกนต่อไม่ได้)
+  const seq = ++_qtyGuideSeq;
+  isSpeakingQtyGuide = true;
+  let watch = null;
+  const release = () => {
+    if (watch) { clearInterval(watch); watch = null; }
+    if (seq !== _qtyGuideSeq) return; // ชุดเก่า — มีชุดใหม่/รีเซ็ตแทนที่แล้ว
+    if (_qtyGuideSafety) { clearTimeout(_qtyGuideSafety); _qtyGuideSafety = null; }
+    isSpeakingQtyGuide = false;
+    lastScanTime = Date.now(); // เริ่มนับ cooldown ใหม่หลังพูดจบ — กันอ่านซ้ำทันที
+  };
+  if (_qtyGuideSafety) clearTimeout(_qtyGuideSafety);
+  _qtyGuideSafety = setTimeout(release, maxLockMs);
+  // 🩺 watchdog — ถ้าเครื่องไม่มีเสียงจริง (TTS เงียบ/ไม่ยิง onend) จะเงียบสนิท
+  //    ตรวจเจอ ~1 วินาที แล้วปลดล็อคเลย ไม่ต้องรอ safety 15 วินาที
+  setTimeout(() => {
+    let idle = 0;
+    watch = setInterval(() => {
+      if (seq !== _qtyGuideSeq || !isSpeakingQtyGuide) { clearInterval(watch); watch = null; return; }
+      if (!speechSynthesis.speaking && !speechSynthesis.pending) {
+        if (++idle >= 3) release();
+      } else idle = 0;
+    }, 350);
+  }, 700);
+  try {
+    speechSynthesis.cancel(); // ตัดข้อความค้างเก่า — ชุดนี้สำคัญกว่า
+    let idx = 0;
+    const speakNext = () => {
+      if (seq !== _qtyGuideSeq) return;
+      if (idx >= list.length) { release(); return; }
+      const u = new SpeechSynthesisUtterance(list[idx++]);
+      u.lang = "th-TH"; u.rate = 1.3;
+      u.onend = speakNext;
+      u.onerror = speakNext;
+      speechSynthesis.speak(u);
+    };
+    speakNext();
+  } catch(e) { release(); }
+}
+
+// ปลดล็อคทันที — ใช้ตอนเริ่มพัสดุใบใหม่ / รีเซ็ตงาน (กันล็อคค้างข้ามใบ)
+function _clearQtyGuideLock() {
+  _qtyGuideSeq++;
+  if (_qtyGuideSafety) { clearTimeout(_qtyGuideSafety); _qtyGuideSafety = null; }
+  isSpeakingQtyGuide = false;
+  _qtyGuideSuppressComplete = false;
+}
+
 // --- Camera & Video ---
 async function startCameraRecording(resetChunks = true) {
   if (isRecording) return;
@@ -4921,6 +4979,10 @@ function onScanBuffer(text, result) {
   const now = Date.now();
   if (isFinishing) return;
 
+  // 🔒 กำลังพูดจำนวนสินค้าที่ลูกค้าสั่ง — ห้ามสแกน "อะไรก็ตาม" จนพูดจบ
+  //    (ทั้งสินค้าชิ้นถัดไปและการสแกนปิดงาน)
+  if (isSpeakingQtyGuide) return;
+
   const upperText = text.trim().toUpperCase();
 
   // ✅ ข้าม URL ร้านค้าตั้งแต่ต้น — ไม่ให้เข้า buffer เลย
@@ -4945,7 +5007,8 @@ function onScanBuffer(text, result) {
   if (isProduct && isStrictValidationMode) {
     const reqItem = expectedItemsArray.find(i => i.sku === upperText);
     const scanned = scannedItemsMap[upperText] || 0;
-    if (reqItem && scanned < reqItem.qty) cooldown = 800;
+    // สินค้าสั่งหลายชิ้น (SKU เดียวกัน) → เว้นระยะนานขึ้น กันกล้องอ่าน "ใบเดิม" ซ้ำ
+    if (reqItem && scanned < reqItem.qty) cooldown = (reqItem.qty > 1) ? 1500 : 800;
   } else if (isProduct) {
     cooldown = 800; // โหมดปกติไม่มี checklist ก็ลด cooldown
   }
@@ -5096,19 +5159,41 @@ async function processFinalScan(text) {
       } else if (currentScannedQty >= reqItem.qty) {
         beep('warn');
         vibrate([100, 50, 100, 50, 100]);
-        speak(productName, true);
-        setTimeout(() => speak("สินค้าเกินจำนวนค่ะ", false), 800);
+        if (reqItem.qty > 1) {
+          // 🔒 ครบแล้วแต่ยังสแกนซ้ำ — ย้ำจำนวนให้จบก่อน ถึงจะสแกนต่อได้
+          _speakQtyGuide([productName, `ลูกค้าสั่ง ${productName} ${reqItem.qty} ชิ้น สแกนครบแล้วค่ะ สินค้าเกินจำนวน`]);
+        } else {
+          speak(productName, true);
+          setTimeout(() => speak("สินค้าเกินจำนวนค่ะ", false), 800);
+        }
         lastScanTime = Date.now(); return; // ✅ บล็อก — ไม่เพิ่มเข้า items
       } else {
         beep('ok');
         vibrate(30);
-        speak(productName, true);
-        // ✅ แจ้งจำนวนครั้งแรกที่สแกน SKU นี้ — ถ้าสินค้านั้นต้องแพคมากกว่า 1 ชิ้น
-        if (currentScannedQty === 0 && reqItem.qty > 1) {
-          setTimeout(() => speak(`ลูกค้าสั่ง ${productName} ${reqItem.qty} ชิ้นนะคะ`, false), 800);
+        const newQty = currentScannedQty + 1;
+        if (reqItem.qty > 1) {
+          // 🔒 สินค้าชิ้นนี้ลูกค้าสั่งหลายชิ้น — ต้องพูดจำนวนให้ "จบ" ก่อนเปิดให้สแกนต่อ
+          //    กัน QR ใบเดิมถูกกล้องอ่านซ้ำจนนับครบ ทั้งที่จัดของได้จริงชิ้นเดียว
+          scannedItemsMap[upperText] = newQty;
+          const msgs = [productName];
+          if (newQty < reqItem.qty) {
+            msgs.push(`ลูกค้าสั่ง ${productName} ${reqItem.qty} ชิ้นนะคะ ตอนนี้ได้ ${newQty} ชิ้น เหลืออีก ${reqItem.qty - newQty} ชิ้น`);
+          } else {
+            msgs.push(`ลูกค้าสั่ง ${productName} ${reqItem.qty} ชิ้น สแกนครบแล้วค่ะ`);
+            // ถ้าครบทั้งออเดอร์ → ต่อท้ายในชุดเดียวกัน แล้วกัน updateChecklistUI พูดซ้ำ
+            const willComplete = expectedItemsArray.every(it => (scannedItemsMap[it.sku] || 0) === it.qty) &&
+              Object.keys(scannedItemsMap).every(sk => {
+                const ex = expectedItemsArray.find(e => e.sku === sk);
+                return !scannedItemsMap[sk] || (ex && scannedItemsMap[sk] <= ex.qty);
+              });
+            if (willComplete) { msgs.push("สินค้าครบถ้วนแล้วค่ะ"); _qtyGuideSuppressComplete = true; }
+          }
+          _speakQtyGuide(msgs);
+        } else {
+          speak(productName, true);
+          scannedItemsMap[upperText] = newQty;
         }
       }
-      scannedItemsMap[upperText] = currentScannedQty + 1;
     } else {
       beep('ok');
       vibrate(30);
@@ -5220,6 +5305,7 @@ function editParcelId() {
 function processNewParcel(text, carrier) {
   // ✅ มีพัสดุใหม่ → ยกเลิก auto-close timer
   _clearPostParcelIdleTimer();
+  _clearQtyGuideLock(); // ปลดล็อคเสียงจำนวนสินค้าของใบก่อนหน้า
   _remarkAnnouncedFor = ''; // เริ่มพัสดุใหม่ → รีเซ็ตสถานะพูดหมายเหตุ
   const wasEditing = isEditingId;
   currentP = text;
@@ -5739,6 +5825,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
 }
 
 async function resetAppForNext() {
+  _clearQtyGuideLock();
   currentP = ""; items = []; isEditingId = false;
   expectedItemsArray = []; scannedItemsMap = {}; isStrictValidationMode = false;
   undoStack = []; // ✅ ล้าง undo history เมื่อเริ่มพัสดุใหม่
@@ -6284,6 +6371,9 @@ function resetRemark() {
 }
 
 function updateChecklistUI() {
+  // ✅ อ่าน+ล้าง flag ตั้งแต่ต้น — กันค้างไปกดปิดเสียง "ครบถ้วน" ของรอบถัดไป
+  const skipCompleteSpeak = _qtyGuideSuppressComplete;
+  _qtyGuideSuppressComplete = false;
   let html = ""; let isAllMatched = true; let hasOverScan = false;
 
   // คำนวณ progress
@@ -6351,7 +6441,8 @@ function updateChecklistUI() {
     alertBox.innerHTML = "<strong>สมบูรณ์!</strong> สินค้าครบถ้วน";
     beep('done');
     vibrate([80, 60, 80]);
-    speak("สินค้าครบถ้วนแล้วค่ะ", false);
+    // ถ้าพูด "ครบถ้วน" ไปแล้วในชุดข้อความจำนวนสินค้า → ไม่พูดซ้ำ/ไม่ตัดทับ
+    if (!skipCompleteSpeak) speak("สินค้าครบถ้วนแล้วค่ะ", false);
     if (saveBtn) saveBtn.classList.add('ready');
   } else if (hasOverScan) {
     alertBox.className = "alert alert-danger mt-2 mb-0 py-2";
