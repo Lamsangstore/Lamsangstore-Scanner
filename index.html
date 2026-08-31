@@ -314,11 +314,38 @@
     }
 
     /* ===== SCANNER ===== */
-    #reader, #search-reader {
+    #search-reader {
       width: 100%; max-width: 440px; margin: auto;
       border-radius: 18px; overflow: hidden;
       box-shadow: inset 5px 5px 12px var(--sd), inset -5px -5px 12px var(--sl);
     }
+    /* กล่องย่อภาพสแกนเนอร์:
+       html5-qrcode ถอดรหัสจาก canvas ที่มีขนาดเท่า "ความกว้าง layout" ของ #reader
+       (foreverScan → drawImage ย่อภาพลงมาที่ qrbox px) → ถ้า #reader กว้าง 360px
+       QR 15.9 มม. จะเหลือแค่ ~2 px/โมดูล อ่านไม่ออก
+       จึงตั้ง layout ให้กว้าง (SCAN_DECODE_WIDTH) แล้วใช้ CSS transform ย่อลงมาให้พอดีจอ
+       → canvas ถอดรหัสละเอียดขึ้น ~2 เท่า โดยหน้าตาเหมือนเดิม */
+    #readerScaler {
+      position: relative; width: 100%; max-width: 440px; margin: auto;
+      overflow: hidden; border-radius: 18px;
+    }
+    #reader {
+      width: 720px; max-width: none; margin: 0;
+      transform-origin: top left;
+      border-radius: 18px; overflow: hidden;
+      box-shadow: inset 5px 5px 12px var(--sd), inset -5px -5px 12px var(--sl);
+    }
+
+    /* ปุ่มคุมกล้อง (ซูม / ไฟฉาย) */
+    .cam-ctrl-btn {
+      font-family: 'Mitr', sans-serif; font-size: 0.75rem;
+      border: none; border-radius: 14px; padding: 3px 12px;
+      background: rgba(var(--accent-rgb),0.14); color: var(--text2);
+      box-shadow: 2px 2px 6px var(--sd), -2px -2px 6px var(--sl);
+      cursor: pointer; line-height: 1.6;
+    }
+    .cam-ctrl-btn:active { box-shadow: inset 2px 2px 6px var(--sd), inset -2px -2px 6px var(--sl); }
+    .cam-ctrl-btn.on { background: rgba(var(--accent-rgb),0.4); color: var(--text); }
 
     /* ===== BUTTONS ===== */
     .btn-custom {
@@ -2423,11 +2450,20 @@
             <option value="">กำลังโหลด...</option>
           </select>
         </div>
+        <!-- ซูม + ไฟฉาย — ช่วยตอน QR บนใบปะหน้าเล็กมาก (เช่น Page365/Flash 15.9 มม.) -->
+        <div id="camCtrlWrap" style="display:none; align-items:center; justify-content:center; gap:6px; margin-top:6px;">
+          <button type="button" class="cam-ctrl-btn" onclick="scanZoomStep(-1)" aria-label="ซูมออก">−</button>
+          <span id="camZoomLabel" style="font-size:0.72rem; color:var(--text3); min-width:42px; text-align:center;">1.0×</span>
+          <button type="button" class="cam-ctrl-btn" onclick="scanZoomStep(1)" aria-label="ซูมเข้า">+</button>
+          <button type="button" class="cam-ctrl-btn" id="torchBtn" onclick="toggleScanTorch()" style="display:none;">ไฟฉาย</button>
+        </div>
       </div>
 
-      <div id="reader" style="display:none" class="scanner-wrap">
-        <div class="scanner-viewfinder">
-          <span class="scanner-viewfinder-label">วาง barcode ในกรอบ</span>
+      <div id="readerScaler">
+        <div id="reader" style="display:none" class="scanner-wrap">
+          <div class="scanner-viewfinder">
+            <span class="scanner-viewfinder-label">วาง barcode ในกรอบ</span>
+          </div>
         </div>
       </div>
       
@@ -4901,8 +4937,166 @@ async function refreshAllCache() {
 
 let currentCameraId = null;
 
+// ===== กล้องสแกน: ตั้งค่าให้อ่าน "QR เล็ก" บนใบปะหน้าได้ =====
+// เคสอ้างอิง: ใบปะหน้า Page365/Flash — QR 15.9×15.9 มม. (25 โมดูล → โมดูลละ 0.635 มม., ECC ระดับ L)
+// ส่วนบาร์โค้ด Code128 บนใบเดียวกันกว้าง 66.7 มม. และเก็บ "เลข tracking ตัวเดียวกัน" → สแกนแถบนั้นง่ายกว่ามาก
+const SCAN_DECODE_WIDTH = 720;   // ความกว้าง layout ของ #reader = ความละเอียด canvas ที่ใช้ถอดรหัส
+const SCAN_ZOOM_KEY = 'scanZoomLevel';
+let _scanZoom = parseFloat(localStorage.getItem(SCAN_ZOOM_KEY)) || 0;  // 0 = ยังไม่เคยตั้งเอง → ใช้ค่ากล้องเดิม
+let _torchOn = false;
+
+function _scanVideoTrack() {
+  const v = document.querySelector('#reader video');
+  const st = v && v.srcObject;
+  if (!st || !st.getVideoTracks) return null;
+  return st.getVideoTracks()[0] || null;
+}
+
+function _trackCaps(track) {
+  if (!track || !track.getCapabilities) return {};
+  try { return track.getCapabilities() || {}; } catch(e) { return {}; }
+}
+
+// ✅ ขอความละเอียดสูง — เดิมไม่ได้ขอเลย เบราว์เซอร์เลยให้ค่า default (มัก 640×480)
+//    ยิ่งภาพต้นทางละเอียด ภาพที่ crop มาถอดรหัสยิ่งคม (โมดูล QR ไม่เละ)
+function _scanVideoConstraints(cameraId) {
+  const c = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+  if (cameraId) c.deviceId = { exact: cameraId };
+  else c.facingMode = { ideal: 'environment' };
+  // best-effort: เบราว์เซอร์ที่ไม่รองรับจะข้าม advanced ไปเอง (ไม่ error)
+  c.advanced = [{ focusMode: 'continuous' }];
+  return c;
+}
+
+// ✅ กรอบสแกนยืดตามขนาดวิดีโอจริง (เดิม fix 300×350 → จอเล็กล้นกรอบ, จอใหญ่ใช้พื้นที่ไม่คุ้ม)
+//    กรอบแนวนอนกว้าง → บาร์โค้ด Code128 ยาว 67 มม. เข้าเต็มกรอบโดยไม่ต้องถอยกล้องห่าง
+function _scanQrbox(vw, vh) {
+  const w = Math.max(180, Math.round(Math.min(vw * 0.92, SCAN_DECODE_WIDTH)));
+  const h = Math.max(150, Math.round(Math.min(vh * 0.62, w * 0.7)));
+  return { width: w, height: h };
+}
+
+function _scanConfig(cameraId) {
+  return {
+    fps: 15,
+    qrbox: _scanQrbox,
+    disableFlip: true,   // ป้ายพัสดุไม่มีทางกลับด้าน → ตัดการสแกนภาพกระจกทิ้ง = ทำงานเร็วขึ้นเท่าตัว
+    videoConstraints: _scanVideoConstraints(cameraId)
+  };
+}
+
+// ย่อ #reader (layout 720px) ลงมาให้พอดีความกว้างจริงของการ์ด
+function _syncReaderScale() {
+  const wrap = document.getElementById('readerScaler');
+  const rd = document.getElementById('reader');
+  if (!wrap || !rd) return;
+  if (rd.style.display === 'none') { wrap.style.height = '0px'; return; }
+  const wrapW = wrap.clientWidth;
+  if (!wrapW || wrapW < 50) return;   // อยู่คนละแท็บ/ยังไม่ layout → ค่อยคำนวณตอนโชว์จริง
+  const k = Math.min(1, wrapW / SCAN_DECODE_WIDTH);
+  const offset = Math.max(0, (wrapW - SCAN_DECODE_WIDTH * k) / 2);
+  rd.style.transform = `translateX(${offset}px) scale(${k})`;
+  wrap.style.height = Math.round(rd.offsetHeight * k) + 'px';
+}
+window.addEventListener('resize', () => { try { _syncReaderScale(); } catch(e) {} });
+window.addEventListener('orientationchange', () => { setTimeout(() => { try { _syncReaderScale(); } catch(e) {} }, 300); });
+let _readerRO = null;
+try { _readerRO = new ResizeObserver(() => { try { _syncReaderScale(); } catch(e) {} }); } catch(e) {}
+
+// ความสูงของ #reader จะเปลี่ยนตอน video โหลด metadata เสร็จ (เช่น 150px → 405px)
+// ต้อง sync ความสูงกรอบตามให้ทัน ไม่งั้นภาพกล้องจะโดน overflow:hidden ตัดครึ่ง
+function _watchReaderSize() {
+  const rd = document.getElementById('reader');
+  if (rd && _readerRO) { try { _readerRO.observe(rd); } catch(e) {} }
+  const v = document.querySelector('#reader video');
+  if (v && !v._scaleHooked) {
+    v._scaleHooked = true;
+    ['loadedmetadata', 'resize', 'playing'].forEach(ev => v.addEventListener(ev, () => { try { _syncReaderScale(); } catch(e) {} }));
+    if (_readerRO) { try { _readerRO.observe(v); } catch(e) {} }
+  }
+  [150, 500, 1200, 2500].forEach(ms => setTimeout(() => { try { _syncReaderScale(); } catch(e) {} }, ms));
+}
+
+// ✅ ซูมกล้อง — ตัวช่วยที่ได้ผลที่สุดกับ QR เล็ก (ขยาย "ก่อน" ภาพถูกย่อลง canvas ถอดรหัส)
+//    ไม่ซูมอัตโนมัติ เพราะซูมมากแล้วบาร์โค้ดยาว 67 มม. จะไม่เข้ากรอบ — ให้ผู้ใช้กด +/− เอง แล้วจำค่าไว้
+function _currentZoom(track) {
+  try { const st = track && track.getSettings ? track.getSettings() : {}; if (st.zoom) return st.zoom; } catch(e) {}
+  return _scanZoom || 1;
+}
+
+async function _applyScanZoom(z) {
+  const track = _scanVideoTrack();
+  const caps = _trackCaps(track);
+  if (!caps.zoom) return false;   // กล้อง/เบราว์เซอร์ไม่รองรับ (เช่น Safari หลาย version)
+  const min = caps.zoom.min != null ? caps.zoom.min : 1;
+  const max = caps.zoom.max != null ? caps.zoom.max : 1;
+  if (!(max > min)) return false;
+  if (typeof z !== 'number' || !z) {
+    if (!_scanZoom) return false;  // ยังไม่เคยตั้งเอง → ปล่อยกล้องไว้ที่ค่าเดิม
+    z = _scanZoom;
+  }
+  z = Math.min(max, Math.max(min, z));
+  try {
+    await track.applyConstraints({ advanced: [{ zoom: z }] });
+    _scanZoom = z;
+    localStorage.setItem(SCAN_ZOOM_KEY, String(z));
+    return true;
+  } catch(e) { console.warn('[Camera] zoom error:', e); return false; }
+}
+
+async function scanZoomStep(dir) {
+  const track = _scanVideoTrack();
+  const caps = _trackCaps(track);
+  if (!caps.zoom) return;
+  const step = Math.max(caps.zoom.step || 0.1, (caps.zoom.max - caps.zoom.min) / 20, 0.5);
+  await _applyScanZoom(_currentZoom(track) + dir * step);
+  _syncCamCtrlUI();
+}
+
+async function toggleScanTorch() {
+  const track = _scanVideoTrack();
+  if (!_trackCaps(track).torch) return;
+  try {
+    await track.applyConstraints({ advanced: [{ torch: !_torchOn }] });
+    _torchOn = !_torchOn;
+  } catch(e) { console.warn('[Camera] torch error:', e); }
+  _syncCamCtrlUI();
+}
+
+function _syncCamCtrlUI() {
+  const wrap = document.getElementById('camCtrlWrap');
+  const label = document.getElementById('camZoomLabel');
+  const torchBtn = document.getElementById('torchBtn');
+  if (!wrap) return;
+  const caps = _trackCaps(_scanVideoTrack());
+  const hasZoom = !!(caps.zoom && caps.zoom.max > caps.zoom.min);
+  const hasTorch = !!caps.torch;
+  wrap.style.display = (hasZoom || hasTorch) ? 'flex' : 'none';
+  if (label) label.innerText = hasZoom ? _currentZoom(_scanVideoTrack()).toFixed(1) + '×' : '';
+  if (torchBtn) {
+    torchBtn.style.display = hasTorch ? 'inline-block' : 'none';
+    torchBtn.classList.toggle('on', _torchOn);
+  }
+}
+
+// เรียกหลังกล้องเริ่มทำงาน — ย่อกรอบให้พอดี + ใส่ซูม + อัปเดตปุ่ม
+async function _afterScanStart() {
+  _syncReaderScale();
+  for (let i = 0; i < 12 && !_scanVideoTrack(); i++) await new Promise(r => setTimeout(r, 100));
+  _watchReaderSize();
+  _syncReaderScale();
+  _torchOn = false;
+  await _applyScanZoom();
+  _syncCamCtrlUI();
+  const tr = _scanVideoTrack();
+  const st = tr && tr.getSettings ? tr.getSettings() : {};
+  console.log('[Scan] decoder =', ('BarcodeDetector' in window) ? 'native BarcodeDetector' : 'ZXing (fallback)',
+              '| video =', st.width + 'x' + st.height, '| zoom =', st.zoom || 'n/a');
+}
+
 async function startScan() {
   document.getElementById("reader").style.display = "block";
+  try { _syncReaderScale(); } catch(e) {}
   document.getElementById("cameraSelectorWrap").style.display = "block";
   try { updateScanActionsBar(); updateScanHistoryBar(); } catch(e) {}
 
@@ -4932,7 +5126,12 @@ async function startScan() {
   }
 
   if (!scanner) {
-    scanner = new Html5Qrcode("reader");
+    // ✅ ระบุชัดเจนว่าให้ใช้ BarcodeDetector ของเบราว์เซอร์ถ้ามี (Android/Chrome)
+    //    เร็วและทนภาพเบลอกว่า ZXing มาก — iOS Safari ยังไม่รองรับ จะ fallback เป็น ZXing เอง
+    scanner = new Html5Qrcode("reader", {
+      verbose: false,
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    });
   }
 
   if (currentCameraId) {
@@ -4948,22 +5147,24 @@ async function _startHtml5Qrcode(cameraId) {
   try {
     await scanner.start(
       cameraId,
-      { fps: 20, qrbox: { width: 300, height: 350 } },
+      _scanConfig(cameraId),
       (text, result) => onScanBuffer(text, result),
       () => {}
     );
     currentCameraId = cameraId;
     localStorage.setItem('selectedCameraId', cameraId);
+    await _afterScanStart();
   } catch(e) {
     console.error('[Camera] start error:', e);
-    // fallback: environment
+    // fallback: environment (ไม่ล็อก deviceId / ไม่บังคับความละเอียด)
     try {
       await scanner.start(
         { facingMode: "environment" },
-        { fps: 20, qrbox: { width: 300, height: 350 } },
+        { fps: 15, qrbox: _scanQrbox, disableFlip: true },
         (text, result) => onScanBuffer(text, result),
         () => {}
       );
+      await _afterScanStart();
     } catch(e2) {
       console.error('[Camera] fallback error:', e2);
     }
@@ -5870,6 +6071,7 @@ async function closeAppCompletely() {
   hideCustomerRemark();
   document.getElementById("orderChecklistPanel").style.display = "none";
   document.getElementById("reader").style.display = "none";
+  try { _syncReaderScale(); } catch(e) {}
   document.getElementById("parcelId").innerText = "-";
   document.getElementById("count").innerText = "0";
   document.getElementById("itemList").innerHTML = "";
@@ -7417,6 +7619,7 @@ async function openTab(tab, btn) {
     try { releaseWakeLock(); } catch(e) {}
     const reader = document.getElementById("reader");
     if (reader) reader.style.display = "none";
+    try { _syncReaderScale(); } catch(e) {}
   }
 
   document.querySelectorAll('#scan, #search, #dash, #upload').forEach(el => el.style.display = 'none');
@@ -8264,7 +8467,13 @@ function startSearchScan() {
   const readerDiv = document.getElementById("search-reader");
   readerDiv.style.display = "block";
   if (searchScanner) searchScanner.clear();
-  searchScanner = new Html5QrcodeScanner("search-reader", { fps: 15, qrbox: { width: 250, height: 250 } });
+  searchScanner = new Html5QrcodeScanner("search-reader", {
+    fps: 15,
+    qrbox: (vw, vh) => ({ width: Math.max(180, Math.round(vw * 0.9)), height: Math.max(150, Math.round(vh * 0.6)) }),
+    disableFlip: true,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    // ไม่ใส่ videoConstraints ที่นี่ — html5-qrcode จะยกเลิกกล้องที่ผู้ใช้เลือกจาก dropdown ของตัวมันเอง
+  });
   searchScanner.render((text) => {
     document.getElementById("searchInput").value = text;
     speak("สแกนสำเร็จค่ะ");
