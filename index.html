@@ -4959,8 +4959,10 @@ function _trackCaps(track) {
 
 // ✅ ขอความละเอียดสูง — เดิมไม่ได้ขอเลย เบราว์เซอร์เลยให้ค่า default (มัก 640×480)
 //    ยิ่งภาพต้นทางละเอียด ภาพที่ crop มาถอดรหัสยิ่งคม (โมดูล QR ไม่เละ)
+//    ขอเป็น 4:3 (1600×1200) ไม่ใช่ 16:9 — เซ็นเซอร์มือถือเป็น 4:3 อยู่แล้ว
+//    ขอ 16:9 = สั่งให้ crop บน-ล่างทิ้ง → พื้นที่สแกนแนวตั้งหายไปประมาณ 25%
 function _scanVideoConstraints(cameraId) {
-  const c = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+  const c = { width: { ideal: 1600 }, height: { ideal: 1200 }, aspectRatio: { ideal: 4 / 3 } };
   if (cameraId) c.deviceId = { exact: cameraId };
   else c.facingMode = { ideal: 'environment' };
   // best-effort: เบราว์เซอร์ที่ไม่รองรับจะข้าม advanced ไปเอง (ไม่ error)
@@ -4969,10 +4971,12 @@ function _scanVideoConstraints(cameraId) {
 }
 
 // ✅ กรอบสแกนยืดตามขนาดวิดีโอจริง (เดิม fix 300×350 → จอเล็กล้นกรอบ, จอใหญ่ใช้พื้นที่ไม่คุ้ม)
-//    กรอบแนวนอนกว้าง → บาร์โค้ด Code128 ยาว 67 มม. เข้าเต็มกรอบโดยไม่ต้องถอยกล้องห่าง
+//    กว้าง → บาร์โค้ด Code128 ยาว 67 มม. เข้าเต็มกรอบโดยไม่ต้องถอยกล้องห่าง
+//    สูง (0.9 ของเฟรม) → เล็งง่ายขึ้นมาก ไม่ต้องขยับมือหาแนวพอดี ๆ
+//    หมายเหตุ: ห้ามให้สูงเกินความสูงวิดีโอ ไม่งั้น html5-qrcode จะทิ้งค่า qrbox แล้วสแกนเต็มเฟรมแทน
 function _scanQrbox(vw, vh) {
   const w = Math.max(180, Math.round(Math.min(vw * 0.92, SCAN_DECODE_WIDTH)));
-  const h = Math.max(150, Math.round(Math.min(vh * 0.62, w * 0.7)));
+  const h = Math.max(150, Math.round(Math.min(vh * 0.9, vh - 8)));
   return { width: w, height: h };
 }
 
@@ -8469,7 +8473,7 @@ function startSearchScan() {
   if (searchScanner) searchScanner.clear();
   searchScanner = new Html5QrcodeScanner("search-reader", {
     fps: 15,
-    qrbox: (vw, vh) => ({ width: Math.max(180, Math.round(vw * 0.9)), height: Math.max(150, Math.round(vh * 0.6)) }),
+    qrbox: (vw, vh) => ({ width: Math.max(180, Math.round(vw * 0.9)), height: Math.max(150, Math.round(Math.min(vh * 0.9, vh - 8))) }),
     disableFlip: true,
     experimentalFeatures: { useBarCodeDetectorIfSupported: true }
     // ไม่ใส่ videoConstraints ที่นี่ — html5-qrcode จะยกเลิกกล้องที่ผู้ใช้เลือกจาก dropdown ของตัวมันเอง
