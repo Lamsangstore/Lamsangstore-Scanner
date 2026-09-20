@@ -2590,7 +2590,7 @@
             <button class="filter-chip" data-filter="mp" data-value="tiktok" style="--chip-color:#010101;">TikTok</button>
             <button class="filter-chip" data-filter="mp" data-value="lazada" style="--chip-color:#0f146d;">Lazada</button>
             <button class="filter-chip" data-filter="mp" data-value="page365" style="--chip-color:#1877f2;">Page365</button>
-            <button class="filter-chip" data-filter="mp" data-value="thaimart" style="--chip-color:#d13a2f;">Thaimart</button>
+            <button class="filter-chip" data-filter="mp" data-value="thaimart" style="--chip-color:#ad1457;">Thaimart</button>
           </div>
           <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; align-items:center;">
             <button class="filter-chip active" data-filter="date" data-value="">ทุกช่วง</button>
@@ -7399,7 +7399,7 @@ async function processFileUpload() {
     shopee:  { name: 'Shopee',  bg: '#ee4d2d', fg: '#ffffff' },
     lazada:  { name: 'Lazada',  bg: '#0f146d', fg: '#ffffff' },
     page365: { name: 'Page365', bg: '#1877f2', fg: '#ffffff' },
-    thaimart:{ name: 'Thaimart', bg: '#d13a2f', fg: '#ffffff' },
+    thaimart:{ name: 'Thaimart', bg: '#ad1457', fg: '#ffffff' },
   };
   const mpBadge = (mp) => {
     const s = mpStyle[mp] || { name: mp, bg: '#888', fg: '#fff' };
@@ -7410,7 +7410,7 @@ async function processFileUpload() {
     shopee:  'rgba(238,77,45,0.08)',
     lazada:  'rgba(15,20,109,0.08)',
     page365: 'rgba(24,119,242,0.08)',
-    thaimart:'rgba(209,58,47,0.08)',
+    thaimart:'rgba(173,20,87,0.08)',
   };
   const _skipReasonLabel = { no_tracking: 'ไม่มี Tracking ID', no_sku: 'ไม่มี SKU', bad_tracking_format: 'Tracking ไม่ถูกต้อง', null_row: 'แถวว่าง' };
   const perFile = results.map(r => {
@@ -8285,7 +8285,7 @@ function renderMarketplaceBreakdown(byMp, totalOrders) {
     tiktok:  { name: 'TikTok',  color: '#010101' },
     lazada:  { name: 'Lazada',  color: '#0f146d' },
     page365: { name: 'Page365', color: '#1877f2' },
-    thaimart:{ name: 'Thaimart', color: '#d13a2f' },
+    thaimart:{ name: 'Thaimart', color: '#ad1457' },
     other:   { name: 'อื่นๆ',   color: '#a08a5a' },
   };
   const sorted = entries
@@ -8382,7 +8382,7 @@ async function showDayDetail(dateStr) {
       tiktok: { name: 'TikTok', color: '#010101' },
       lazada: { name: 'Lazada', color: '#0f146d' },
       page365:{ name: 'Page365', color: '#1877f2' },
-      thaimart:{ name: 'Thaimart', color: '#d13a2f' },
+      thaimart:{ name: 'Thaimart', color: '#ad1457' },
       other:  { name: 'อื่นๆ',  color: '#a08a5a' },
     };
     const mpEntries = Object.entries(data.byMarketplace || {})
@@ -8717,7 +8717,7 @@ function _renderSearchCards(rows) {
       : `<span style="font-weight:600; word-break:break-all;">${escHtml(tracking)}</span>`;
 
     let orderBadge = '';
-    const pColors = { shopee: '#ee4d2d', tiktok: '#333', lazada: '#0f146d', page365: '#25d366', thaimart: '#d13a2f' };
+    const pColors = { shopee: '#ee4d2d', tiktok: '#333', lazada: '#0f146d', page365: '#25d366', thaimart: '#ad1457' };
     const pName = { shopee: 'Shopee', tiktok: 'TikTok', lazada: 'Lazada', page365: 'Page365', thaimart: 'Thaimart' };
     if (marketplace_raw) {
       const color = pColors[marketplace_raw] || '#c8a84b';
