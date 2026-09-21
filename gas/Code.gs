@@ -856,6 +856,7 @@ function refreshPendingCache(force) {
   if (!cfg.url || !cfg.secret) return;
   try {
     drainMpInbox(); // backup: ดูดไฟล์ marketplace ที่ค้างใน /mpInbox เข้าชีตก่อน mirror /pending
+    drainRemarkLive(); // 📝 หมายเหตุที่แก้จากแถบค้นหา → ลงชีต (ก่อน rebuild /pending รอบนี้จะได้ติดไปด้วย)
     _removePage365DupRows(true); // 🧹 กันซ้ำ: ลบแถว page365 ที่ tracking ซ้ำกับ native (ก่อนคำนวณ /pending)
     _prunePendingLive(cfg); // 🧹 ลบ overlay ที่เก่า (ตอนนี้ /pending ตัวจริงครอบคลุมแล้ว)
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1327,7 +1328,6 @@ const RATE_LIMITS = {
   getAllPendingOrders: 60,
   getProductData: 60,
   searchData: 120,
-  updateRemark: 60,          // แก้หมายเหตุจากแถบค้นหา — คนกดเอง ไม่ใช่ batch
   getReportData: 30,
   getExpectedOrderDetails: 240,
   getSpreadsheetUrl: 30,
@@ -1347,7 +1347,7 @@ const RATE_LIMITS = {
 };
 
 const ALLOWED_ACTIONS = new Set([
-  "getProductData", "saveData", "searchData", "saveMarketplaceData", "updateRemark",
+  "getProductData", "saveData", "searchData", "saveMarketplaceData",
   "getExpectedOrderDetails", "getReportData", "getAllPendingOrders",
   "getSpreadsheetUrl", "getMarketplaceVersionUrl",
   "uploadVideoOnly", "reconcileVideoUrls", "drainInbox", "refreshPending", "drainMpInbox",
@@ -1465,7 +1465,6 @@ function doPost(e) {
     else if (action === "saveData")                   result = saveData(body);
     else if (action === "searchData")                 result = searchData(body.query);
     else if (action === "saveMarketplaceData")        result = saveMarketplaceData(body);
-    else if (action === "updateRemark")               result = updateRemark(body);
     else if (action === "getExpectedOrderDetails")    result = getExpectedOrderDetails(body.trackingNo);
     else if (action === "getReportData")              result = getReportData(body.start, body.end);
     else if (action === "getAllPendingOrders")        result = getAllPendingOrders();
@@ -1497,7 +1496,7 @@ function doPost(e) {
 function _logRequestRejected(parcelId, action, reason, detail) {
   try {
     // log เฉพาะ action ที่ใช้บันทึกข้อมูล — ไม่ log getProductData, searchData ฯลฯ
-    const WRITE_ACTIONS = new Set(["saveData", "saveMarketplaceData", "updateRemark", ""]);
+    const WRITE_ACTIONS = new Set(["saveData", "saveMarketplaceData", ""]);
     if (action && !WRITE_ACTIONS.has(action)) return;
     _logSaveAttempt(parcelId, "", reason, 0, action + " | " + (detail || ""));
   } catch(e) {
@@ -2975,115 +2974,154 @@ function getAllPendingOrders() {
 }
 
 // ============================================================
-// updateRemark — เพิ่ม/แก้หมายเหตุของพัสดุหนึ่งใบ จากแถบค้นหา
+// drainRemarkLive — เอาหมายเหตุที่แก้จากแถบค้นหาลงชีต (งานเบื้องหลัง)
 //
-// หมายเหตุในระบบอยู่ 2 ที่ คนละความหมาย จึงเขียน "ทั้งสองที่ถ้าเจอ":
-//   - MarketplaceData col F → ไหลไป /pending = ตัวที่ระบบพูดตอนสแกนแพ็ค (ยังไม่แพ็ค)
-//   - Orders col F          → ไหลไป /orders  = บันทึกที่ติดกับออเดอร์ที่แพ็คไปแล้ว
-// พัสดุใบหนึ่งอาจอยู่ทั้งคู่ (อัปไฟล์แล้วแพ็คแล้ว) → แก้ให้ตรงกันทั้งคู่ ไม่ให้ข้อมูลขัดกันเอง
+// ทางเดินของหมายเหตุที่แก้เอง:
+//   แอป → PATCH /remarkLive/{TRACKING} = { k, ts, rm }  (ไม่ผ่าน GAS เลย — เร็วและไม่แย่ง lock)
+//       → PUT /cacheMeta → ทุกเครื่องดึงใหม่ แล้ว "ทับ" หมายเหตุด้วย /remarkLive ทันที
+//   ฟังก์ชันนี้ (เรียกจาก refreshPendingCache ตามเวลา) → ลงชีต → ลบ /remarkLive ของใบนั้น
 //
-// remark ว่าง = ตั้งใจลบ (ต่างจากตอนอัปไฟล์ที่ค่าว่างแปลว่า "ไฟล์ไม่มีคอลัมน์นี้" จึงห้ามลบ)
-//   ที่นี่คนพิมพ์เองกับมือ ช่องว่างจึงเป็นเจตนาจริง
+// ทำไมไม่ให้แอปเรียก GAS เขียนชีตตรง: เคยทำแล้ว (action updateRemark) — ใช้ ScriptLock ตัวเดียวกับ
+//   drain/upload ช่วงแพ็คถี่กดแล้วรอ 30 วิได้ "Server busy" ซ้ำรอยปัญหาที่ saveData เคยเจอ
+//   แล้วแก้ด้วย Firebase /inbox + drain ผู้เขียนชีตคนเดียว — ที่นี่ใช้แบบเดียวกัน
+//
+// หมายเหตุอยู่ 2 ชีต คนละความหมาย จึงเขียนทุกที่ที่เจอ:
+//   MarketplaceData col F → /pending (ตัวที่พูดตอนสแกนแพ็ค) / Orders col F → /orders (บันทึกของใบที่แพ็คแล้ว)
 // ============================================================
-function updateRemark(body) {
-  const tracking = String(body.tracking || "").trim().toUpperCase();
-  if (!tracking) return { success: false, error: "ไม่มีเลขพัสดุ" };
-  const remark = String(body.remark || "").trim().slice(0, 500);
+const REMARK_LIVE_MAX_PER_RUN = 200;
+const REMARK_LIVE_MAX_AGE_MS  = 24 * 60 * 60 * 1000; // ค้างเกินวัน = มีอะไรผิด → ทิ้ง กัน overlay ทับของจริงไปตลอด
 
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); }
-  catch(e) { return { success: false, error: "Server busy, please retry" }; }
+function drainRemarkLive() {
+  const cfg = _firebaseCfg();
+  if (!cfg.url || !cfg.secret) return 0;
+  const auth = "?auth=" + encodeURIComponent(cfg.secret);
 
+  // 1) รายการ tracking ที่รออยู่ (shallow = เอาแค่ key เบามาก — ปกติว่างเปล่า)
+  let keys;
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let mpUpdated = 0, ordUpdated = 0;
-    let mpFound = 0, ordFound = 0; // เจอแถว vs แก้จริง — ต้องแยก ไม่งั้น "ไม่เจอพัสดุ" จะดูเหมือน "ค่าเดิมอยู่แล้ว"
+    const r = UrlFetchApp.fetch(cfg.url + "/remarkLive.json" + auth + "&shallow=true", { muteHttpExceptions: true });
+    if (r.getResponseCode() !== 200) return 0;
+    const b = r.getContentText();
+    if (!b || b === "null") return 0;
+    keys = Object.keys(JSON.parse(b) || {}).slice(0, REMARK_LIVE_MAX_PER_RUN);
+  } catch(e) { Logger.log("[drainRemarkLive] list fail: " + e.message); return 0; }
+  if (!keys.length) return 0;
 
-    let pendingItems = null; // ไว้ PUT /pending ของ tracking นี้ใหม่
-
-    // ── 1. MarketplaceData (ออเดอร์ที่ยังไม่แพ็ค) ──
-    const mpSheet = ss.getSheetByName(SHEET_MARKETPLACE);
-    if (mpSheet) {
-      const last = mpSheet.getLastRow();
-      if (last > 1) {
-        // อ่าน B..G (marketplace, tracking, sku, qty, remark, orderId) — พอสำหรับหาแถว + ประกอบ /pending ใหม่
-        const rows = mpSheet.getRange(2, 2, last - 1, 6).getValues();
-        const items = [];
-        for (let i = 0; i < rows.length; i++) {
-          if (numToStr(rows[i][1]).toUpperCase() !== tracking) continue;
-          mpFound++;
-          if (String(rows[i][4] || "").trim() !== remark) {
-            mpSheet.getRange(i + 2, 6).setValue(remark);
-            mpUpdated++;
-          }
-          const sku = numToStr(rows[i][2]).toUpperCase();
-          if (!sku) continue;
-          const qty = parseInt(rows[i][3]) || 1;
-          const oid = numToStr(rows[i][5]);
-          // รวม sku ซ้ำแบบเดียวกับ getAllPendingOrders เพื่อให้ /pending หน้าตาเหมือนกัน
-          const found = items.filter(function(it) { return it.sku === sku; })[0];
-          if (found) {
-            found.qty += qty;
-            if (oid && found.orderId.split(',').map(function(x){return x.trim();}).indexOf(oid) === -1) {
-              found.orderId = found.orderId ? found.orderId + ',' + oid : oid;
-            }
-          } else {
-            items.push({ sku: sku, qty: qty, remark: remark, orderId: oid,
-                         marketplace: String(rows[i][0] || "").trim().toLowerCase() });
-          }
-        }
-        if (items.length) pendingItems = items;
+  // 2) อ่านแต่ละรายการพร้อม ETag — ใช้ลบแบบมีเงื่อนไขตอนท้าย
+  //    ถ้ามีคนแก้ซ้ำระหว่างที่เรากำลังลงชีต ETag จะเปลี่ยน → ลบไม่ผ่าน (412) → ค่าใหม่รอรอบหน้า ไม่หาย
+  const jobs = []; // { key, tracking, remark, etag }
+  const nowMs = Date.now();
+  keys.forEach(function(key) {
+    try {
+      const r = UrlFetchApp.fetch(cfg.url + "/remarkLive/" + encodeURIComponent(key) + ".json" + auth,
+                                  { headers: { "X-Firebase-ETag": "true" }, muteHttpExceptions: true });
+      if (r.getResponseCode() !== 200) return;
+      const d = JSON.parse(r.getContentText() || "null");
+      const hdrs = r.getHeaders() || {};
+      const etag = hdrs["ETag"] || hdrs["etag"] || "";
+      if (!d || typeof d !== "object") return;
+      const tracking = String(d.tk || key || "").trim().toUpperCase();
+      if (!tracking) return;
+      if (Number(d.ts) && (nowMs - Number(d.ts)) > REMARK_LIVE_MAX_AGE_MS) {
+        jobs.push({ key: key, tracking: tracking, stale: true, etag: etag });
+        return;
       }
-    }
+      jobs.push({ key: key, tracking: tracking, remark: String(d.rm || "").trim().slice(0, 500), etag: etag });
+    } catch(e) { Logger.log("[drainRemarkLive] read " + key + " fail: " + e.message); }
+  });
+  if (!jobs.length) return 0;
 
-    // ── 2. Orders (ออเดอร์ที่แพ็คไปแล้ว) ──
-    const ordSheet = ss.getSheetByName(SHEET_ORDERS);
-    if (ordSheet) {
-      const last = ordSheet.getLastRow();
-      if (last > 1) {
-        const colDF = ordSheet.getRange(2, 4, last - 1, 3).getValues(); // D tracking, E video, F remark
-        for (let i = 0; i < colDF.length; i++) {
-          if (numToStr(colDF[i][0]).toUpperCase() !== tracking) continue;
-          // แถว placeholder ของวิดีโอยังไม่ใช่ออเดอร์จริง — ทับแล้ว saveData จะหา placeholder ไม่เจอ
-          if (String(colDF[i][2] || "").indexOf("__VIDEO_FIRST__") === 0) continue;
-          ordFound++;
-          if (String(colDF[i][2] || "").trim() !== remark) {
-            ordSheet.getRange(i + 2, 6).setValue(remark);
-            ordUpdated++;
-          }
+  // 3) หาแถว "นอก lock" (สแกนทั้งชีตช้า — ไม่ควรถือ lock ระหว่างนี้)
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const mpSheet  = ss.getSheetByName(SHEET_MARKETPLACE);
+  const ordSheet = ss.getSheetByName(SHEET_ORDERS);
+  const want = {};
+  jobs.forEach(function(j) { if (!j.stale) want[j.tracking] = j; });
+  const mpRows = _findRowsByTracking(mpSheet, 3, want);   // MarketplaceData: tracking = col C
+  const ordRows = _findRowsByTracking(ordSheet, 4, want);  // Orders: tracking = col D (ข้ามแถว placeholder)
+
+  // 4) เขียนใต้ ScriptLock — แต่ถือแค่ช่วงอ่าน-ยืนยัน-เขียนทีละเซลล์ (สั้นมาก)
+  //    ยืนยัน tracking ของแถวซ้ำก่อนเขียน: ถ้ามีการลบแถวคั่นระหว่างขั้น 3 กับ 4 แถวจะเลื่อน
+  //    → ไม่ตรง → ไม่เขียน และไม่ลบ /remarkLive ของใบนั้น → รอบหน้าหาแถวใหม่แล้วเขียนให้
+  //    tryLock สั้น: เป็นงานเบื้องหลัง ถ้า lock ไม่ว่างก็ข้ามรอบนี้ไป (หมายเหตุยังโชว์ผ่าน overlay อยู่แล้ว)
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) { Logger.log("[drainRemarkLive] lock ไม่ว่าง ข้ามรอบนี้"); return 0; }
+  const done = {};            // tracking → true เมื่อทุกแถวของมันเขียน/ยืนยันผ่านหมด
+  let mpUpdated = 0;
+  const ordTouched = {};      // tracking → remark ที่ลง Orders แล้ว (ไว้ sync /orders)
+  try {
+    Object.keys(want).forEach(function(tk) {
+      const remark = want[tk].remark;
+      let ok = true;   // ทุกแถวที่หาไว้ยังเป็น tracking เดิม (ไม่มีแถวเลื่อน)
+      let found = 0;   // แถว "จริง" ที่ลงหมายเหตุได้ (ไม่นับ placeholder)
+      (mpRows[tk] || []).forEach(function(row) {
+        if (numToStr(mpSheet.getRange(row, 3).getValue()).toUpperCase() !== tk) { ok = false; return; }
+        found++;
+        if (String(mpSheet.getRange(row, 6).getValue() || "").trim() !== remark) {
+          mpSheet.getRange(row, 6).setValue(remark); mpUpdated++;
         }
-      }
-    }
-
-    if (mpFound === 0 && ordFound === 0) {
-      return { success: false, tracking: tracking, notFound: true,
-               error: "ไม่พบพัสดุนี้ทั้งใน MarketplaceData และ Orders" };
-    }
-    if (mpUpdated === 0 && ordUpdated === 0) {
-      return { success: true, tracking: tracking, mpUpdated: 0, ordUpdated: 0, unchanged: true };
-    }
+      });
+      (ordRows[tk] || []).forEach(function(row) {
+        if (numToStr(ordSheet.getRange(row, 4).getValue()).toUpperCase() !== tk) { ok = false; return; }
+        const cur = String(ordSheet.getRange(row, 6).getValue() || "");
+        if (cur.indexOf("__VIDEO_FIRST__") === 0) return; // placeholder — ทับแล้ว saveData หาไม่เจอ
+        found++;
+        if (cur.trim() !== remark) ordSheet.getRange(row, 6).setValue(remark);
+        ordTouched[tk] = remark;
+      });
+      // ไม่เจอแถวจริงเลย ≠ เสร็จ — ใบที่เพิ่งอัปไฟล์อาจยังอยู่แค่ /pendingLive (drainMpInbox ยังไม่ลงชีต)
+      //   หรือกำลังแพ็คอยู่ (มีแต่ placeholder) → เก็บ /remarkLive ไว้รอบหน้า ไม่งั้นหมายเหตุหายเงียบ
+      //   ของที่ไม่มีอยู่จริงจะโดนตัดทิ้งเองเมื่อเกิน REMARK_LIVE_MAX_AGE_MS
+      if (ok && found > 0) done[tk] = true;
+    });
     SpreadsheetApp.flush();
+  } finally { try { lock.releaseLock(); } catch(_) {} }
 
-    // ── 3. sync Firebase ทันที ไม่ต้องรอ refreshPendingCache รอบถัดไป ──
-    const cfg = _firebaseCfg();
-    if (cfg.url && cfg.secret) {
-      const key = _fbKey(tracking);
-      // แก้แถวเดิมไม่ทำให้ lastRow ขยับ → sig เท่าเดิม → mirror ถูกข้าม ต้องล้างเอง
-      if (mpUpdated > 0) {
-        _invalidatePendingCacheSig();
-        if (pendingItems) { try { _fbPut(cfg, "/pending/" + key + ".json", pendingItems); } catch(e) {} }
-      }
-      if (ordUpdated > 0) { try { _fbPut(cfg, "/orders/" + key + "/rm.json", remark); } catch(e) {} }
-    }
+  // 5) sync Firebase (นอก lock)
+  //    /orders: แก้เฉพาะ node ที่มีอยู่จริง — PUT ใส่ path ย่อยของ node ที่ยังไม่มี จะสร้าง node ผี
+  //    ที่มีแต่ rm แล้วไปโผล่ในผลค้นหาเป็นการ์ดเปล่า (ถ้ายังไม่ mirror ก็รอ mirror พาค่าใหม่ไปเอง)
+  Object.keys(ordTouched).forEach(function(tk) {
+    try {
+      const nodeUrl = cfg.url + "/orders/" + _fbKey(tk);
+      const ex = UrlFetchApp.fetch(nodeUrl + "/tk.json" + auth, { muteHttpExceptions: true });
+      const exists = ex.getResponseCode() === 200 && ex.getContentText() && ex.getContentText() !== "null";
+      if (exists) _fbPut(cfg, "/orders/" + _fbKey(tk) + "/rm.json", ordTouched[tk]);
+    } catch(e) { Logger.log("[drainRemarkLive] orders sync " + tk + ": " + e.message); }
+  });
+  // /pending: แก้แถวเดิมไม่ทำให้ lastRow ขยับ → ล้าง sig ให้ refreshPendingCache rebuild รอบนี้
+  if (mpUpdated > 0) _invalidatePendingCacheSig();
 
-    Logger.log("[updateRemark] " + tracking + " → mp=" + mpUpdated + " ord=" + ordUpdated);
-    return { success: true, tracking: tracking, mpUpdated: mpUpdated, ordUpdated: ordUpdated,
-             pending: mpFound > 0, packed: ordFound > 0 };
-  } catch (e) {
-    return { success: false, error: e.toString() };
-  } finally {
-    try { lock.releaseLock(); } catch(_) {}
+  // 6) ลบ /remarkLive ที่ลงชีตครบแล้ว (หรือค้างเกินวัน) — ลบแบบมีเงื่อนไขด้วย ETag
+  let cleared = 0;
+  jobs.forEach(function(j) {
+    if (!j.stale && !done[j.tracking]) return;          // ยังไม่ครบ → เก็บไว้รอบหน้า
+    const opts = { method: "delete", muteHttpExceptions: true };
+    if (j.etag) opts.headers = { "if-match": j.etag };   // ไม่มี ETag → ลบไม่ได้อย่างปลอดภัย ข้ามไป
+    else return;
+    try {
+      const r = UrlFetchApp.fetch(cfg.url + "/remarkLive/" + encodeURIComponent(j.key) + ".json" + auth, opts);
+      if (r.getResponseCode() === 200) cleared++;
+      // 412 = มีคนแก้ใหม่ระหว่างทาง → ปล่อยไว้ รอบหน้าลงค่าใหม่
+    } catch(e) {}
+  });
+
+  Logger.log("[drainRemarkLive] jobs=" + jobs.length + " mp=" + mpUpdated +
+             " ord=" + Object.keys(ordTouched).length + " cleared=" + cleared);
+  return cleared;
+}
+
+// หาเลขแถวของ tracking ที่ต้องการในชีต (อ่านคอลัมน์เดียว) → { TRACKING: [row, ...] }
+function _findRowsByTracking(sheet, col, want) {
+  const out = {};
+  if (!sheet) return out;
+  const last = sheet.getLastRow();
+  if (last < 2) return out;
+  const vals = sheet.getRange(2, col, last - 1, 1).getValues();
+  for (let i = 0; i < vals.length; i++) {
+    const t = numToStr(vals[i][0]).toUpperCase();
+    if (t && want[t]) (out[t] = out[t] || []).push(i + 2);
   }
+  return out;
 }
 
 // ============================================================
