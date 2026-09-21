@@ -488,15 +488,20 @@ function drainMpInbox() {
     try { slock.waitLock(30000); } catch(e) { Logger.log("[drainMpInbox] script lock timeout"); return 0; }
     const ts = new Date();
     const newRows = [];
+    const remarkUpdates = [];
+    let remarkUpdated = 0;
     const delKeys = {};
     try {
       // dedup keys (tracking|sku|orderId) — อ่านทั้งชีต "ครั้งเดียว" ใต้ lock
       const existingKeys = new Set();
+      const existingRowByKey = {}; // key → { row, remark } สำหรับอัปเดต remark ของแถวเดิม
       const lastRow = sheet.getLastRow();
       if (lastRow > 1) {
         const slice = sheet.getRange(2, 3, lastRow - 1, 5).getValues(); // C..G
         for (let i = 0; i < slice.length; i++) {
-          existingKeys.add(numToStr(slice[i][0]).toUpperCase() + '|' + numToStr(slice[i][1]).toUpperCase() + '|' + numToStr(slice[i][4]));
+          const k = numToStr(slice[i][0]).toUpperCase() + '|' + numToStr(slice[i][1]).toUpperCase() + '|' + numToStr(slice[i][4]);
+          existingKeys.add(k);
+          if (!existingRowByKey[k]) existingRowByKey[k] = { row: i + 2, remark: String(slice[i][3] || "") };
         }
       }
       keys.forEach(k => {
@@ -511,7 +516,16 @@ function drainMpInbox() {
           const oid = String(item.orderId || "").trim();
           if (!t || !sku) return;
           const key = t + '|' + sku + '|' + oid;
-          if (existingKeys.has(key)) return;
+          if (existingKeys.has(key)) {
+            // ✅ เหมือน saveMarketplaceData: แถวซ้ำแต่หมายเหตุใหม่ไม่ว่าง/ต่างจากเดิม → เขียนทับ
+            const prev = existingRowByKey[key];
+            const rmk  = String(item.remark || "").trim().slice(0, 500);
+            if (prev && rmk && rmk !== String(prev.remark || "").trim()) {
+              remarkUpdates.push({ row: prev.row, remark: rmk });
+              prev.remark = rmk;
+            }
+            return;
+          }
           existingKeys.add(key);
           newRows.push([ts, mp || String(item.marketplace || ""), "'" + t, "'" + sku,
                         Number(item.qty) || 1, String(item.remark || "").trim().slice(0, 500), "'" + oid]);
@@ -524,13 +538,18 @@ function drainMpInbox() {
         sheet.getRange(startRow, 1, newRows.length, 7).setValues(newRows);
         SpreadsheetApp.flush();
       }
+      remarkUpdated = _applyRemarkUpdates(sheet, remarkUpdates);
     } finally { try { slock.releaseLock(); } catch(_) {} }
+
+    // แก้ remark ในแถวเดิมไม่ทำให้ lastRow ขยับ → ล้าง sig เองไม่งั้น /pending ไม่ rebuild
+    if (remarkUpdated > 0) _invalidatePendingCacheSig();
 
     // ลบ batch ที่ process แล้วทั้งหมด (Firebase — นอก lock)
     UrlFetchApp.fetch(cfg.url + "/mpInbox.json?auth=" + encodeURIComponent(cfg.secret), {
       method: "patch", contentType: "application/json", payload: JSON.stringify(delKeys), muteHttpExceptions: true
     });
-    Logger.log("[drainMpInbox] เขียน " + newRows.length + " แถว จาก " + keys.length + " batch");
+    Logger.log("[drainMpInbox] เขียน " + newRows.length + " แถว จาก " + keys.length + " batch" +
+               (remarkUpdated > 0 ? " + อัปเดตหมายเหตุ " + remarkUpdated + " แถว" : ""));
     if (newRows.length > 0) _logSaveAttempt("", "", "mp_drain", newRows.length, "batches=" + keys.length);
     return newRows.length;
   } catch(e) {
@@ -2069,6 +2088,39 @@ function setupMarketplaceSheet() {
 }
 
 // ============================================================
+// _applyRemarkUpdates — เขียนทับ remark (col F) ของแถวที่มีอยู่แล้วใน MarketplaceData
+//
+// ทำไมต้องมี: dedup key คือ tracking|sku|orderId ซึ่ง "ไม่มี remark อยู่ในกุญแจ"
+//   ถ้าลูกค้ามาเพิ่มหมายเหตุทีหลังแล้วแม่ค้า export ไฟล์ใหม่มาอัปซ้ำ แถวเดิมจะถูก skip ทั้งแถว
+//   → หมายเหตุใหม่ไม่เคยลงชีต และมือถือไม่มีวันเห็น
+//
+// กติกา: อัปเดตเฉพาะเมื่อ remark ใหม่ "ไม่ว่าง" และ "ต่างจากของเดิม"
+//   remark ว่างไม่ลบของเดิมทิ้ง — ไฟล์บางรอบอาจไม่มีคอลัมน์หมายเหตุ/ส่งมาไม่ครบ
+//
+// updates = [{ row, remark }] (row = เลขแถวจริงในชีต)
+const REMARK_UPDATE_CAP = 1000; // กัน setValue ยิงรัวจนสคริปต์ timeout — ที่เหลือรอบหน้าเก็บต่อ
+function _applyRemarkUpdates(sheet, updates) {
+  if (!updates || !updates.length) return 0;
+  const todo = updates.slice(0, REMARK_UPDATE_CAP);
+  if (updates.length > todo.length) {
+    Logger.log('[_applyRemarkUpdates] เกิน cap: อัปเดต ' + todo.length + '/' + updates.length + ' แถว (ที่เหลือรออัปโหลดรอบหน้า)');
+  }
+  for (let i = 0; i < todo.length; i++) {
+    sheet.getRange(todo[i].row, 6).setValue(todo[i].remark);
+  }
+  SpreadsheetApp.flush();
+  return todo.length;
+}
+
+// ล้าง pendingCacheSig — บังคับให้ /pending ถูก rebuild รอบถัดไป
+//   จำเป็นเมื่อ "แก้ remark ในแถวเดิม" เพราะ sig คิดจาก lastRow ของชีต ซึ่งไม่ขยับเลย
+//   ([refreshPendingCache] จะข้าม mirror ถ้า sig เท่าเดิม → มือถือไม่เห็นหมายเหตุที่เพิ่งแก้)
+function _invalidatePendingCacheSig() {
+  try { PropertiesService.getScriptProperties().deleteProperty('pendingCacheSig'); }
+  catch(e) { Logger.log('[_invalidatePendingCacheSig] ' + e.message); }
+}
+
+// ============================================================
 // saveMarketplaceData
 // ============================================================
 function saveMarketplaceData(body) {
@@ -2096,6 +2148,7 @@ function saveMarketplaceData(body) {
     // ✅ อ่านเฉพาะคอลัมน์ C-G (tracking, sku, qty, remark, orderId) — เร็วกว่าอ่านทุกคอลัมน์
     // เดิม: getDataRange().getValues() อ่าน 7 คอลัมน์ รวม timestamp ที่ไม่ใช้ → เสียเวลา serialize
     const existingKeys = new Set();
+    const existingRowByKey = {}; // key → { row, remark } สำหรับอัปเดต remark ของแถวเดิม
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
       const slice = sheet.getRange(2, 3, lastRow - 1, 5).getValues(); // C..G
@@ -2103,12 +2156,16 @@ function saveMarketplaceData(body) {
         const t = numToStr(slice[i][0]).toUpperCase(); // col C
         const s = numToStr(slice[i][1]).toUpperCase(); // col D
         const o = numToStr(slice[i][4]);               // col G
-        existingKeys.add(t + '|' + s + '|' + o);
+        const k = t + '|' + s + '|' + o;
+        existingKeys.add(k);
+        // key ซ้ำในชีต (เคยมีก่อน dedupeMarketplaceData) → ยึดแถวแรก ให้ตรงกับกติกาของ dedupe
+        if (!existingRowByKey[k]) existingRowByKey[k] = { row: i + 2, remark: String(slice[i][3] || "") };
       }
     }
 
     let newRows = [];
     let duplicateSkipped = 0;
+    const remarkUpdates = [];
     dataArray.forEach(item => {
       if (!item || typeof item !== 'object') return;
       const t   = String(item.tracking || "").trim().toUpperCase();
@@ -2116,7 +2173,18 @@ function saveMarketplaceData(body) {
       const oid = String(item.orderId || "").trim();
       if (!t || !sku) return;
       const key = t + '|' + sku + '|' + oid;
-      if (existingKeys.has(key)) { duplicateSkipped++; return; }
+      if (existingKeys.has(key)) {
+        duplicateSkipped++;
+        // ✅ แถวซ้ำ แต่ถ้าหมายเหตุใหม่ไม่ว่างและต่างจากเดิม → เขียนทับ remark ของแถวเดิม
+        //    (เคสลูกค้ามาเพิ่มโน้ตทีหลัง แล้ว export ไฟล์ใหม่มาอัปซ้ำ)
+        const prev = existingRowByKey[key];
+        const rmk  = String(item.remark || "").trim().slice(0, 500);
+        if (prev && rmk && rmk !== String(prev.remark || "").trim()) {
+          remarkUpdates.push({ row: prev.row, remark: rmk });
+          prev.remark = rmk; // กันสั่งอัปเดตซ้ำถ้า key นี้โผล่อีกในก้อนเดียวกัน
+        }
+        return;
+      }
       existingKeys.add(key);
       newRows.push([
         timestamp,
@@ -2146,11 +2214,15 @@ function saveMarketplaceData(body) {
       }
     }
 
+    const remarkUpdated = _applyRemarkUpdates(sheet, remarkUpdates);
+
     logSheet.appendRow([timestamp, fileName, marketplace, newRows.length]);
 
-    if (newRows.length > 0) _bumpMarketplaceVersion();
+    if (newRows.length > 0 || remarkUpdated > 0) _bumpMarketplaceVersion();
+    // แก้ remark ในแถวเดิมไม่ทำให้ lastRow ขยับ → ต้องล้าง sig เองไม่งั้น /pending ไม่ rebuild
+    if (remarkUpdated > 0) _invalidatePendingCacheSig();
 
-    return { success: true, count: newRows.length, duplicateSkipped, verified };
+    return { success: true, count: newRows.length, duplicateSkipped, remarkUpdated, verified };
   } catch (e) {
     return { success: false, error: e.toString() };
   } finally {

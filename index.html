@@ -7181,7 +7181,7 @@ async function _uploadOneWithRetry(r) {
     return _sendChunkWithRetry(all, r.file.name, r.marketplace);
   }
   // ไฟล์ใหญ่ → แบ่งส่งทีละก้อน, รวมผล
-  let count = 0, dup = 0, bf = 0;
+  let count = 0, dup = 0, bf = 0, ru = 0;
   for (let i = 0; i < all.length; i += MP_UPLOAD_CHUNK) {
     const chunk = all.slice(i, i + MP_UPLOAD_CHUNK);
     const res = await _sendChunkWithRetry(chunk, r.file.name + ` [${i + 1}-${i + chunk.length}]`, r.marketplace);
@@ -7192,14 +7192,15 @@ async function _uploadOneWithRetry(r) {
     count += res.resp.count || 0;
     dup   += res.resp.duplicateSkipped || 0;
     bf    += res.resp.backfilled || 0;
+    ru    += res.resp.remarkUpdated || 0;
   }
-  return { ok: true, resp: { success: true, count, duplicateSkipped: dup, backfilled: bf } };
+  return { ok: true, resp: { success: true, count, duplicateSkipped: dup, backfilled: bf, remarkUpdated: ru } };
 }
 
 // ✅ concurrency = 1 — saveMarketplaceData ใช้ lock เดียวกันอยู่แล้ว
 // ขนานหลาย requests ไม่ช่วยอะไร แค่ทำให้ queue ยาว → timeout
 async function _uploadResultsParallel(items, concurrency = 1) {
-  const agg = { totalCount: 0, totalDup: 0, totalBf: 0, failures: [] };
+  const agg = { totalCount: 0, totalDup: 0, totalBf: 0, totalRemarkUpd: 0, failures: [] };
   let done = 0;
   _showProgressDialog('กำลังอัปโหลด', items.length);
   await _runWithLimit(items, concurrency, async (r) => {
@@ -7211,6 +7212,7 @@ async function _uploadResultsParallel(items, concurrency = 1) {
       agg.totalCount += resp.count || 0;
       agg.totalDup   += resp.duplicateSkipped || 0;
       agg.totalBf    += resp.backfilled || 0;
+      agg.totalRemarkUpd += resp.remarkUpdated || 0;
       return { ok: true };
     } else {
       agg.failures.push({ result: r, reason: result.error });
@@ -7513,7 +7515,7 @@ async function processFileUpload() {
   //    จะอ่าน lastRow ค่าเดียวกัน → เขียนทับกัน → ข้อมูลหาย
   //    GAS ฝั่งใหม่มี LockService แล้ว (ทำงานเสมือนได้) แต่ client ยังคุม sequential เพื่อความปลอดภัย
   let pending = results;
-  let totalCount = 0, totalDup = 0, totalBf = 0;
+  let totalCount = 0, totalDup = 0, totalBf = 0, totalRemarkUpd = 0;
   let lastFailures = [];
 
   while (pending.length > 0) {
@@ -7521,6 +7523,7 @@ async function processFileUpload() {
     totalCount += agg.totalCount;
     totalDup   += agg.totalDup;
     totalBf    += agg.totalBf;
+    totalRemarkUpd += agg.totalRemarkUpd;
 
     if (agg.failures.length === 0) { lastFailures = []; break; }
 
@@ -7530,10 +7533,11 @@ async function processFileUpload() {
       </div>`).join('');
     const dupMsg2 = totalDup > 0 ? ` (ข้ามซ้ำ ${totalDup})` : '';
     const bfMsg2  = totalBf > 0 ? ` (เติม OrderId ${totalBf})` : '';
+    const ruMsg2  = totalRemarkUpd > 0 ? ` (อัปเดตหมายเหตุ ${totalRemarkUpd})` : '';
     const choice = await Swal.fire({
       title: 'อัปโหลดบางไฟล์ไม่สำเร็จ',
       html: `<div style="text-align:left; font-size:0.88rem; color:#7a6440;">
-        ✅ สำเร็จสะสม: <strong>${totalCount}</strong> รายการ${dupMsg2}${bfMsg2}<br>
+        ✅ สำเร็จสะสม: <strong>${totalCount}</strong> รายการ${dupMsg2}${bfMsg2}${ruMsg2}<br>
         ❌ ล้มเหลว: <strong>${agg.failures.length}</strong> ไฟล์
         <div style="margin-top:8px; padding-top:8px; border-top:1px solid #e0d8c0;">${failHtml}</div>
       </div>`,
@@ -7596,12 +7600,15 @@ async function processFileUpload() {
       ? `<div style="margin-top:4px; padding:6px 10px; background:#fff3cd; border-left:3px solid #d4a017; border-radius:6px; font-size:0.84rem; color:#7a5a10;">⤴ ข้ามซ้ำ <strong>${totalDup}</strong> รายการ (มีอยู่ใน Sheet แล้ว — จึงไม่เขียนซ้ำ)</div>`
       : '';
     const bfLine    = totalBf  > 0 ? `<div style="font-size:0.8rem;color:#a08a5a;">เติม OrderId ย้อนหลัง ${totalBf} แถว</div>` : '';
+    const ruLine = totalRemarkUpd > 0
+      ? `<div style="margin-top:4px; padding:6px 10px; background:#e7f5ec; border-left:3px solid #1a9e82; border-radius:6px; font-size:0.84rem; color:#1a6b58;">📝 อัปเดตหมายเหตุลูกค้า <strong>${totalRemarkUpd}</strong> รายการ (แถวมีอยู่แล้ว แต่หมายเหตุเปลี่ยน — เขียนทับให้)</div>`
+      : '';
     Swal.fire({
       title: totalParseSkipped > 0 ? 'สำเร็จ (มีคำเตือน)' : 'สำเร็จ',
       html: `<div style="text-align:left;line-height:1.8;">
         <div>✅ <strong>เขียนเข้า Sheet จริง: ${totalCount} รายการ</strong></div>
         <div style="font-size:0.85rem;color:#7a6440;">จากที่อ่านได้ทั้งหมด ${totalSent} รายการ ใน ${results.length} ไฟล์</div>
-        ${dupLine}${bfLine}
+        ${dupLine}${bfLine}${ruLine}
         <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e0d8c0;">${resultPerFile}</div>
       </div>`,
       icon: totalParseSkipped > 0 ? 'warning' : 'success',
