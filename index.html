@@ -4654,6 +4654,30 @@ async function _firebaseFetchPendingLive() {
   } catch(e) { return null; }
 }
 
+// ⚡ overlay หมายเหตุที่แก้จากแถบค้นหา — /remarkLive/{TRACKING} = { k, ts, tk, rm }
+//   แอปเขียนตรง (ไม่ผ่าน GAS) แล้วทุกเครื่องเอาไป "ทับ" หมายเหตุของ /pending และ /orders
+//   GAS drainRemarkLive ลงชีตตามหลัง แล้วลบรายการนั้นทิ้ง → กลับไปใช้ค่าจาก /pending ที่ตรงกันแล้ว
+//   คืน { TRACKING: remark } — rm ว่าง = ตั้งใจลบหมายเหตุ ต้องทับด้วยค่าว่างจริง ไม่ใช่ข้าม
+async function _firebaseFetchRemarkLive() {
+  if (!FIREBASE_ENABLED()) return null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(`${FIREBASE_DB_URL}/remarkLive.json`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const raw = (await res.json()) || {};
+    const out = {};
+    for (const key in raw) {
+      const d = raw[key];
+      if (!d || typeof d !== 'object') continue;
+      const tk = String(d.tk || key || '').trim().toUpperCase();
+      if (tk) out[tk] = String(d.rm == null ? '' : d.rm);
+    }
+    return out;
+  } catch(e) { return null; }
+}
+
 // ====== REAL-TIME SYNC — เครื่องอื่นอัปไฟล์ → ทุกเครื่องดึงข้อมูลใหม่อัตโนมัติ ======
 //   ฟัง Firebase /cacheMeta แบบ stream (SSE) — ts เปลี่ยนทุกครั้งที่ refreshPendingCache เขียน
 //   (รวมตอน "อัปไฟล์เสร็จ → refreshPending") → SSE ส่ง event → เครื่องนี้ดึง /pending+/products ใหม่เบื้องหลัง
@@ -4751,6 +4775,14 @@ async function _fetchOrderCacheBackground(retries = 2) {
           }
         }
       } catch(e) { console.warn('[pendingLive] merge fail:', e.message); }
+      // 📝 ทับหมายเหตุด้วย /remarkLive — หมายเหตุที่เพิ่งแก้จากแถบค้นหา ยังไม่ลงชีต/ยังไม่เข้า /pending
+      try {
+        const rl = await _firebaseFetchRemarkLive();
+        if (rl) for (const T of Object.keys(rl)) {
+          if (!Array.isArray(normalizedOrderRes[T])) continue; // แพ็คแล้ว → ไม่อยู่ใน pending ไม่เกี่ยวกับการพูด
+          normalizedOrderRes[T] = normalizedOrderRes[T].map(it => ({ ...it, remark: rl[T] }));
+        }
+      } catch(e) { console.warn('[remarkLive] merge fail:', e.message); }
       localStorage.setItem('localOrdersCache', JSON.stringify(normalizedOrderRes));
       console.log("[Order Cache] ซิงค์สำเร็จ:", Object.keys(normalizedOrderRes).length, "ออเดอร์");
       const remarkFromOrders = {}, infoFromOrders = {};
@@ -8196,6 +8228,12 @@ async function _firebaseSearch(query) {
     String(d.oid || '').toUpperCase().includes(kw)
   );
   const rows = hits.map(_fbOrderToRow);
+  // 📝 หมายเหตุที่เพิ่งแก้ (ยังไม่ลงชีต/ยังไม่ mirror /orders) → ทับให้เห็นค่าล่าสุด
+  const rl = await _firebaseFetchRemarkLive();
+  if (rl) for (const r of rows) {
+    const T = String(r[3] || '').toUpperCase();
+    if (Object.prototype.hasOwnProperty.call(rl, T)) r[5] = rl[T];
+  }
 
   // ✅ ค้นออเดอร์ที่ "ยังไม่แพ็ค" ด้วย — /orders มีเฉพาะที่แพ็คแล้ว
   //    ถ้าไม่รวมตรงนี้ จะแก้หมายเหตุของใบที่ยังไม่แพ็คไม่ได้เลย ซึ่งเป็นใบที่ระบบต้องพูดตอนสแกน
@@ -8828,8 +8866,40 @@ function _renderSearchCards(rows) {
 }
 
 // ===== เพิ่ม/แก้หมายเหตุจากแถบค้นหา =====
-// เขียนผ่าน GAS action "updateRemark" ซึ่งลงทั้ง MarketplaceData (ใบที่ยังไม่แพ็ค — ระบบพูดตอนสแกน)
-//   และ Orders (ใบที่แพ็คแล้ว — บันทึกย้อนหลัง) แล้วแต่ว่าพัสดุใบนั้นอยู่ที่ไหน
+// เขียนลง Firebase /remarkLive ตรง (ไม่เรียก GAS) → ทุกเครื่องเห็นทันทีผ่าน /cacheMeta
+//   GAS drainRemarkLive ลงชีตตามหลังเป็นงานเบื้องหลัง — ทั้ง MarketplaceData (ใบที่ยังไม่แพ็ค ระบบพูดตอนสแกน)
+//   และ Orders (ใบที่แพ็คแล้ว บันทึกย้อนหลัง) แล้วแต่ว่าพัสดุอยู่ที่ไหน
+//   เคยเรียก GAS เขียนชีตตรง แต่ติด ScriptLock ช่วงแพ็คถี่ ("Server busy" หลังรอ 30 วิ) — จึงเปลี่ยนมาทางนี้
+let _remarkPushFailReason = '';
+async function _firebasePushRemarkLive(tracking, remark) {
+  _remarkPushFailReason = '';
+  const TK = String(tracking || '').trim().toUpperCase();
+  // key ต้องไม่มีอักขระต้องห้ามของ Firebase — ใช้กติกาเดียวกับ _fbKey ฝั่ง GAS
+  const key = TK.replace(/[.$#\[\]\/\x00-\x1f\x7f]/g, '_').slice(0, 200) || '_';
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/remarkLive.json`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      // rm "" = ตั้งใจลบ → ต้องส่งเป็นสตริงว่าง ไม่ใช่ null (null จะลบ node ทิ้ง GAS จะไม่รู้ว่าต้องล้างชีต)
+      body: JSON.stringify({ [key]: { k: FIREBASE_WRITE_KEY, ts: Date.now(), tk: TK, rm: remark } })
+    });
+    if (!res.ok) {
+      _remarkPushFailReason = (res.status === 401 || res.status === 403)
+        ? 'Firebase ไม่อนุญาตให้เขียน /remarkLive — ต้องเพิ่ม Rule ของ remarkLive ใน Firebase Console ก่อน'
+        : `Firebase ตอบกลับ ${res.status}`;
+      return false;
+    }
+    // เตะทุกเครื่องให้ดึงใหม่ (real-time ผ่าน SSE) — ไม่ต้องรอผล
+    fetch(`${FIREBASE_DB_URL}/cacheMeta.json`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ts: Date.now(), k: FIREBASE_WRITE_KEY })
+    }).catch(() => {});
+    return true;
+  } catch (e) {
+    _remarkPushFailReason = 'เชื่อมต่อ Firebase ไม่ได้ — ' + e.message;
+    return false;
+  }
+}
+
 async function editSearchRemark(tracking) {
   const tk = String(tracking || '').trim();
   if (!tk) return;
@@ -8854,30 +8924,26 @@ async function editSearchRemark(tracking) {
   const remark = String(value || '').trim();
   if (remark === current.trim()) return; // ไม่มีอะไรเปลี่ยน — ไม่ต้องยิง
 
-  Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false,
-              background: '#fff0f3', customClass: { popup: 'swal-popup' } });
-  let res;
-  try {
-    res = await callGAS('updateRemark', { tracking: tk, remark }, 30000);
-  } catch (e) {
-    Swal.fire('บันทึกไม่สำเร็จ', e.message, 'error');
+  if (!FIREBASE_ENABLED()) {
+    Swal.fire('บันทึกไม่ได้', 'ต้องเปิดใช้ Firebase ก่อน (FIREBASE_DB_URL ว่าง)', 'error');
     return;
   }
-  if (!res || !res.success) {
-    Swal.fire('บันทึกไม่สำเร็จ', (res && res.error) || 'ไม่ทราบสาเหตุ', 'error');
+  Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false,
+              background: '#fff0f3', customClass: { popup: 'swal-popup' } });
+  const ok = await _firebasePushRemarkLive(tk, remark);
+  if (!ok) {
+    Swal.fire('บันทึกไม่สำเร็จ', _remarkPushFailReason || 'ไม่ทราบสาเหตุ', 'error');
     return;
   }
 
   _applyRemarkLocally(tk, remark);
   _applySearchFilters();
 
-  const where = [];
-  if (res.pending) where.push('ใบที่ยังไม่แพ็ค (ระบบจะพูดตอนสแกน)');
-  if (res.packed)  where.push('บันทึกของใบที่แพ็คแล้ว');
+  const isPending = !!(row && row._pending);
   Swal.fire({
-    icon: res.unchanged ? 'info' : 'success',
-    title: res.unchanged ? 'ค่าเดิมอยู่แล้ว' : (remark ? 'บันทึกหมายเหตุแล้ว' : 'ลบหมายเหตุแล้ว'),
-    html: where.length ? `<div style="font-size:0.85rem; color:#7a6440;">อัปเดต: ${where.join(' + ')}</div>` : '',
+    icon: 'success',
+    title: remark ? 'บันทึกหมายเหตุแล้ว' : 'ลบหมายเหตุแล้ว',
+    html: `<div style="font-size:0.85rem; color:#7a6440;">ทุกเครื่องเห็นแล้ว${isPending ? ' — ระบบจะพูดหมายเหตุนี้ตอนสแกนแพ็ค' : ''}</div>`,
     background: '#fff0f3', customClass: { popup: 'swal-popup' },
     timer: 2200, showConfirmButton: false,
   });
