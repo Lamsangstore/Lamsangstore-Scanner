@@ -1327,6 +1327,7 @@ const RATE_LIMITS = {
   getAllPendingOrders: 60,
   getProductData: 60,
   searchData: 120,
+  updateRemark: 60,          // แก้หมายเหตุจากแถบค้นหา — คนกดเอง ไม่ใช่ batch
   getReportData: 30,
   getExpectedOrderDetails: 240,
   getSpreadsheetUrl: 30,
@@ -1346,7 +1347,7 @@ const RATE_LIMITS = {
 };
 
 const ALLOWED_ACTIONS = new Set([
-  "getProductData", "saveData", "searchData", "saveMarketplaceData",
+  "getProductData", "saveData", "searchData", "saveMarketplaceData", "updateRemark",
   "getExpectedOrderDetails", "getReportData", "getAllPendingOrders",
   "getSpreadsheetUrl", "getMarketplaceVersionUrl",
   "uploadVideoOnly", "reconcileVideoUrls", "drainInbox", "refreshPending", "drainMpInbox",
@@ -1464,6 +1465,7 @@ function doPost(e) {
     else if (action === "saveData")                   result = saveData(body);
     else if (action === "searchData")                 result = searchData(body.query);
     else if (action === "saveMarketplaceData")        result = saveMarketplaceData(body);
+    else if (action === "updateRemark")               result = updateRemark(body);
     else if (action === "getExpectedOrderDetails")    result = getExpectedOrderDetails(body.trackingNo);
     else if (action === "getReportData")              result = getReportData(body.start, body.end);
     else if (action === "getAllPendingOrders")        result = getAllPendingOrders();
@@ -1495,7 +1497,7 @@ function doPost(e) {
 function _logRequestRejected(parcelId, action, reason, detail) {
   try {
     // log เฉพาะ action ที่ใช้บันทึกข้อมูล — ไม่ log getProductData, searchData ฯลฯ
-    const WRITE_ACTIONS = new Set(["saveData", "saveMarketplaceData", ""]);
+    const WRITE_ACTIONS = new Set(["saveData", "saveMarketplaceData", "updateRemark", ""]);
     if (action && !WRITE_ACTIONS.has(action)) return;
     _logSaveAttempt(parcelId, "", reason, 0, action + " | " + (detail || ""));
   } catch(e) {
@@ -2969,6 +2971,118 @@ function getAllPendingOrders() {
   } catch (e) {
     Logger.log("Error in getAllPendingOrders: " + e.message);
     return {};
+  }
+}
+
+// ============================================================
+// updateRemark — เพิ่ม/แก้หมายเหตุของพัสดุหนึ่งใบ จากแถบค้นหา
+//
+// หมายเหตุในระบบอยู่ 2 ที่ คนละความหมาย จึงเขียน "ทั้งสองที่ถ้าเจอ":
+//   - MarketplaceData col F → ไหลไป /pending = ตัวที่ระบบพูดตอนสแกนแพ็ค (ยังไม่แพ็ค)
+//   - Orders col F          → ไหลไป /orders  = บันทึกที่ติดกับออเดอร์ที่แพ็คไปแล้ว
+// พัสดุใบหนึ่งอาจอยู่ทั้งคู่ (อัปไฟล์แล้วแพ็คแล้ว) → แก้ให้ตรงกันทั้งคู่ ไม่ให้ข้อมูลขัดกันเอง
+//
+// remark ว่าง = ตั้งใจลบ (ต่างจากตอนอัปไฟล์ที่ค่าว่างแปลว่า "ไฟล์ไม่มีคอลัมน์นี้" จึงห้ามลบ)
+//   ที่นี่คนพิมพ์เองกับมือ ช่องว่างจึงเป็นเจตนาจริง
+// ============================================================
+function updateRemark(body) {
+  const tracking = String(body.tracking || "").trim().toUpperCase();
+  if (!tracking) return { success: false, error: "ไม่มีเลขพัสดุ" };
+  const remark = String(body.remark || "").trim().slice(0, 500);
+
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); }
+  catch(e) { return { success: false, error: "Server busy, please retry" }; }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let mpUpdated = 0, ordUpdated = 0;
+    let mpFound = 0, ordFound = 0; // เจอแถว vs แก้จริง — ต้องแยก ไม่งั้น "ไม่เจอพัสดุ" จะดูเหมือน "ค่าเดิมอยู่แล้ว"
+
+    let pendingItems = null; // ไว้ PUT /pending ของ tracking นี้ใหม่
+
+    // ── 1. MarketplaceData (ออเดอร์ที่ยังไม่แพ็ค) ──
+    const mpSheet = ss.getSheetByName(SHEET_MARKETPLACE);
+    if (mpSheet) {
+      const last = mpSheet.getLastRow();
+      if (last > 1) {
+        // อ่าน B..G (marketplace, tracking, sku, qty, remark, orderId) — พอสำหรับหาแถว + ประกอบ /pending ใหม่
+        const rows = mpSheet.getRange(2, 2, last - 1, 6).getValues();
+        const items = [];
+        for (let i = 0; i < rows.length; i++) {
+          if (numToStr(rows[i][1]).toUpperCase() !== tracking) continue;
+          mpFound++;
+          if (String(rows[i][4] || "").trim() !== remark) {
+            mpSheet.getRange(i + 2, 6).setValue(remark);
+            mpUpdated++;
+          }
+          const sku = numToStr(rows[i][2]).toUpperCase();
+          if (!sku) continue;
+          const qty = parseInt(rows[i][3]) || 1;
+          const oid = numToStr(rows[i][5]);
+          // รวม sku ซ้ำแบบเดียวกับ getAllPendingOrders เพื่อให้ /pending หน้าตาเหมือนกัน
+          const found = items.filter(function(it) { return it.sku === sku; })[0];
+          if (found) {
+            found.qty += qty;
+            if (oid && found.orderId.split(',').map(function(x){return x.trim();}).indexOf(oid) === -1) {
+              found.orderId = found.orderId ? found.orderId + ',' + oid : oid;
+            }
+          } else {
+            items.push({ sku: sku, qty: qty, remark: remark, orderId: oid,
+                         marketplace: String(rows[i][0] || "").trim().toLowerCase() });
+          }
+        }
+        if (items.length) pendingItems = items;
+      }
+    }
+
+    // ── 2. Orders (ออเดอร์ที่แพ็คไปแล้ว) ──
+    const ordSheet = ss.getSheetByName(SHEET_ORDERS);
+    if (ordSheet) {
+      const last = ordSheet.getLastRow();
+      if (last > 1) {
+        const colDF = ordSheet.getRange(2, 4, last - 1, 3).getValues(); // D tracking, E video, F remark
+        for (let i = 0; i < colDF.length; i++) {
+          if (numToStr(colDF[i][0]).toUpperCase() !== tracking) continue;
+          // แถว placeholder ของวิดีโอยังไม่ใช่ออเดอร์จริง — ทับแล้ว saveData จะหา placeholder ไม่เจอ
+          if (String(colDF[i][2] || "").indexOf("__VIDEO_FIRST__") === 0) continue;
+          ordFound++;
+          if (String(colDF[i][2] || "").trim() !== remark) {
+            ordSheet.getRange(i + 2, 6).setValue(remark);
+            ordUpdated++;
+          }
+        }
+      }
+    }
+
+    if (mpFound === 0 && ordFound === 0) {
+      return { success: false, tracking: tracking, notFound: true,
+               error: "ไม่พบพัสดุนี้ทั้งใน MarketplaceData และ Orders" };
+    }
+    if (mpUpdated === 0 && ordUpdated === 0) {
+      return { success: true, tracking: tracking, mpUpdated: 0, ordUpdated: 0, unchanged: true };
+    }
+    SpreadsheetApp.flush();
+
+    // ── 3. sync Firebase ทันที ไม่ต้องรอ refreshPendingCache รอบถัดไป ──
+    const cfg = _firebaseCfg();
+    if (cfg.url && cfg.secret) {
+      const key = _fbKey(tracking);
+      // แก้แถวเดิมไม่ทำให้ lastRow ขยับ → sig เท่าเดิม → mirror ถูกข้าม ต้องล้างเอง
+      if (mpUpdated > 0) {
+        _invalidatePendingCacheSig();
+        if (pendingItems) { try { _fbPut(cfg, "/pending/" + key + ".json", pendingItems); } catch(e) {} }
+      }
+      if (ordUpdated > 0) { try { _fbPut(cfg, "/orders/" + key + "/rm.json", remark); } catch(e) {} }
+    }
+
+    Logger.log("[updateRemark] " + tracking + " → mp=" + mpUpdated + " ord=" + ordUpdated);
+    return { success: true, tracking: tracking, mpUpdated: mpUpdated, ordUpdated: ordUpdated,
+             pending: mpFound > 0, packed: ordFound > 0 };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  } finally {
+    try { lock.releaseLock(); } catch(_) {}
   }
 }
 

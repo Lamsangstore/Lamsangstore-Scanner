@@ -8195,7 +8195,42 @@ async function _firebaseSearch(query) {
     String(d.tk || '').toUpperCase().includes(kw) ||
     String(d.oid || '').toUpperCase().includes(kw)
   );
-  return hits.map(_fbOrderToRow);
+  const rows = hits.map(_fbOrderToRow);
+
+  // ✅ ค้นออเดอร์ที่ "ยังไม่แพ็ค" ด้วย — /orders มีเฉพาะที่แพ็คแล้ว
+  //    ถ้าไม่รวมตรงนี้ จะแก้หมายเหตุของใบที่ยังไม่แพ็คไม่ได้เลย ซึ่งเป็นใบที่ระบบต้องพูดตอนสแกน
+  const packed = new Set(rows.map(r => String(r[3] || '').toUpperCase()));
+  for (const r of _searchPendingRows(kw)) {
+    if (packed.has(String(r[3] || '').toUpperCase())) continue; // แพ็คแล้ว → ใช้แถวของ /orders
+    rows.push(r);
+  }
+  return rows;
+}
+
+// ค้น localOrdersCache (= /pending) ด้วยคีย์เวิร์ดเดียวกับ /orders — tracking หรือ orderId
+//   คืนแถวหน้าตาเดียวกับ _fbOrderToRow แต่ติดธง _pending ไว้ให้การ์ดรู้ว่ายังไม่แพ็ค
+function _searchPendingRows(kw) {
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem('localOrdersCache') || '{}'); } catch(e) { return []; }
+  const out = [];
+  for (const tk in cache) {
+    const items = cache[tk];
+    if (!Array.isArray(items) || !items.length) continue;
+    const first = items[0] || {};
+    const oid = String(first.orderId || '');
+    if (!String(tk).toUpperCase().includes(kw) && !oid.toUpperCase().includes(kw)) continue;
+    const remark = (items.find(i => i && i.remark) || {}).remark || '';
+    // กาง qty ออกเป็นรายชิ้น ให้จำนวนตรงกับการ์ดของ /orders ที่เก็บ item ซ้ำตามจำนวนจริง
+    const skus = [];
+    for (const it of items) {
+      const n = Math.max(1, parseInt(it && it.qty) || 1);
+      for (let i = 0; i < n; i++) skus.push(String((it && it.sku) || ''));
+    }
+    const row = ['', oid, String(first.marketplace || '').toLowerCase(), String(tk), '', remark, skus.length, ...skus];
+    row._pending = true;
+    out.push(row);
+  }
+  return out;
 }
 
 // ออเดอร์ที่เพิ่งแพ็ก → ใส่ cache ทันที (search เจอเลยไม่ต้องรอ mirror 5 นาที)
@@ -8575,7 +8610,9 @@ function _matchesFilter(row) {
   const mp = String(row[2] || '').trim().toLowerCase();
   const dateStr = String(row[0] || '');
   if (_searchFilter.mp && mp !== _searchFilter.mp) return false;
-  if (_searchFilter.date) {
+  // แถว /pending ยังไม่ถูกแพ็คจึงไม่มีวันที่ — ตัวกรองวันที่หมายถึง "วันที่แพ็ค"
+  //   ถ้าปล่อยให้ตกตัวกรอง ผู้ใช้กด "7 วัน" แล้วใบที่ยังไม่แพ็คจะหายไปเฉยๆ ทั้งที่ยังค้างอยู่จริง
+  if (_searchFilter.date && !row._pending) {
     // dateStr format: "dd/MM/yyyy HH:mm:ss" (from numToStr in GAS searchData)
     const m = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
     if (!m) return false;
@@ -8732,6 +8769,9 @@ function _renderSearchCards(rows) {
       const name = pName[marketplace_raw] || marketplace_raw;
       orderBadge += `<span style="display:inline-block; background:${color}; color:#fff; font-size:0.68rem; padding:1px 8px; border-radius:10px; margin-left:6px; vertical-align:middle;">${name}</span>`;
     }
+    if (row._pending) {
+      orderBadge += `<span style="display:inline-block; background:#e9c46a; color:#5a4410; font-size:0.68rem; padding:1px 8px; border-radius:10px; margin-left:6px; vertical-align:middle;">รอแพ็ค</span>`;
+    }
     if (orderId_raw) {
       orderBadge += `<div style="font-size:0.75rem; color:var(--text3); margin-top:2px;">คำสั่งซื้อ #${escHtml(orderId_raw)}</div>`;
     }
@@ -8748,9 +8788,11 @@ function _renderSearchCards(rows) {
     // ✅ Copy + Share buttons
     const trackingEsc = tracking.replace(/'/g, "\\'");
     const linkEsc = (trackingLink || '').replace(/'/g, "\\'");
+    const remarkBtnTitle = remark ? 'แก้หมายเหตุ' : 'เพิ่มหมายเหตุ';
     const actionBtns = `
       <button onclick="copyTracking('${trackingEsc}', this)" class="btn-neu-sm" style="font-size:0.7rem; padding:4px 9px; min-width:34px;" title="ก๊อปรหัสพัสดุ">📋</button>
       <button onclick="shareTracking('${trackingEsc}', '${linkEsc}')" class="btn-neu-sm" style="font-size:0.7rem; padding:4px 9px; min-width:34px;" title="แชร์">📤</button>
+      <button onclick="editSearchRemark('${trackingEsc}')" class="btn-neu-sm" style="font-size:0.7rem; padding:4px 9px; min-width:34px;${remark ? '' : ' color:#c06030;'}" title="${remarkBtnTitle}">📝</button>
     `;
 
     const itemsHtml = rawItems.length > 0
@@ -8766,7 +8808,7 @@ function _renderSearchCards(rows) {
     return `<div style="background:var(--bg); border-radius:var(--radius); box-shadow:4px 4px 12px var(--sd),-4px -4px 12px var(--sl); padding:14px 16px; margin-bottom:12px;">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:4px;">
         <div>
-          <div style="font-size:0.73rem; color:var(--text3);"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="2" y="4" width="16" height="14" rx="3.5" fill="#a8dadc"/><rect x="2" y="4" width="16" height="5.5" rx="3.5" fill="#457b9d"/><rect x="2" y="7" width="16" height="2.5" fill="#457b9d"/><rect x="5.5" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="13" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="8.75" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="12.5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/></svg> ${escHtml(date)}</div>
+          <div style="font-size:0.73rem; color:var(--text3);"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="2" y="4" width="16" height="14" rx="3.5" fill="#a8dadc"/><rect x="2" y="4" width="16" height="5.5" rx="3.5" fill="#457b9d"/><rect x="2" y="7" width="16" height="2.5" fill="#457b9d"/><rect x="5.5" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="13" y="1" width="1.5" height="3" rx="0.75" fill="#cdb4db"/><rect x="5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="8.75" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/><rect x="12.5" y="13" width="2.5" height="2.5" rx="1" fill="white" opacity="0.7"/></svg> ${date ? escHtml(date) : 'ยังไม่ได้แพ็ค'}</div>
           <div style="margin-top:4px;">${trackingHtml}${orderBadge}</div>
           ${remarkHtml}
         </div>
@@ -8783,6 +8825,96 @@ function _renderSearchCards(rows) {
 
   th.innerHTML = '';
   tb.innerHTML = `<tr><td colspan="99" style="padding:0; border:none;">${cards}</td></tr>`;
+}
+
+// ===== เพิ่ม/แก้หมายเหตุจากแถบค้นหา =====
+// เขียนผ่าน GAS action "updateRemark" ซึ่งลงทั้ง MarketplaceData (ใบที่ยังไม่แพ็ค — ระบบพูดตอนสแกน)
+//   และ Orders (ใบที่แพ็คแล้ว — บันทึกย้อนหลัง) แล้วแต่ว่าพัสดุใบนั้นอยู่ที่ไหน
+async function editSearchRemark(tracking) {
+  const tk = String(tracking || '').trim();
+  if (!tk) return;
+  const row = (_searchRawResults || []).find(r => String(r[3] || '').toUpperCase() === tk.toUpperCase());
+  const current = row ? String(row[5] || '') : '';
+
+  const { value, isConfirmed } = await Swal.fire({
+    title: current ? 'แก้หมายเหตุ' : 'เพิ่มหมายเหตุ',
+    html: `<div style="font-size:0.8rem; color:#9a9085; word-break:break-all; margin-bottom:2px;">${escHtml(tk)}</div>`,
+    input: 'textarea',
+    inputValue: current,
+    inputPlaceholder: 'พิมพ์หมายเหตุ เช่น ห่อกันกระแทก / ห้ามเคาะกล่อง',
+    inputAttributes: { maxlength: 500, 'aria-label': 'หมายเหตุ' },
+    showCancelButton: true,
+    confirmButtonText: 'บันทึก',
+    cancelButtonText: 'ยกเลิก',
+    background: '#fff0f3',
+    customClass: { popup: 'swal-popup' },
+  });
+  if (!isConfirmed) return;
+
+  const remark = String(value || '').trim();
+  if (remark === current.trim()) return; // ไม่มีอะไรเปลี่ยน — ไม่ต้องยิง
+
+  Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false,
+              background: '#fff0f3', customClass: { popup: 'swal-popup' } });
+  let res;
+  try {
+    res = await callGAS('updateRemark', { tracking: tk, remark }, 30000);
+  } catch (e) {
+    Swal.fire('บันทึกไม่สำเร็จ', e.message, 'error');
+    return;
+  }
+  if (!res || !res.success) {
+    Swal.fire('บันทึกไม่สำเร็จ', (res && res.error) || 'ไม่ทราบสาเหตุ', 'error');
+    return;
+  }
+
+  _applyRemarkLocally(tk, remark);
+  _applySearchFilters();
+
+  const where = [];
+  if (res.pending) where.push('ใบที่ยังไม่แพ็ค (ระบบจะพูดตอนสแกน)');
+  if (res.packed)  where.push('บันทึกของใบที่แพ็คแล้ว');
+  Swal.fire({
+    icon: res.unchanged ? 'info' : 'success',
+    title: res.unchanged ? 'ค่าเดิมอยู่แล้ว' : (remark ? 'บันทึกหมายเหตุแล้ว' : 'ลบหมายเหตุแล้ว'),
+    html: where.length ? `<div style="font-size:0.85rem; color:#7a6440;">อัปเดต: ${where.join(' + ')}</div>` : '',
+    background: '#fff0f3', customClass: { popup: 'swal-popup' },
+    timer: 2200, showConfirmButton: false,
+  });
+}
+
+// อัปเดต cache ทุกที่ที่เก็บหมายเหตุไว้ ให้ตรงกับที่เพิ่งบันทึก โดยไม่ต้องรอ sync รอบถัดไป
+function _applyRemarkLocally(tracking, remark) {
+  const TK = String(tracking || '').toUpperCase();
+
+  // แถวผลค้นหาที่ถืออยู่
+  for (const r of (_searchRawResults || [])) {
+    if (String(r[3] || '').toUpperCase() === TK) r[5] = remark;
+  }
+  // cache ของ /orders (ใบที่แพ็คแล้ว)
+  if (Array.isArray(_ordersCache)) {
+    for (const d of _ordersCache) {
+      if (String(d.tk || '').toUpperCase() === TK) d.rm = remark;
+    }
+  }
+  // cache ของ /pending (ใบที่ยังไม่แพ็ค) — ตัวที่ใช้พูดตอนสแกน
+  try {
+    const cache = JSON.parse(localStorage.getItem('localOrdersCache') || '{}');
+    for (const k in cache) {
+      if (String(k).toUpperCase() !== TK) continue;
+      if (Array.isArray(cache[k])) cache[k].forEach(it => { if (it) it.remark = remark; });
+    }
+    localStorage.setItem('localOrdersCache', JSON.stringify(cache));
+  } catch(e) { console.warn('[Remark] อัปเดต localOrdersCache ไม่ได้:', e.message); }
+  try {
+    const map = JSON.parse(localStorage.getItem('orderRemarkMap') || '{}');
+    if (remark) map[TK] = remark; else delete map[TK];
+    localStorage.setItem('orderRemarkMap', JSON.stringify(map));
+  } catch(e) { console.warn('[Remark] อัปเดต orderRemarkMap ไม่ได้:', e.message); }
+  // กันไม่ให้ "พูดหมายเหตุไปแล้ว" ค้าง — แก้ใหม่แล้วต้องพูดของใหม่ได้
+  if (typeof _remarkAnnouncedFor !== 'undefined' && String(_remarkAnnouncedFor).toUpperCase() === TK) {
+    _remarkAnnouncedFor = '';
+  }
 }
 
 // ✅ สร้าง URL ตรวจสอบสถานะพัสดุตามขนส่ง
