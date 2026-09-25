@@ -1158,11 +1158,11 @@
       transition: all 0.2s ease;
     }
     .drop-zone:hover {
-      border-color: var(--gold);
+      border-color: var(--pink);
       background: #fff8e8;
     }
     .drop-zone.dragover {
-      border-color: var(--gold);
+      border-color: var(--pink);
       background: #fff0c2;
       box-shadow: 0 0 0 4px rgba(212,168,67,0.18), inset 3px 3px 8px var(--sd), inset -3px -3px 8px var(--sl);
       transform: scale(1.01);
@@ -1200,7 +1200,7 @@
       cursor: pointer; padding: 0 4px; line-height: 1;
     }
     html.dark-mode .drop-zone { background: #1e1c19; color: #b0a890; border-color: #6b5a30; }
-    html.dark-mode .drop-zone:hover { background: #2a2620; border-color: var(--gold); }
+    html.dark-mode .drop-zone:hover { background: #2a2620; border-color: var(--pink); }
     html.dark-mode .drop-zone.dragover { background: #3a3220; }
     html.dark-mode .dz-filelist .dz-file { background: #2c2a25; color: #e8e4dc; }
     /* Global drop overlay — ลากไฟล์มาวางที่ไหนก็ได้ในแอป */
@@ -2725,7 +2725,7 @@
         <h6 class="fw-bold mb-2" style="color:var(--pink);"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="1" y="3" width="18" height="15" rx="4" fill="#cdb4db"/><rect x="1" y="3" width="18" height="5" rx="4" fill="#d8c3e8"/><rect x="1" y="6" width="18" height="2" fill="#d8c3e8"/><rect x="4" y="13" width="3" height="4" rx="1.5" fill="#f4a261"/><rect x="8.5" y="10" width="3" height="7" rx="1.5" fill="#a8dadc"/><rect x="13" y="8" width="3" height="9" rx="1.5" fill="#b5ead7"/></svg></span> กราฟรายวัน</h6>
         <div id="dailyChartContainer" style="display:flex; align-items:flex-end; gap:3px; padding:0; overflow-x:auto;"></div>
         <div style="display:flex; gap:14px; justify-content:center; margin-top:6px;">
-          <span style="font-size:0.68rem; color:var(--text3);"><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:var(--gold); vertical-align:middle;"></span> ยังไม่ถึงเป้า</span>
+          <span style="font-size:0.68rem; color:var(--text3);"><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#c8a84b; vertical-align:middle;"></span> ยังไม่ถึงเป้า</span>
           <span style="font-size:0.68rem; color:var(--text3);"><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#7ab87a; vertical-align:middle;"></span> ถึงเป้า</span>
           <span style="font-size:0.68rem; color:var(--text3);">🎯 <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:rgba(122,184,122,0.5); vertical-align:middle; border:1px dashed #7ab87a;"></span> เป้า</span>
         </div>
@@ -8501,7 +8501,7 @@ async function showDayDetail(dateStr) {
     const prodHtml = products.length === 0
       ? '<div style="color:var(--text3); font-size:0.82rem;">ไม่มีสินค้า</div>'
       : products.map((p, i) => `<div style="display:flex; align-items:baseline; gap:6px; font-size:0.82rem; padding:2px 0;">
-          <span style="color:var(--gold); font-weight:600; flex-shrink:0; min-width:18px;">${i + 1}.</span>
+          <span style="color:var(--text2); font-weight:600; flex-shrink:0; min-width:18px;">${i + 1}.</span>
           <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(p.name)}</span>
           <strong>${p.count}</strong>
         </div>`).join('');
