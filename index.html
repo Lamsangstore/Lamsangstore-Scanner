@@ -3123,6 +3123,45 @@ const headerKeywords = {
   }
 };
 
+/* ===== HEADER-ROWS-START — ข้อมูลเริ่มที่แถวไหน (ทดสอบผ่าน tools ได้เหมือนกัน) =====
+   ไฟล์ของ TikTok มี "แถวคำอธิบายคอลัมน์" คั่นอยู่ใต้หัวตาราง (ไฟล์ .xlsx มี · .csv ไม่มี)
+   ชุดเดียวกันจึงมีได้ทั้งสองแบบ — ต้องหาเองจากเนื้อในแถว ไม่ใช่ตั้งตายตัวต่อช่องทาง
+   นับผิดไปแถวเดียวก็เสียข้อมูลแถวแรก หรือเอาคำอธิบายไปเป็นออเดอร์ */
+function _looksLikeCode(v) {
+  const s = String(v ?? '').trim();
+  return s.length >= 4 && s.length <= 120 && !/\s/.test(s);
+}
+function _looksLikeNumber(v) {
+  const s = String(v ?? '').trim();
+  return s !== '' && Number.isFinite(Number(s.replace(/[,\s]/g, '')));
+}
+
+/** แถวนี้เป็นคำอธิบายคอลัมน์ ไม่ใช่ข้อมูลจริง */
+function isDescriptionRow(row, map) {
+  if (!row || !row.length) return false;
+  /* แบบที่เจอจริงในไฟล์ TikTok: "Platform unique order ID." · "The filed to explain…" */
+  const first = String(row[0] ?? '').trim().toLowerCase();
+  if (first.includes('platform') || first.includes('the ') || (first.includes('order') && first.length > 30)) return true;
+  /* กันไว้เผื่อ TikTok เปลี่ยนข้อความ/แปลเป็นภาษาอื่น — ดูที่ช่องที่เราต้องใช้จริงแทน
+     แถวข้อมูลต้องมี SKU เป็นรหัส (ไม่มีช่องว่าง) หรือจำนวนเป็นตัวเลข อย่างน้อยหนึ่งอย่าง */
+  const sku = map.sku >= 0 ? row[map.sku] : '';
+  const qty = map.qty >= 0 ? row[map.qty] : '';
+  const tracking = map.tracking >= 0 ? row[map.tracking] : '';
+  const hasData = _looksLikeCode(sku) || _looksLikeNumber(qty) || _looksLikeCode(tracking);
+  return !hasData;
+}
+
+/** แถวแรกที่เป็นข้อมูลจริง — ข้ามหัวตาราง + แถวคำอธิบายที่ตามมา (ดูไม่เกิน 4 แถวแรก) */
+function dataStartRow(rows, map) {
+  let start = 1;
+  for (let r = 1; r < Math.min(5, rows.length); r++) {
+    if (!isDescriptionRow(rows[r], map)) break;
+    start = r + 1;
+  }
+  return start;
+}
+/* ===== HEADER-ROWS-END ===== */
+
 /* ===== AMOUNT-MAP-START — ยอดที่ลูกค้าจ่ายของแต่ละบรรทัด (ทดสอบด้วย tools/test-amount.mjs) =====
    ยอดนี้ติดไปกับคิวรอแพค แล้ว Hub คัดลอกลงใบแพคตอนแพคเสร็จ → รายงาน "ยอดส่งออกรายวัน"
    ยอดคือ "เงินที่ลูกค้าจ่ายจริง" (หลังส่วนลดของร้าน ก่อนหักค่าธรรมเนียมแพลตฟอร์ม)
@@ -7023,14 +7062,7 @@ async function readAndExtractFile(file) {
     if (detected.remark !== undefined) useMap.remark = detected.remark;
     if (detected.orderId !== undefined) useMap.orderId = detected.orderId;
   }
-  let detectedStart = 1;
-  for (let r = 1; r < Math.min(5, rows.length); r++) {
-    const firstCell = String(rows[r]?.[0] || '').trim().toLowerCase();
-    if (firstCell.includes('platform') || firstCell.includes('the ') || (firstCell.includes('order') && firstCell.length > 30)) {
-      detectedStart = r + 1;
-    } else break;
-  }
-  useMap.headerRows = detectedStart;
+  useMap.headerRows = dataStartRow(rows, useMap);
 
   const extractData = [];
   const remarkMap = {};
@@ -7319,6 +7351,19 @@ async function _uploadResultsParallel(items, concurrency = 1) {
    ยอดที่อ่านได้จากไฟล์คือสิ่งที่ทำให้ "ยอดส่งออกรายวัน" ที่หลังบ้านมีตัวเลข
    **ต้องบอกเสมอว่ารู้ราคากี่ใบจากกี่ใบ** ช่องทางที่ยังไม่ได้ผูกช่องราคา (Shopee · Lazada)
    จะอัปได้ปกติแต่ใบพวกนั้นไม่มียอด — ไม่บอกก็จะงงว่าทำไมยอดรายวันขาด */
+/* ไฟล์ที่อ่านได้แต่ไม่มีอะไรเข้าคิวเลย — ต้องบอกให้ตรงสาเหตุ ไม่ใช่ "ไม่พบข้อมูลในไฟล์"
+   ไฟล์ของ TikTok ที่ยังไม่ได้กดจัดส่ง (สถานะ "รอจัดส่ง") ไม่มีเลขพัสดุสักแถว
+   ซึ่งเป็นเรื่องปกติ ไม่ใช่ไฟล์เสีย — คิวรอแพคใช้เลขพัสดุเป็นตัวจับคู่ตอนสแกน */
+function _emptyFileReason(r) {
+  const reasons = (r.skipped && r.skipped.reasons) || {};
+  const noTk = reasons.no_tracking || 0;
+  const total = r.totalDataRows || 0;
+  if (noTk > 0 && noTk >= total * 0.5) {
+    return `ยังไม่มีเลขพัสดุสักแถว (${noTk} แถว) — ไฟล์นี้เป็นออเดอร์ที่ยังไม่ได้กดจัดส่ง TikTok จะออกเลขให้ตอนกดจัดส่ง/พิมพ์ใบปะหน้า แล้วค่อยโหลดไฟล์ใหม่มาอัป`;
+  }
+  return 'ไม่พบข้อมูลในไฟล์';
+}
+
 function _baht(v) {
   return '฿' + (Number(v) || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 });
 }
@@ -7359,7 +7404,7 @@ async function processFileUpload() {
     try {
       const r = await readAndExtractFile(f);
       if (r.extractData.length === 0) {
-        readFailures.push({ name: f.name, reason: 'ไม่พบข้อมูลในไฟล์' });
+        readFailures.push({ name: f.name, reason: _emptyFileReason(r) });
       } else {
         results.push(r);
       }
@@ -7423,7 +7468,7 @@ async function processFileUpload() {
     page365: 'rgba(24,119,242,0.08)',
     thaimart:'rgba(173,20,87,0.08)',
   };
-  const _skipReasonLabel = { no_tracking: 'ไม่มี Tracking ID', no_sku: 'ไม่มี SKU', bad_tracking_format: 'Tracking ไม่ถูกต้อง', null_row: 'แถวว่าง' };
+  const _skipReasonLabel = { no_tracking: 'ยังไม่มีเลขพัสดุ', no_sku: 'ไม่มี SKU', bad_tracking_format: 'เลขพัสดุผิดรูปแบบ', null_row: 'แถวว่าง' };
   const perFile = results.map(r => {
     const tCount = new Set(r.extractData.map(d => d.tracking)).size;
     const s = mpStyle[r.marketplace] || { bg: '#888' };
