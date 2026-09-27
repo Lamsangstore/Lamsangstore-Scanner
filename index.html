@@ -4541,8 +4541,6 @@ async function initScanner() {
   }
 }
 
-// ⚡ อ่าน products จาก Firebase /products (~100ms) — คืน map หรือ null
-
 // ✅ แปลง SKU → ชื่อสินค้า แบบทนทาน (case-insensitive) — ใช้ทั้ง search + report
 //   /stats เก็บ sku เป็น UPPERCASE, product sheet อาจ key คนละ case → index แบบ uppercase กันพลาด
 let _productNameUpper = {}; // UPPERCASE(sku) -> name
@@ -7452,7 +7450,7 @@ async function openTab(tab, btn) {
   // ── Search Animations ──
   if (tab === 'search') {
     animateSearch();
-    _loadOrdersCache(false).catch(() => {}); // 🔍 preload Firebase orders → ค้นครั้งแรกเร็ว
+    _loadOrdersCache(false).catch(() => {}); // 🔍 preload ใบแพคจาก Hub → ค้นครั้งแรกเร็ว
   }
 
   if (tab !== 'search' && searchScanner) { searchScanner.clear(); document.getElementById("search-reader").style.display = "none"; }
@@ -7725,8 +7723,7 @@ function setPreset(type, btnEl) {
   fetchReport();
 }
 
-// 📊 อ่าน stats จาก Firebase ตรง (~100ms, ไม่มี GAS cold start)
-//   คืน null ถ้าปิด Firebase / อ่านไม่ได้ → ให้ fallback ไป GAS
+// 📊 รายงาน — สรุปจากใบแพคที่ Hub (เดิมอ่านตัวเลขสรุปจาก Firebase /stats)
 async function _hubReadStats(start, end) {
   /* สรุปเองจากใบแพคใน Hub — เดิมอ่านตัวเลขสรุปสำเร็จรูปจาก Firebase /stats
      ที่ GAS เป็นคนไล่บวกให้ตอน drain ตอนนี้ไม่มีตัวกลางแล้ว จึงนับจากใบจริงตรง ๆ */
@@ -7770,21 +7767,28 @@ let _ordersCache = null;         // array ของ doc { ts, tk, oid, mp, v, rm
 let _ordersCacheAt = 0;          // เวลาโหลดล่าสุด
 const ORDERS_CACHE_TTL = 5 * 60 * 1000; // 5 นาที
 
-async function _loadOrdersCache(force) {
-  if (!force && _ordersCache && (Date.now() - _ordersCacheAt) < ORDERS_CACHE_TTL) return _ordersCache;
+/* ค้นหาโหลดแค่ 30 วันก่อน — ทั้งร้านแพคราววันละ 500 ใบ 90 วันคือ ~5 MB
+   ซึ่งบนมือถือตรงโต๊ะแพคช้ามากจนดูเหมือนหน้าค้าง · หาไม่เจอค่อยขยายเป็น 90 วันให้เอง */
+const ORDERS_CACHE_DAYS = 30;
+const ORDERS_CACHE_DAYS_WIDE = 90;
+let _ordersCacheDays = 0;
+
+async function _loadOrdersCache(force, days = ORDERS_CACHE_DAYS) {
+  const fresh = _ordersCache && (Date.now() - _ordersCacheAt) < ORDERS_CACHE_TTL && _ordersCacheDays >= days;
+  if (!force && fresh) return _ordersCache;
   try {
-    /* ใบแพคย้อนหลัง 90 วันจาก Hub — เรียงใหม่สุดก่อนมาให้แล้ว */
-    const docs = await _hubFetchPacks({ days: 90, limit: 20000 });
+    const docs = await _hubFetchPacks({ days, limit: 20000 });
     _ordersCache = docs;
     _ordersCacheAt = Date.now();
+    _ordersCacheDays = days;
     return _ordersCache;
   } catch(e) {
     console.warn('[ค้นหา] โหลดใบแพคจาก Hub ไม่ได้:', e.message);
-    return _ordersCache; // คงของเก่าไว้
+    return _ordersCache; // คงของเก่าไว้ · ไม่มีของเก่า = null → หน้าค้นหาจะขึ้นข้อความบอก
   }
 }
 
-// แปลง doc Firebase → row array แบบเดียวกับ GAS searchData
+// แปลงใบแพค → row array แบบเดียวกับที่หน้าค้นหาเคยใช้
 //   [ts(formatted), orderId, marketplace, tracking, videoUrl, remark, count, ...items]
 function _fbOrderToRow(d) {
   const dt = d.ts ? new Date(d.ts) : null;
@@ -7793,7 +7797,7 @@ function _fbOrderToRow(d) {
   return [tsStr, d.oid || '', d.mp || '', d.tk || '', d.v || '', d.rm || '', items.length, ...items];
 }
 
-// 📋 ตาราง Orders ทั้งหมด (จาก Firebase /orders — ย้อนหลัง 90 วัน) — ปุ่มในแถบรายงาน
+// 📋 ตารางใบแพคทั้งหมด (จาก Hub — ย้อนหลัง 90 วัน) — ปุ่มในแถบรายงาน
 async function showOrdersTable() {
   Swal.fire({ title: '📋 กำลังโหลดตาราง...', html: 'ดึงใบแพคจาก Hub', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
   await _ensureProductMap();
@@ -7919,14 +7923,19 @@ window._toggleOrderRow = function(tr) {
 
 // ค้นใน cache → คืน row arrays (เรียงใหม่→เก่า) หรือ null ถ้าใช้ Firebase ไม่ได้
 async function _firebaseSearch(query) {
-  const cache = await _loadOrdersCache(false);
+  let cache = await _loadOrdersCache(false);
   if (!cache) return null;
   const kw = String(query || '').trim().toUpperCase();
   if (!kw) return [];
-  const hits = cache.filter(d =>
-    String(d.tk || '').toUpperCase().includes(kw) ||
-    String(d.oid || '').toUpperCase().includes(kw)
-  );
+  const match = d => String(d.tk || '').toUpperCase().includes(kw) || String(d.oid || '').toUpperCase().includes(kw);
+  let hits = cache.filter(match);
+  /* ไม่เจอใน 30 วัน → ขยายเป็น 90 วันให้อัตโนมัติ (ของเก่ากว่านั้นดูที่หลังบ้านเว็บ) */
+  if (hits.length === 0 && _ordersCacheDays < ORDERS_CACHE_DAYS_WIDE) {
+    try { showSyncToast('ไม่เจอใน 30 วัน — กำลังค้นย้อนหลัง 90 วัน...'); } catch(e) {}
+    cache = await _loadOrdersCache(true, ORDERS_CACHE_DAYS_WIDE);
+    if (!cache) return null;
+    hits = cache.filter(match);
+  }
   const rows = hits.map(_fbOrderToRow);
   /* หมายเหตุอยู่ในใบแพคที่ Hub แล้ว (แก้แล้วส่งใบเดิมซ้ำ ใบหลังชนะ) ไม่ต้องมีชั้นทับอีก */
 
@@ -7986,11 +7995,11 @@ async function fetchReport() {
   document.getElementById('dashContent').style.display = 'none';
   try {
     await _ensureProductMap(); // ให้ชื่อสินค้าพร้อมก่อน render (เผื่อยังไม่กด "เริ่ม")
-    // ⚡ Firebase ล้วน — ดึงไม่ได้ → แจ้ง error (ไม่ fallback GAS ที่ช้า)
+    /* อ่านจาก Hub — ดึงไม่ได้ก็บอกไปตรง ๆ ไม่ปล่อยให้หน้าว่างเปล่าจนดูเหมือนพัง */
     const data = await _hubReadStats(start, end);
     if (!data) {
       document.getElementById('dashLoading').style.display = 'none';
-      Swal.fire('โหลดรายงานไม่ได้', 'ดึงข้อมูลจาก Firebase ไม่ได้ — เช็คเน็ต/Rules แล้วลองใหม่', 'error');
+      Swal.fire('โหลดรายงานไม่ได้', 'ดึงใบแพคจาก Hub ไม่ได้ — เช็คเน็ตแล้วลองใหม่', 'error');
       return;
     }
     lastReportFetchTime = Date.now();
@@ -8000,6 +8009,18 @@ async function fetchReport() {
     document.getElementById('dashLoading').style.display = 'none';
     Swal.fire('โหลดข้อมูลไม่สำเร็จ', e.message, 'error');
   }
+}
+
+/** บอกว่าใบแพคล่าสุดคือเมื่อไร — ใช้ตอนช่วงที่เลือกไม่มีข้อมูล */
+async function _showLatestPackHint(container) {
+  try {
+    const docs = await _hubFetchPacks({ days: 30, limit: 20000, lite: true });
+    if (!docs.length || !container) return;
+    const last = docs.reduce((m, d) => (d.ts > (m?.ts || 0) ? d : m), null);
+    if (!last) return;
+    const t = new Date(last.ts).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    container.innerHTML += `<div class="text-center small" style="color:#9a9085; padding-bottom:10px;">ใบล่าสุดที่แพคคือ ${t} — เลือกช่วงวันให้ครอบคลุมวันนั้นเพื่อดูตัวเลข</div>`;
+  } catch(e) {}
 }
 
 function renderReport(data, start, end) {
@@ -8030,7 +8051,10 @@ function renderReport(data, start, end) {
   const container = document.getElementById('dashProductTable');
   const products  = data.allProducts || [];
   if (products.length === 0) {
-    container.innerHTML = '<div class="text-center small py-4" style="color:#9a9085;">😿 ไม่พบข้อมูลในช่วงนี้</div>';
+    /* ช่วงที่ไม่มีใบแพคเลยต้องบอกว่า "ยังไม่มีการแพค" พร้อมใบล่าสุดที่มี
+       ไม่งั้นเลข 0 กับ −100% จะอ่านเหมือนหน้าพัง ทั้งที่แค่ยังไม่ได้แพควันนี้ */
+    container.innerHTML = '<div class="text-center small py-4" style="color:#9a9085;">😿 ยังไม่มีใบแพคในช่วงนี้</div>';
+    _showLatestPackHint(container);
     return;
   }
   container.innerHTML = products.map((item, i) => `
@@ -8097,7 +8121,7 @@ async function _renderComparePrevPeriod(start, end, curOrders, curItems) {
     const prevEnd   = new Date(s); prevEnd.setDate(s.getDate() - 1);
     const prevStart = new Date(prevEnd); prevStart.setDate(prevEnd.getDate() - (days - 1));
     const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const prev = await _hubReadStats(fmt(prevStart), fmt(prevEnd)); // Firebase ล้วน — ดึงไม่ได้ → ข้ามการเทียบ
+    const prev = await _hubReadStats(fmt(prevStart), fmt(prevEnd)); // ดึงไม่ได้ → ข้ามการเทียบ
     if (token !== _prevPeriodToken) return; // มี fetch ใหม่แทรกแล้ว
     if (!prev || prev.error) return;
     _setCompareDelta('d-box', _calcDelta(curOrders, prev.totalOrders || 0));
@@ -8150,8 +8174,8 @@ async function showDayDetail(dateStr) {
     customClass: { popup: 'swal-popup' },
   });
   try {
-    const data = await _hubReadStats(dateStr, dateStr); // Firebase ล้วน (ไม่ fallback GAS)
-    if (!data || data.error) throw new Error(data?.error || 'ดึงข้อมูลจาก Firebase ไม่ได้ — เช็คเน็ต/Rules');
+    const data = await _hubReadStats(dateStr, dateStr); // อ่านจาก Hub
+    if (!data || data.error) throw new Error(data?.error || 'ดึงใบแพคจาก Hub ไม่ได้ — เช็คเน็ตแล้วลองใหม่');
 
     const mpStyle = {
       shopee: { name: 'Shopee', color: '#ee4d2d' },
@@ -8432,11 +8456,11 @@ async function runSearch() {
   document.getElementById("tableHead").innerHTML = "";
   try {
     await _ensureProductMap(); // ให้ชื่อสินค้าพร้อมก่อนแสดงผลค้นหา
-    // ⚡ Firebase ล้วน — ดึงไม่ได้ (null) → แจ้ง error (ไม่ fallback GAS ที่ช้า)
+    /* อ่านจาก Hub — ดึงไม่ได้ก็บอกไปตรง ๆ */
     const res = await _firebaseSearch(q);
     if (res === null) {
       document.getElementById("loadingSearch").style.display = "none";
-      Swal.fire('ค้นหาไม่ได้', 'ดึงข้อมูลจาก Firebase ไม่ได้ — เช็คเน็ต/Rules แล้วลองใหม่', 'error');
+      Swal.fire('ค้นหาไม่ได้', 'ดึงใบแพคจาก Hub ไม่ได้ — เช็คเน็ตแล้วลองใหม่', 'error');
       return;
     }
     document.getElementById("loadingSearch").style.display = "none";
