@@ -3123,6 +3123,124 @@ const headerKeywords = {
   }
 };
 
+/* ===== AMOUNT-MAP-START — ยอดที่ลูกค้าจ่ายของแต่ละบรรทัด (ทดสอบด้วย tools/test-amount.mjs) =====
+   ยอดนี้ติดไปกับคิวรอแพค แล้ว Hub คัดลอกลงใบแพคตอนแพคเสร็จ → รายงาน "ยอดส่งออกรายวัน"
+   ยอดคือ "เงินที่ลูกค้าจ่ายจริง" (หลังส่วนลดของร้าน ก่อนหักค่าธรรมเนียมแพลตฟอร์ม)
+
+   scope: 'line'  = ไฟล์มีราคารวมรายการอยู่ในแถวนั้นแล้ว
+   scope: 'order' = ไฟล์มีแต่ยอดรวมของบิล → ต้องเฉลี่ยลงแต่ละบรรทัด
+                    (Hub บวกทุกบรรทัดของพัสดุใบเดียวกัน ใส่ยอดบิลซ้ำทุกแถวจะได้หลายเท่า)
+   ช่องทางที่ยังไม่รู้ชื่อคอลัมน์ให้เป็น null — อัปได้ตามปกติ แค่ใบนั้นไม่มียอด
+   และหน้าสรุปตอนอัปจะบอกว่า "ไฟล์นี้ไม่มีราคา" ไม่ใช่เงียบหายไป */
+const amountMappings = {
+  /* หลังหักทั้งส่วนลดร้านและส่วนลด TikTok = ที่ลูกค้าจ่าย · รวมทุกบรรทัดแล้วเท่ากับ Order Amount */
+  tiktok:   { scope: 'line',  keywords: ['sku subtotal after discount'] },
+  thaimart: { scope: 'line',  keywords: ['ราคารวมรายการ (บาท)', 'ราคารวมรายการ'] },
+  /* Page365: ช่อง Subtotal/Discount ไม่สอดคล้องกันเอง (บางบิลเป็นราคาก่อนลด บางบิลหลังลด)
+     จึงยึด Total ของบิล ซึ่งเท่ากับ Paid Amount ทุกใบที่มีค่านั้น แล้วเฉลี่ยตามราคารวมรายการ */
+  page365:  { scope: 'order', keywords: ['total'], weight: ['item subtotal'], order: ['no.'] },
+  /* ยังไม่มีไฟล์ตัวอย่างให้ดูชื่อคอลัมน์ราคา */
+  shopee:   null,
+  lazada:   null
+};
+
+/** อ่านตัวเลขเงินจากช่องในไฟล์ — อ่านไม่ได้/ติดลบ = 0 (ไม่ใช่ error ปล่อยให้ใบนั้นไม่มียอด) */
+function parseMoneyCell(v) {
+  if (v === null || v === undefined) return 0;
+  const n = Number(String(v).replace(/[฿,\s]/g, '').replace(/[()]/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** หาตำแหน่งคอลัมน์ราคาจาก header จริง — null = ช่องทางนี้ยังไม่ได้ผูก หรือไฟล์ไม่มีคอลัมน์นั้น */
+function resolveAmountColumns(marketplace, headerRow) {
+  const cfg = amountMappings[marketplace];
+  if (!cfg || !headerRow) return null;
+  const headers = headerRow.map(_normHeader);
+  const findCol = (keywords) => {
+    if (!keywords) return -1;
+    for (const k of keywords) {
+      const i = headers.findIndex(h => h === k);
+      if (i >= 0) return i;
+    }
+    for (const k of keywords) {
+      if (!k.includes(' ')) continue;
+      const i = headers.findIndex(h => h.includes(k));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const col = findCol(cfg.keywords);
+  if (col < 0) return null;
+  const out = { scope: cfg.scope, col, label: String(headerRow[col] || '').trim() };
+  if (cfg.scope === 'order') {
+    out.weightCol = findCol(cfg.weight);
+    out.orderCol = findCol(cfg.order);
+    if (out.orderCol < 0) return null; // ไม่รู้ว่าแถวไหนอยู่บิลเดียวกัน = เฉลี่ยไม่ได้
+  }
+  return out;
+}
+
+/**
+ * แบ่งยอด `totalSatang` ลงแต่ละบรรทัดตามน้ำหนัก — **ผลรวมต้องเท่ากับก้อนที่แบ่งเป๊ะ**
+ * ปัดทีละบรรทัดแล้วบวกกันจะขาดไปทีละสตางค์ (กติกาเดียวกับ allocate() ของเว็บร้าน)
+ * เศษที่เหลือยกให้บรรทัดที่น้ำหนักมากสุด · ไม่มีน้ำหนักเลย = เฉลี่ยเท่ากัน
+ */
+function allocateSatang(totalSatang, weights) {
+  const n = weights.length;
+  const out = new Array(n).fill(0);
+  if (!n || !(totalSatang > 0)) return out;
+  const w = weights.map(v => (Number(v) > 0 ? Number(v) : 0));
+  const sum = w.reduce((a, b) => a + b, 0);
+  let used = 0;
+  if (sum > 0) {
+    for (let i = 0; i < n; i++) { out[i] = Math.floor((totalSatang * w[i]) / sum); used += out[i]; }
+  } else {
+    const base = Math.floor(totalSatang / n);
+    for (let i = 0; i < n; i++) { out[i] = base; used += base; }
+  }
+  const order = w.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
+  let rest = totalSatang - used;
+  for (let k = 0; rest > 0; k = (k + 1) % n) { out[order[k]] += 1; rest -= 1; }
+  return out;
+}
+
+/**
+ * ยอด (บาท) ของแต่ละแถวในไฟล์ — คืน array ที่ตรงตำแหน่งกับ `rows`
+ * scope 'line' อ่านตรงจากช่องนั้น · scope 'order' เฉลี่ยยอดบิลลงบรรทัดที่ใช้ได้
+ * `isUsable(row)` คือแถวที่จะถูกส่งเข้าคิวจริง — แถวที่ถูกข้ามต้องไม่กินส่วนแบ่ง
+ * ไม่งั้นยอดของพัสดุจะหายไปพร้อมแถวที่ข้าม
+ */
+function rowAmounts(rows, startRow, cfg, isUsable) {
+  const out = new Array(rows.length).fill(0);
+  if (!cfg) return out;
+  if (cfg.scope === 'line') {
+    for (let i = startRow; i < rows.length; i++) {
+      if (rows[i] && isUsable(rows[i])) out[i] = parseMoneyCell(rows[i][cfg.col]);
+    }
+    return out;
+  }
+  // scope 'order' — จับกลุ่มตามเลขที่บิล แล้วเฉลี่ยยอดของบิลลงบรรทัดในกลุ่ม
+  const groups = new Map();
+  for (let i = startRow; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !isUsable(row)) continue;
+    const key = String(row[cfg.orderCol] ?? '').trim();
+    if (!key) continue;
+    const g = groups.get(key) || { total: 0, idx: [], weights: [] };
+    /* ยอดบิลซ้ำทุกแถวของบิลเดียวกัน — เอาค่าที่มากสุดกันแถวที่ช่องว่าง */
+    g.total = Math.max(g.total, parseMoneyCell(row[cfg.col]));
+    g.idx.push(i);
+    g.weights.push(cfg.weightCol >= 0 ? parseMoneyCell(row[cfg.weightCol]) : 0);
+    groups.set(key, g);
+  }
+  for (const g of groups.values()) {
+    const share = allocateSatang(Math.round(g.total * 100), g.weights);
+    g.idx.forEach((rowIdx, k) => { out[rowIdx] = share[k] / 100; });
+  }
+  return out;
+}
+/* ===== AMOUNT-MAP-END ===== */
+
 // ===== AUTO-DETECT MARKETPLACE จาก header row =====
 // ให้คะแนนแต่ละ marketplace ตามจำนวน keyword ที่ match แล้วเลือกอันที่ได้คะแนนสูงสุด
 // เงื่อนไข: ต้อง match อย่างน้อย tracking + sku ถึงจะนับว่าใช้ได้
@@ -6601,6 +6719,12 @@ function cellToStr(val) {
 }
 
 // normalize Order ID — คืนค่าตรงๆ (ไม่แปลง)
+/** ปัดเป็น 2 ตำแหน่ง — เงินที่ส่งขึ้น Hub เป็นบาท (Hub คูณ 100 เก็บเป็นสตางค์) */
+function _round2(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0;
+}
+
 function normOrderId(id, marketplace) {
   if (!id) return '';
   return String(id).trim();
@@ -6910,6 +7034,20 @@ async function readAndExtractFile(file) {
     }
   };
   const startRow = useMap.headerRows || 1;
+
+  /* ยอดที่ลูกค้าจ่ายของแต่ละบรรทัด — ช่องทางที่ยังไม่ได้ผูกช่องราคาได้ null (ใบนั้นจะไม่มียอด) */
+  const amountCfg = resolveAmountColumns(marketplace, rows[0]);
+  /* แถวที่จะถูกส่งเข้าคิวจริง — ต้องตรงกับเงื่อนไขข้ามแถวด้านล่าง
+     ไม่งั้นแถวที่ถูกข้ามจะกินส่วนแบ่งของยอดบิลไปเฉย ๆ แล้วยอดพัสดุขาด */
+  const _usableRow = (row) => {
+    const tk = cellToStr(row[useMap.tracking]).toUpperCase();
+    const sk = normSku(cellToStr(row[useMap.sku]), marketplace);
+    if (!tk || !sk || tk === 'UNDEFINED' || sk === 'UNDEFINED') return false;
+    return tk.length >= 5 && !tk.includes(' ');
+  };
+  const amounts = rowAmounts(rows, startRow, amountCfg, _usableRow);
+  const amountBySkuKey = {};   // "TRACKING|SKU" → บาท
+
   if (marketplace === 'lazada') {
       const trackingMap = {};
       for (let i = startRow; i < rows.length; i++) {
@@ -6922,6 +7060,7 @@ async function readAndExtractFile(file) {
         }
         const key = tracking + '|' + sku;
         trackingMap[key] = (trackingMap[key] || 0) + 1;
+        if (amounts[i] > 0) amountBySkuKey[key] = (amountBySkuKey[key] || 0) + amounts[i];
         // ✅ ดึง orderId
         if (!orderInfoMap[tracking] && useMap.orderId !== undefined) {
           const oid = normOrderId(cellToStr(row[useMap.orderId]), marketplace);
@@ -6941,7 +7080,7 @@ async function readAndExtractFile(file) {
       for (const key in trackingMap) {
         const [tracking, sku] = key.split('|');
         const oid = orderInfoMap[tracking]?.orderId || '';
-        extractData.push({ marketplace, tracking, sku, qty: trackingMap[key], remark: remarkMap[tracking] || "", orderId: oid });
+        extractData.push({ marketplace, tracking, sku, qty: trackingMap[key], amount: _round2(amountBySkuKey[key]), remark: remarkMap[tracking] || "", orderId: oid });
       }
     } else {
       // ✅ ใช้ trackingSkuMap สะสม qty ก่อน แก้ปัญหา Shopee แตก row ซ้ำ SKU เดียวกัน
@@ -6961,6 +7100,7 @@ async function readAndExtractFile(file) {
         }
         const key = tracking + '|' + sku;
         trackingSkuMap[key] = (trackingSkuMap[key] || 0) + qty;
+        if (amounts[i] > 0) amountBySkuKey[key] = (amountBySkuKey[key] || 0) + amounts[i];
         // ✅ ดึง orderId — รองรับ "การจัดส่งแบบรวม" (tracking เดียว หลาย orderId)
         if (useMap.orderId !== undefined) {
           const oid = normOrderId(cellToStr(row[useMap.orderId]), marketplace);
@@ -6986,15 +7126,31 @@ async function readAndExtractFile(file) {
       // ✅ flatten trackingSkuMap → extractData (qty ถูกต้องแล้ว)
       for (const key in trackingSkuMap) {
         const [tracking, sku] = key.split('|');
-        extractData.push({ marketplace, tracking, sku, qty: trackingSkuMap[key], remark: remarkMap[tracking] || "", orderId: orderInfoMap[tracking]?.orderId || "" });
+        extractData.push({ marketplace, tracking, sku, qty: trackingSkuMap[key], amount: _round2(amountBySkuKey[key]), remark: remarkMap[tracking] || "", orderId: orderInfoMap[tracking]?.orderId || "" });
       }
     }
+
+  /* เรียงตามเลขพัสดุก่อนส่ง — ไฟล์ใหญ่ถูกแบ่งส่งทีละก้อน และ Hub เขียนทับรายการ "ทั้งใบ"
+     ใบเดียวที่แตกอยู่สองก้อนจะถูกก้อนหลังทับก้อนแรก เรียงแล้วใบเดียวอยู่ก้อนเดียวกันแน่ */
+  extractData.sort((a, b) => (a.tracking < b.tracking ? -1 : a.tracking > b.tracking ? 1 : 0));
+
+  /* ยอดรวมต่อพัสดุ — เอาไปบอกในหน้าสรุปว่ารู้ราคากี่ใบ (ใบที่ไม่รู้ราคาจะไม่มียอดในรายงาน) */
+  const parcelAmount = {};
+  for (const d of extractData) {
+    if (d.amount > 0) parcelAmount[d.tracking] = (parcelAmount[d.tracking] || 0) + d.amount;
+  }
+  const amountInfo = {
+    column: amountCfg ? amountCfg.label : '',
+    parcels: Object.keys(parcelAmount).length,
+    total: _round2(Object.values(parcelAmount).reduce((sum, v) => sum + v, 0)),
+  };
 
   const totalDataRows = rows.length - (useMap.headerRows || 1);
   if (skipped.count > 0) {
     console.warn(`[${marketplace}] ${file.name}: ข้าม ${skipped.count}/${totalDataRows} แถว`, skipped.reasons, skipped.examples);
   }
-  return { file, marketplace, extractData, remarkMap, orderInfoMap, skipped, totalDataRows };
+  console.log(`[${marketplace}] ${file.name}: ราคา ${amountInfo.column || '— ไม่มีช่องราคา'} · ${amountInfo.parcels} ใบ · ${amountInfo.total} บาท`);
+  return { file, marketplace, extractData, remarkMap, orderInfoMap, skipped, totalDataRows, amountInfo };
 }
 
 // ===== Concurrency helper — รัน task พร้อมกันได้สูงสุด `limit` ตัว =====
@@ -7055,7 +7211,18 @@ async function _sendChunkWithRetry(chunk, fileName, marketplace, maxRetries = 3)
     try {
       /* ส่งเข้าคิวรอแพคที่ Hub — Hub ตัดใบที่แพคไปแล้วทิ้งให้เอง อัปไฟล์เดิมซ้ำจึงไม่ทำให้ใบเก่ากลับมา */
       const resp = await _hubUploadQueueRows(chunk, marketplace);
-      if (resp && resp.ok) return { ok: true, resp: { success: true, count: resp.rows, duplicateSkipped: resp.skippedPacked } };
+      if (resp && resp.ok) return {
+        ok: true,
+        resp: {
+          success: true,
+          count: resp.rows,
+          duplicateSkipped: resp.skippedPacked,
+          parcels: resp.parcels || 0,
+          parcelsWithAmount: resp.parcelsWithAmount || 0,
+          /* Hub ตอบเป็นสตางค์ตามกติกาของเว็บ — แปลงเป็นบาทตอนโชว์ */
+          amount: (resp.amount || 0) / 100
+        }
+      };
       lastError = resp?.error || 'unknown';
       return { ok: false, error: lastError };
       if (attempt < maxRetries - 1) await new Promise(res => setTimeout(res, 3000 * Math.pow(2, attempt)));
@@ -7067,18 +7234,26 @@ async function _sendChunkWithRetry(chunk, fileName, marketplace, maxRetries = 3)
   return { ok: false, error: lastError + ' (retried ' + maxRetries + 'x)' };
 }
 
-// อัปโหลด 1 ไฟล์ — ✅ chunk ≤ 5000 รายการต่อครั้ง (GAS reject >10000 ทั้งก้อน → ไฟล์ใหญ่หาย)
-//   dedup ฝั่ง GAS (tracking|sku|orderId) ทำให้ส่งเป็น chunk ปลอดภัย ไม่ซ้ำข้ามก้อน
+// อัปโหลด 1 ไฟล์ — ✅ chunk ≤ 5000 รายการต่อครั้ง (Hub รับครั้งละไม่เกิน 5000 แถว)
+//   Hub เขียนทับรายการ "ทั้งใบ" ของพัสดุที่ส่งไป ส่งซ้ำ/retry จึงไม่นับซ้ำ
+//   ⚠️ แต่ใบเดียวต้องไม่ถูกแบ่งไปสองก้อน ไม่งั้นก้อนหลังทับก้อนแรกแล้วของหาย
+//   extractData ถูกเรียงตามเลขพัสดุมาแล้ว ตรงนี้แค่ขยับขอบก้อนให้จบที่ใบเดียวกัน
 const MP_UPLOAD_CHUNK = 5000;
+/** ขอบท้ายของก้อนที่ไม่ผ่ากลางพัสดุใบเดียว */
+function _chunkEnd(all, start) {
+  let end = Math.min(start + MP_UPLOAD_CHUNK, all.length);
+  while (end < all.length && all[end].tracking === all[end - 1].tracking) end += 1;
+  return end;
+}
 async function _uploadOneWithRetry(r) {
   const all = r.extractData || [];
   if (all.length <= MP_UPLOAD_CHUNK) {
     return _sendChunkWithRetry(all, r.file.name, r.marketplace);
   }
   // ไฟล์ใหญ่ → แบ่งส่งทีละก้อน, รวมผล
-  let count = 0, dup = 0, bf = 0, ru = 0;
-  for (let i = 0; i < all.length; i += MP_UPLOAD_CHUNK) {
-    const chunk = all.slice(i, i + MP_UPLOAD_CHUNK);
+  let count = 0, dup = 0, parcels = 0, withAmount = 0, amount = 0;
+  for (let i = 0; i < all.length; i = _chunkEnd(all, i)) {
+    const chunk = all.slice(i, _chunkEnd(all, i));
     const res = await _sendChunkWithRetry(chunk, r.file.name + ` [${i + 1}-${i + chunk.length}]`, r.marketplace);
     if (!res.ok) {
       // ก้อนนี้ล้ม → คืน error พร้อมยอดที่สำเร็จไปแล้ว (จะได้ retry ทั้งไฟล์รอบหน้า — dedup กันซ้ำ)
@@ -7086,16 +7261,17 @@ async function _uploadOneWithRetry(r) {
     }
     count += res.resp.count || 0;
     dup   += res.resp.duplicateSkipped || 0;
-    bf    += res.resp.backfilled || 0;
-    ru    += res.resp.remarkUpdated || 0;
+    parcels += res.resp.parcels || 0;
+    withAmount += res.resp.parcelsWithAmount || 0;
+    amount += res.resp.amount || 0;
   }
-  return { ok: true, resp: { success: true, count, duplicateSkipped: dup, backfilled: bf, remarkUpdated: ru } };
+  return { ok: true, resp: { success: true, count, duplicateSkipped: dup, parcels, parcelsWithAmount: withAmount, amount } };
 }
 
 // ✅ concurrency = 1 — saveMarketplaceData ใช้ lock เดียวกันอยู่แล้ว
 // ขนานหลาย requests ไม่ช่วยอะไร แค่ทำให้ queue ยาว → timeout
 async function _uploadResultsParallel(items, concurrency = 1) {
-  const agg = { totalCount: 0, totalDup: 0, totalBf: 0, totalRemarkUpd: 0, failures: [] };
+  const agg = { totalCount: 0, totalDup: 0, totalBf: 0, totalRemarkUpd: 0, totalParcels: 0, totalWithAmount: 0, totalAmount: 0, failures: [] };
   let done = 0;
   _showProgressDialog('กำลังอัปโหลด', items.length);
   await _runWithLimit(items, concurrency, async (r) => {
@@ -7104,10 +7280,15 @@ async function _uploadResultsParallel(items, concurrency = 1) {
       const resp = result.resp;
       r._serverWritten = resp.count || 0;
       r._serverDup     = resp.duplicateSkipped || 0;
+      r._serverAmount  = resp.amount || 0;
+      r._serverWithAmount = resp.parcelsWithAmount || 0;
       agg.totalCount += resp.count || 0;
       agg.totalDup   += resp.duplicateSkipped || 0;
       agg.totalBf    += resp.backfilled || 0;
       agg.totalRemarkUpd += resp.remarkUpdated || 0;
+      agg.totalParcels   += resp.parcels || 0;
+      agg.totalWithAmount += resp.parcelsWithAmount || 0;
+      agg.totalAmount    += resp.amount || 0;
       return { ok: true };
     } else {
       agg.failures.push({ result: r, reason: result.error });
@@ -7122,6 +7303,36 @@ async function _uploadResultsParallel(items, concurrency = 1) {
 
 /* เดิมตรงนี้มีทางลัดผ่าน Firebase (/mpInbox → drain เขียนชีต → /pendingLive → เตะ /cacheMeta)
    ตัดทิ้งทั้งชุดเมื่อ 27 ก.ย. 2569 — คิวรอแพคอยู่ที่ Hub แล้ว อัปเสร็จทุกเครื่องเห็นทันที */
+
+/* ---- ยอดเงินในหน้าสรุปตอนอัปไฟล์ ----
+   ยอดที่อ่านได้จากไฟล์คือสิ่งที่ทำให้ "ยอดส่งออกรายวัน" ที่หลังบ้านมีตัวเลข
+   **ต้องบอกเสมอว่ารู้ราคากี่ใบจากกี่ใบ** ช่องทางที่ยังไม่ได้ผูกช่องราคา (Shopee · Lazada)
+   จะอัปได้ปกติแต่ใบพวกนั้นไม่มียอด — ไม่บอกก็จะงงว่าทำไมยอดรายวันขาด */
+function _baht(v) {
+  return '฿' + (Number(v) || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+}
+function _amountTotalOf(results) {
+  return results.reduce((sum, r) => sum + (r.amountInfo?.total || 0), 0);
+}
+function _amountParcelsOf(results) {
+  return results.reduce((sum, r) => sum + (r.amountInfo?.parcels || 0), 0);
+}
+function _amountFileHtml(r, parcelCount) {
+  const info = r.amountInfo || {};
+  if (!info.column) {
+    return `<div style="font-size:0.78rem; color:#a08a5a; margin-top:3px;">💰 ไฟล์นี้ยังไม่มีช่องราคาที่รู้จัก — ${parcelCount} ใบนี้จะไม่มียอดในรายงาน</div>`;
+  }
+  const missing = parcelCount - (info.parcels || 0);
+  const missHtml = missing > 0 ? ` <span style="color:#c48a00;">· ไม่มีราคา ${missing} ใบ</span>` : '';
+  return `<div style="font-size:0.78rem; color:#7a6440; margin-top:3px;">💰 ${_baht(info.total)} จาก "${escHtml(info.column)}" · ${info.parcels} ใบ${missHtml}</div>`;
+}
+function _noAmountWarnHtml(results) {
+  const names = { tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', page365: 'Page365', thaimart: 'Thaimart' };
+  const mps = [...new Set(results.filter(r => !(r.amountInfo?.column)).map(r => r.marketplace))];
+  if (!mps.length) return '';
+  const list = mps.map(m => names[m] || m).join(' · ');
+  return `<div style="margin-top:6px; padding:8px 10px; background:#fff3cd; border-left:3px solid #d4a017; border-radius:6px; font-size:0.84rem; color:#7a5a10;">💰 ยังอ่านราคาจากไฟล์ของ <strong>${escHtml(list)}</strong> ไม่ได้ — อัปได้ตามปกติ แค่ใบพวกนี้จะไม่มียอดใน "ยอดส่งออกรายวัน"</div>`;
+}
 
 async function processFileUpload() {
   const fileInput = document.getElementById('fileInput');
@@ -7217,12 +7428,14 @@ async function processFileUpload() {
         .join(', ');
       return `<div style="font-size:0.78rem; color:#c44; margin-top:3px;">⚠ ข้าม ${skipCount} แถว — ${parts}</div>`;
     })() : '';
+    const amtHtml = _amountFileHtml(r, tCount);
     return `<div style="padding:8px 10px; margin:6px 0; background:${bg}; border-left:4px solid ${s.bg}; border-radius:8px;">
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         ${mpBadge(r.marketplace)}
         <strong style="font-size:0.88rem; word-break:break-all;">📄 ${escHtml(r.file.name)}</strong>
       </div>
       <div style="font-size:0.82rem; color:#7a6440; margin-top:4px;">${rowSummary}</div>
+      ${amtHtml}
       ${skipHtml}
     </div>`;
   }).join('');
@@ -7241,7 +7454,9 @@ async function processFileUpload() {
         <div>📋 รายการสินค้ารวม: <strong>${totalItems} รายการ</strong></div>
         <div>📝 หมายเหตุลูกค้า: <strong>${totalRemark} ใบ</strong></div>
         <div>📁 ไฟล์: <strong>${results.length} ไฟล์</strong></div>
+        <div>💰 ยอดที่ลูกค้าจ่าย: <strong>${_baht(_amountTotalOf(results))}</strong> <span style="font-size:0.82rem;">(รู้ราคา ${_amountParcelsOf(results)}/${allTracking.size} ใบ)</span></div>
         ${crossDupHtml}
+        ${_noAmountWarnHtml(results)}
         <div style="margin-top:8px; padding-top:8px; border-top:1px solid #e0d8c0;">
           ${perFile}
         </div>
@@ -7281,6 +7496,7 @@ async function processFileUpload() {
   //    GAS ฝั่งใหม่มี LockService แล้ว (ทำงานเสมือนได้) แต่ client ยังคุม sequential เพื่อความปลอดภัย
   let pending = results;
   let totalCount = 0, totalDup = 0, totalBf = 0, totalRemarkUpd = 0;
+  let totalParcels = 0, totalWithAmount = 0, totalAmount = 0;
   let lastFailures = [];
 
   while (pending.length > 0) {
@@ -7289,6 +7505,9 @@ async function processFileUpload() {
     totalDup   += agg.totalDup;
     totalBf    += agg.totalBf;
     totalRemarkUpd += agg.totalRemarkUpd;
+    totalParcels    += agg.totalParcels;
+    totalWithAmount += agg.totalWithAmount;
+    totalAmount     += agg.totalAmount;
 
     if (agg.failures.length === 0) { lastFailures = []; break; }
 
@@ -7344,7 +7563,10 @@ async function processFileUpload() {
       const written = r._serverWritten ?? sent;
       const dup = r._serverDup ?? 0;
       const dupLine = dup > 0
-        ? `<div style="font-size:0.78rem;color:#a08a5a;">✏️ เขียนใหม่ ${written} · ⤴ ข้ามซ้ำ ${dup}</div>`
+        ? `<div style="font-size:0.78rem;color:#a08a5a;">✏️ เข้าคิว ${written} · ⤴ ข้ามใบที่แพคแล้ว ${dup}</div>`
+        : '';
+      const amtLine = (r._serverAmount || 0) > 0
+        ? `<div style="font-size:0.78rem;color:#7a6440;">💰 ${_baht(r._serverAmount)} · ${r._serverWithAmount || 0} ใบ</div>`
         : '';
       const skipDetail = skipCount > 0 ? (() => {
         const parts = Object.entries(r.skipped.reasons)
@@ -7357,11 +7579,15 @@ async function processFileUpload() {
       const rowInfo = skipCount > 0
         ? `${tCount} ใบ · <span style="color:#7a6440;">${sent}/${totalRows} แถว</span>`
         : `${tCount} ใบ · ${sent} รายการ`;
-      return `<div style="font-size:0.82rem;color:#5a4a30;line-height:1.6;margin-bottom:6px;">[${mpName}] ${escHtml(r.file.name.replace(/\.[^.]+$/, ''))}<br>${rowInfo}${dupLine}${skipDetail}</div>`;
+      return `<div style="font-size:0.82rem;color:#5a4a30;line-height:1.6;margin-bottom:6px;">[${mpName}] ${escHtml(r.file.name.replace(/\.[^.]+$/, ''))}<br>${rowInfo}${dupLine}${amtLine}${skipDetail}</div>`;
     }).join('');
     const totalSent = results.reduce((s, r) => s + r.extractData.length, 0);
+    /* ยอดเงินของใบที่เข้าคิวรอบนี้ — ที่มาของตัวเลขในรายงาน "ยอดส่งออกรายวัน" ตอนใบถูกแพค */
+    const amountLine = totalWithAmount > 0
+      ? `<div style="margin-top:4px; padding:6px 10px; background:#e7f5ec; border-left:3px solid #1a9e82; border-radius:6px; font-size:0.84rem; color:#1a6b58;">💰 ยอดที่ลูกค้าจ่าย <strong>${_baht(totalAmount)}</strong> · รู้ราคา ${totalWithAmount} จาก ${totalParcels} ใบ${totalParcels > totalWithAmount ? ` <span style="color:#7a5a10;">(อีก ${totalParcels - totalWithAmount} ใบไม่มีราคาในไฟล์)</span>` : ''}</div>`
+      : `<div style="margin-top:4px; font-size:0.82rem; color:#a08a5a;">💰 ไฟล์รอบนี้ไม่มีราคาติดมา — ใบพวกนี้จะไม่มียอดใน "ยอดส่งออกรายวัน"</div>`;
     const dupLine = totalDup > 0
-      ? `<div style="margin-top:4px; padding:6px 10px; background:#fff3cd; border-left:3px solid #d4a017; border-radius:6px; font-size:0.84rem; color:#7a5a10;">⤴ ข้ามซ้ำ <strong>${totalDup}</strong> รายการ (มีอยู่ใน Sheet แล้ว — จึงไม่เขียนซ้ำ)</div>`
+      ? `<div style="margin-top:4px; padding:6px 10px; background:#fff3cd; border-left:3px solid #d4a017; border-radius:6px; font-size:0.84rem; color:#7a5a10;">⤴ ข้าม <strong>${totalDup}</strong> รายการ (พัสดุแพคไปแล้ว — ไม่เอากลับเข้าคิว)</div>`
       : '';
     const bfLine    = totalBf  > 0 ? `<div style="font-size:0.8rem;color:#a08a5a;">เติม OrderId ย้อนหลัง ${totalBf} แถว</div>` : '';
     const ruLine = totalRemarkUpd > 0
@@ -7370,8 +7596,9 @@ async function processFileUpload() {
     Swal.fire({
       title: totalParseSkipped > 0 ? 'สำเร็จ (มีคำเตือน)' : 'สำเร็จ',
       html: `<div style="text-align:left;line-height:1.8;">
-        <div>✅ <strong>เขียนเข้า Sheet จริง: ${totalCount} รายการ</strong></div>
+        <div>✅ <strong>เข้าคิวรอแพคที่ Hub: ${totalCount} รายการ</strong></div>
         <div style="font-size:0.85rem;color:#7a6440;">จากที่อ่านได้ทั้งหมด ${totalSent} รายการ ใน ${results.length} ไฟล์</div>
+        ${amountLine}
         ${dupLine}${bfLine}${ruLine}
         <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e0d8c0;">${resultPerFile}</div>
       </div>`,
