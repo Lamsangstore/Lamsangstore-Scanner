@@ -1,9 +1,10 @@
-// Lamsangstore Scanner — Service Worker v4
+// Lamsangstore Scanner — Service Worker v5
 // v3: network-only สำหรับ Firebase/GAS/non-GET (ห้าม cache ข้อมูลสด)
 // v4: เพิ่ม Hub ของร้าน (/api/) เข้าในรายการห้ามแคช — ชื่อ/รูป/สต๊อกต้องสดเสมอ
+// v5: ตัด Firebase/ชีตออกหมด — ข้อมูลทุกอย่างมาจาก Hub (เหลือ Apps Script ไว้อัปคลิปขึ้น Drive)
 //     เคยพลาดมาแล้วกับแอปคีย์ลัด: SW แคช /api/ ไว้ สต๊อกค้างทั้งวันโดยไม่มีใครรู้ว่าทำไม
 
-const CACHE_NAME = 'ls-scanner-v4';
+const CACHE_NAME = 'ls-scanner-v5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

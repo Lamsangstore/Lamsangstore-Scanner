@@ -2853,75 +2853,85 @@ const GAS_API_KEY = "d0be0cec0771dbb705616a737a5d3c76e42b1a4bbd10e376dd9d5bd88d7
 //   **เว้นว่าง หรือ Hub ล่ม = ใช้ของเดิม (Firebase /products → GAS) ทุกอย่างเหมือนเดิม ไม่พัง**
 const HUB_URL = "https://lamsangstore.com/api/hub/v1/products?inactive=1";
 const HUB_PACKS_URL = "https://lamsangstore.com/api/hub/v1/packs";
-const HUB_KEY = "lsh_vLhpqTnZQoJjoISQXXgjfQCwk0UlTKQjxTzsNnhLo84";
+const HUB_QUEUE_URL = "https://lamsangstore.com/api/hub/v1/pack-queue";
 
-// ============================================================
-// 🔥 FIREBASE — durable safety net ฝั่ง server (กันออเดอร์หายแม้เครื่องหาย)
-//   ทำงานคู่ขนานกับ GAS: client เขียนออเดอร์ลง Firebase /inbox ด้วย
-//   แล้ว GAS cron (drainFirebaseInbox) ดูดเข้า sheet → ออเดอร์ไม่หายเด็ดขาด
-//   ❗ ตั้งค่า: สร้าง Realtime Database ใน Firebase console แล้วใส่ค่า 2 ตัวนี้
-//   ถ้าเว้นว่าง ('') → ระบบทำงานปกติแบบไม่มี Firebase (ปิด feature อัตโนมัติ)
-const FIREBASE_DB_URL = "https://lamsang-scanner-default-rtdb.asia-southeast1.firebasedatabase.app"; // เช่น "https://lamsang-scanner-default-rtdb.asia-southeast1.firebasedatabase.app"
-const FIREBASE_WRITE_KEY = GAS_API_KEY; // shared key — RTDB rules ตรวจ key นี้ก่อนอนุญาตเขียน
-const FIREBASE_ENABLED = () => !!FIREBASE_DB_URL;
+/* ---------------------------------------------------------------------------
+   คุยกับ Hub ของร้าน — ชื่อสินค้า · คิวรอแพค · ใบที่แพคแล้ว
+   ทุกอย่างที่แอปนี้เคยเก็บใน Firebase/ชีต ย้ายมาอยู่ที่นี่หมดแล้ว (27 ก.ย. 2569)
+--------------------------------------------------------------------------- */
 
-// deviceId ติดเครื่อง — ใช้ debug ว่าออเดอร์มาจากเครื่องไหน
-const DEVICE_ID = (() => {
+/** GET จาก Hub พร้อมกุญแจ — โยน error เมื่อเรียกไม่ได้ ผู้เรียกตัดสินเองว่าจะทำอะไรต่อ */
+async function _hubGet(url, timeoutMs = 20000) {
+  if (!HUB_KEY) throw new Error('ยังไม่ได้ตั้งกุญแจ Hub');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    let d = localStorage.getItem('deviceId');
-    if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+Math.random().toString(36).slice(2)); localStorage.setItem('deviceId', d); }
-    return d;
-  } catch(e) { return 'unknown'; }
-})();
-
-// ✅ เขียนออเดอร์ลง Firebase /inbox/{idemToken} (PUT = idempotent, retry ไม่ซ้ำ)
-//   คืน true ถ้าสำเร็จ — best-effort, ไม่ throw
-async function _firebasePushOrder(job) {
-  if (!FIREBASE_ENABLED() || !job.idemToken) return false;
-  try {
-    const url = `${FIREBASE_DB_URL}/inbox/${encodeURIComponent(job.idemToken)}.json`;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 12000);
-    const res = await fetch(url, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        k: FIREBASE_WRITE_KEY,
-        parcelId: job.pId,
-        items: job.itemsArr || [],
-        orderId: job.orderId || "",
-        marketplace: job.marketplace || "",
-        remark: job.remarkNote || "",
-        idemToken: job.idemToken,
-        device: DEVICE_ID,
-        ts: job.ts || Date.now(),
-        hadVideo: !!job.hadVideo,        // drain ใช้ตัดสินใจ "รอ videoUrl" (grace) ก่อนเขียน row
-        videoUrl: job.videoUrl || ""     // ว่างตอน push แรก → PATCH เติมทีหลังเมื่ออัป Drive เสร็จ
-      }),
-      signal: ctrl.signal
-    });
-    clearTimeout(timer);
-    if (!res.ok) {
-      // ❌ เขียน /inbox ไม่ได้ — มักเป็น Rules ยังไม่เปิด write หรือ key ไม่ตรง
-      let why = res.status;
-      try { const t = await res.text(); why += ' ' + t.slice(0, 120); } catch(e) {}
-      console.warn(`[Firebase] เขียน /inbox ไม่ได้ (${why}) — เช็ค Rules /inbox write + key`);
-    }
-    return res.ok;
-  } catch(e) {
-    console.warn('[Firebase] push /inbox error:', e.message);
-    return false;
-  }
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + HUB_KEY }, signal: ctrl.signal, cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } finally { clearTimeout(timer); }
 }
 
-// ✅ ensure ออเดอร์ถูก mirror ลง Firebase แล้ว (push ถ้ายัง) — best-effort
-//   อัปเดต flag fbPushed ใน queue เพื่อไม่ push ซ้ำ
-/* ---------------------------------------------------------------------------
-   📦 ส่งใบที่แพคเสร็จเข้า Hub ของร้าน — ที่เก็บกลางที่ Good-Products มาอ่านที่เดียว
-   ทำคู่ขนานกับ Firebase/ชีตเหมือนเดิม **ไม่ได้แทนที่** (ของเดิมเป็นตาข่ายกันออเดอร์หาย)
-   ส่งไม่สำเร็จ → เก็บเข้าคิวใน localStorage แล้วลองใหม่ตอนเปิดแอปครั้งหน้า
-   ส่งใบเดิมซ้ำได้ Hub ตัดซ้ำด้วย id ให้เอง (ใบหลังชนะ — ใช้ตอนเติมลิงก์คลิป)
---------------------------------------------------------------------------- */
+/** "2026-09-27" ตามวันที่ไทย (ย้อนหลัง back วัน) */
+function _hubDay(back = 0) {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(new Date(Date.now() - back * 864e5));
+  const g = t => (parts.find(x => x.type === t) || {}).value || '';
+  return `${g('year')}-${g('month')}-${g('day')}`;
+}
+
+/** ใบแพคจาก Hub → รูปแบบที่หน้าค้นหา/รายงานของแอปใช้อยู่ (+ id ไว้แก้หมายเหตุ) */
+function _hubPackToDoc(p) {
+  return { ts: p.t || 0, tk: p.p || '', oid: p.o || '', mp: p.m || '', v: p.v || '', rm: p.r || '', it: p.i || [], id: p.id || '' };
+}
+
+/** ใบแพคย้อนหลัง `days` วัน (ใหม่สุดก่อน) · lite = เอาแค่เลขพัสดุกับเวลา */
+async function _hubFetchPacks({ days = 90, limit = 20000, lite = false } = {}) {
+  const q = `since=${_hubDay(days - 1)}&limit=${limit}${lite ? '&lite=1' : ''}`;
+  const json = await _hubGet(`${HUB_PACKS_URL}?${q}`, lite ? 20000 : 30000);
+  return (json.packs || []).map(_hubPackToDoc);
+}
+
+/** คิวออเดอร์ที่รอแพคทั้งหมด → { TRACKING: [{sku, qty, remark, orderId, marketplace}] } */
+async function _hubFetchQueue() {
+  const json = await _hubGet(`${HUB_QUEUE_URL}?limit=20000`);
+  const out = {};
+  (json.parcels || []).forEach(p => {
+    const tk = String(p.tracking || '').toUpperCase();
+    if (!tk) return;
+    out[tk] = (p.items || []).map(i => ({
+      sku: i.sku, qty: i.qty, remark: p.remark || '', orderId: p.orderId || '', marketplace: p.marketplace || ''
+    }));
+  });
+  return out;
+}
+
+/** ของที่ต้องมีในพัสดุใบเดียว — [] = ไม่ได้อัปไฟล์มา (แพคต่อได้ ไม่มีรายการให้ตรวจ) */
+async function _hubFetchQueueOne(tracking) {
+  const json = await _hubGet(`${HUB_QUEUE_URL}?tracking=${encodeURIComponent(tracking)}`, 12000);
+  const p = json.parcel;
+  if (!p) return [];
+  return (p.items || []).map(i => ({ sku: i.sku, qty: i.qty, remark: p.remark || '' }));
+}
+
+/** อัปรายการจากไฟล์ export เข้าคิวรอแพค */
+async function _hubUploadQueueRows(rows, marketplace) {
+  if (!HUB_KEY) throw new Error('ยังไม่ได้ตั้งกุญแจ Hub');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 90000);
+  try {
+    const res = await fetch(HUB_QUEUE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + HUB_KEY },
+      body: JSON.stringify({ rows, marketplace }),
+      signal: ctrl.signal
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } finally { clearTimeout(timer); }
+}
+
+/* ---- ส่งใบที่แพคเสร็จเข้า Hub · ส่งไม่ได้เก็บเข้าคิวใน localStorage แล้วส่งใหม่รอบหน้า ---- */
 const HUB_PACK_QUEUE_KEY = 'hubPackQueue';
 const HUB_PACK_QUEUE_MAX = 500;
 
@@ -2938,7 +2948,6 @@ function _hubPackRecord(job) {
     ts: job.ts || Date.now()
   };
 }
-
 function _hubQueueRead() {
   try { const q = JSON.parse(localStorage.getItem(HUB_PACK_QUEUE_KEY) || '[]'); return Array.isArray(q) ? q : []; } catch (e) { return []; }
 }
@@ -2951,12 +2960,12 @@ function _hubQueueAdd(rec) {
   _hubQueueWrite(q);
 }
 
-/** ส่งใบแพคเข้า Hub — คืน true เมื่อ Hub รับแล้ว · ล้มเหลวเก็บเข้าคิวเสมอ ไม่ throw */
+/** ส่งใบแพคเข้า Hub — คืน true เมื่อ Hub รับแล้ว · ไม่ throw */
 async function _hubPushPacks(records) {
   if (!HUB_KEY || !records.length) return false;
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 12000);
+    const timer = setTimeout(() => ctrl.abort(), 15000);
     const res = await fetch(HUB_PACKS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + HUB_KEY },
@@ -2972,13 +2981,14 @@ async function _hubPushPacks(records) {
   }
 }
 
-/** ส่งใบเดียว (ตอนแพคเสร็จ / ตอนอัปคลิปเสร็จ) */
+/** ส่งใบเดียว (ตอนแพคเสร็จ / ตอนอัปคลิปเสร็จ) — คืน true เมื่อ Hub รับแล้ว */
 async function _hubSendPack(job) {
-  if (!HUB_KEY) return;
+  if (!HUB_KEY) return false;
   const rec = _hubPackRecord(job);
-  if (!rec.parcelId) return;
+  if (!rec.parcelId) return false;
   const ok = await _hubPushPacks([rec]);
   if (!ok) _hubQueueAdd(rec);
+  return ok;
 }
 
 /** ส่งใบที่ค้างในคิว — เรียกตอนเปิดแอปและหลังแพคเสร็จ */
@@ -2987,42 +2997,29 @@ async function _hubFlushPackQueue() {
   const q = _hubQueueRead();
   if (!q.length) return;
   const batch = q.slice(0, 200);
-  const ok = await _hubPushPacks(batch);
-  if (ok) _hubQueueWrite(q.slice(batch.length));
+  if (await _hubPushPacks(batch)) _hubQueueWrite(q.slice(batch.length));
 }
 
-async function _ensureFirebasePush(job) {
-  /* Hub ของร้านเป็นอีกที่หนึ่งที่ต้องได้ใบนี้ — ยิงคู่กันไป ไม่ต้องรอผลของกันและกัน */
-  _hubSendPack(job).then(() => _hubFlushPackQueue()).catch(() => {});
-  if (!FIREBASE_ENABLED() || !job || !job.idemToken || job.fbPushed) return;
-  const ok = await _firebasePushOrder(job);
-  if (ok) {
-    try { _updateQueueItem(job.pId, (cur) => { cur.fbPushed = true; return cur; }); } catch(e) {}
-    job.fbPushed = true;
-  }
-}
+const HUB_KEY = "lsh_vLhpqTnZQoJjoISQXXgjfQCwk0UlTKQjxTzsNnhLo84";
 
-// ✅ เติม videoUrl เข้า /inbox doc เดิม (หลังอัปวิดีโอขึ้น Drive เสร็จ) → drain เขียน row พร้อม link
-//   PATCH merge — field อื่น (order) คงเดิม; ส่ง k ไปด้วยให้ผ่าน Firebase rules
-async function _firebasePatchVideoUrl(idemToken, videoUrl) {
-  if (!FIREBASE_ENABLED() || !idemToken) return false;
+// ============================================================
+// 🔥 เดิมมี Firebase Realtime Database เป็นตาข่ายกันออเดอร์หาย (/inbox → GAS ดูดเข้าชีต)
+//    ตัดทิ้งทั้งชุด 27 ก.ย. 2569 — ใบแพค · คิวรอแพค · ชื่อสินค้า · รายงาน อยู่ที่ Hub ของร้านหมดแล้ว
+//    เหลือ Apps Script ไว้ทำงานเดียว: อัปคลิปตอนแพคขึ้น Google Drive (Hub ไม่มีที่เก็บวิดีโอ)
+// ============================================================
+
+// deviceId ติดเครื่อง — ใช้ debug ว่าออเดอร์มาจากเครื่องไหน
+const DEVICE_ID = (() => {
   try {
-    const url = `${FIREBASE_DB_URL}/inbox/${encodeURIComponent(idemToken)}.json`;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 12000);
-    const res = await fetch(url, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ k: FIREBASE_WRITE_KEY, videoUrl: videoUrl || "" }),
-      signal: ctrl.signal
-    });
-    clearTimeout(timer);
-    return res.ok;
-  } catch(e) { console.warn('[Firebase] patch videoUrl error:', e.message); return false; }
-}
+    let d = localStorage.getItem('deviceId');
+    if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+Math.random().toString(36).slice(2)); localStorage.setItem('deviceId', d); }
+    return d;
+  } catch(e) { return 'unknown'; }
+})();
 
-// ✅ อัปวิดีโอขึ้น Drive (uploadVideoOnly) แล้ว PATCH url เข้า Firebase doc + อัปเดต queue
-//   คืน url (string) ถ้าสำเร็จ, null ถ้าล้ม (ให้ retry)
+/* เดิมใบแพคถูก push ขึ้น Firebase /inbox แล้วให้ GAS ดูดเข้าชีต — ตัดทิ้ง 27 ก.ย. 2569
+   ใบแพคไปที่ Hub ทางเดียว (ดู _hubSendPack) เหลือ Apps Script ไว้อัปคลิปขึ้น Drive อย่างเดียว */
+
 async function _uploadVideoAndPatch(pId, idemToken, videoData, videoMime) {
   _auditPack(pId, 'video', 'attempt', 'uploadVideoOnly');
   const vres = await callGAS("uploadVideoOnly", {
@@ -3030,7 +3027,6 @@ async function _uploadVideoAndPatch(pId, idemToken, videoData, videoMime) {
   }, 120000).catch(e => ({ success: false, error: e.message }));
   if (vres && vres.success) {
     const vurl = vres.videoUrl || "";
-    if (idemToken) await _firebasePatchVideoUrl(idemToken, vurl);
     let packed = null;
     _updateQueueItem(pId, (c) => { c.videoSent = true; c.videoUrl = vurl; c.videoBase64 = ''; c.videoMime = ''; packed = c; return c; });
     /* ส่งใบเดิมซ้ำเข้า Hub พร้อมลิงก์คลิป — Hub เอาใบหลังสุดของ id เดียวกัน */
@@ -3368,7 +3364,6 @@ document.addEventListener('visibilitychange', () => {
     // กลับมาแล้ว → retry queue ทันที (force ข้าม backoff)
     setTimeout(() => retryFailedUploads(true), 1000);
     // 🔄 มือถือมักฆ่า SSE ตอน background → re-connect + ดึงข้อมูลตามที่อาจพลาดไปตอนปิดจอ
-    _startPendingSync();
     _fetchOrderCacheBackground();
   }
 });
@@ -3426,17 +3421,8 @@ function _flushOrderOnly(useBeacon) {
 function _flushPendingUploads() { _flushOrderOnly(false); }
 function _flushWithBeacon()     { _flushOrderOnly(true); }
 
-// ✅ On-demand drain — สั่ง GAS ดูด /inbox → ชีต "ทันที" ไม่ต้องรอ trigger 1 นาที
-//    (Apps Script trigger ถูก Google throttle เป็นหลายนาที → นี่คือทางลัดให้ทันใจ)
-//    debounce 8s/เครื่อง + rate-limit ฝั่ง GAS + drain ใช้ tryLock(1) → ไม่เปลือง quota, ไม่ทับซ้อน
-let _lastDrainKick = 0;
-function _kickDrain() {
-  if (!FIREBASE_DB_URL) return;            // Firebase ปิด → ไม่มี inbox
-  const now = Date.now();
-  if (now - _lastDrainKick < 8000) return; // debounce 8 วิ
-  _lastDrainKick = now;
-  try { callGAS("drainInbox", {}, 15000).catch(() => {}); } catch(e) {}
-}
+/* เดิมมี _kickDrain() สั่ง GAS ดูด /inbox เข้าชีต — ไม่มี /inbox แล้ว ใบแพคไปที่ Hub ตรง ๆ */
+function _kickDrain() {}
 
 // นับ "วิดีโอที่ยังไม่ขึ้น Drive" — ยังมีไฟล์ใน queue + ยัง retry ไม่หมดสิทธิ์
 //   ถ้าปิดแอปตอนนี้ วิดีโอพวกนี้จะหาย (order ยังปลอดภัยเพราะอยู่ Firebase/queue)
@@ -3707,38 +3693,16 @@ async function retryFailedUploads(force) {
       if (_isSent(job.pId)) continue;
       if (!force && job.nextAt && now < job.nextAt) continue;
 
-      // 🔥 push order ขึ้น Firebase /inbox — order ปลอดภัยทันที, drain (single writer) เขียนชีตให้
-      await _ensureFirebasePush(job);
+      /* ส่งใบเข้า Hub — สำเร็จเมื่อไรถือว่าใบนี้ปลอดภัยแล้ว · ไม่สำเร็จมีคิวใน localStorage รอส่งรอบหน้า */
+      if (!job.fbPushed && await _hubSendPack(job)) {
+        try { _updateQueueItem(job.pId, (cur) => { cur.fbPushed = true; return cur; }); } catch(e) {}
+        job.fbPushed = true;
+      }
 
-      // 🎬 วิดีโอ: อัปขึ้น Drive → PATCH videoUrl เข้า /inbox doc → drain เขียน row พร้อม link
-      //   (ไม่ผ่าน saveData → ไม่แตะ append lock → ไม่ติด lock_timeout)
+      // 🎬 วิดีโอ: อัปขึ้น Drive แล้วส่งใบเดิมซ้ำเข้า Hub พร้อมลิงก์คลิป
       if (job.hadVideo && !job.videoSent && (job.videoAttempts || 0) < VIDEO_MAX_ATTEMPTS && job.videoBase64) {
         const vurl = await _uploadVideoAndPatch(job.pId, job.idemToken, job.videoBase64, job.videoMime || "video/webm");
         if (vurl !== null) { job.videoSent = true; job.videoBase64 = ''; }
-      }
-
-      // 🆘 fallback เฉพาะ "Firebase ล่ม" — push ไม่ขึ้นเลย ≥3 รอบ → เขียนชีตตรง (saveData) กันออเดอร์หาย
-      //   ปกติไม่เข้า branch นี้ (Firebase ทำงาน → fbPushed=true → drain จัดการ)
-      if (!job.fbPushed && (job.attempts || 0) >= 3) {
-        try {
-          const ores = await callGAS("saveData", {
-            parcelId: job.pId, items: job.itemsArr,
-            videoEvidence: (job.hadVideo && job.videoBase64) ? _videoForSave(job.videoBase64) : "no_video",
-            videoMimeType: job.videoMime || "video/webm", remark: job.remarkNote || "",
-            orderId: job.orderId || "", marketplace: job.marketplace || "", idemToken: job.idemToken || "",
-            ts: job.ts || Date.now()        // ⏱️ เวลาแพค → ใช้เป็น Timestamp ของ row
-          }, 120000);
-          if (isGasSuccess(ores)) {
-            job.orderSent = true;
-            const vPending = !!ores.videoPending;
-            _updateQueueItem(job.pId, (c) => {
-              c.orderSent = true;
-              if (!vPending && job.hadVideo && job.videoBase64) { c.videoSent = true; c.videoBase64 = ''; c.videoMime = ''; }
-              return c;
-            });
-            if (!vPending && job.hadVideo && job.videoBase64) { job.videoSent = true; job.videoBase64 = ''; }
-          }
-        } catch(e) {}
       }
 
       // เสร็จครบ → ลบ; ยังไม่ครบ → backoff
@@ -3850,80 +3814,50 @@ function _updateLogoAlert() {
     const vf = JSON.parse(localStorage.getItem(VIDEO_FAILED_KEY) || '[]').length;
     const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
     const atRisk = q.filter(j => !j.orderSent && !j.fbPushed).length;
-    const mpStuck = !!localStorage.getItem('mpDrainStuck'); // ไฟล์ marketplace ค้าง /mpInbox (drain kick ล้ม)
-    dot.style.display = (vf > 0 || atRisk > 0 || mpStuck) ? 'block' : 'none';
+    const hubQueued = _hubQueueRead().length;   // ใบแพคที่ยังส่งเข้า Hub ไม่ได้
+    dot.style.display = (vf > 0 || atRisk > 0 || hubQueued > 0) ? 'block' : 'none';
   } catch(e) {}
 }
 
 // 🔧 ตรวจสอบระบบ — แตะโลโก้ LS เพื่อเปิด (ไม่ต้องใช้ console)
-//   ทดสอบเขียน Firebase /inbox จริง + แสดงสถานะคิว + วิดีโอล้ม + /inbox ค้างบนจอ
+//   ทดสอบอ่าน Hub จริง + แสดงสถานะคิวส่งใบแพค + วิดีโอที่ยังไม่ขึ้น Drive
 async function showDiagnostic() {
   const q = JSON.parse(localStorage.getItem(FAIL_QUEUE_KEY) || '[]');
-  const atRisk = q.filter(j => !j.orderSent && !j.fbPushed).length;
+  const atRisk = q.filter(j => !j.orderSent).length;
   const videoPending = q.filter(j => j.hadVideo && !j.videoSent).length;
   const videoFailed = JSON.parse(localStorage.getItem(VIDEO_FAILED_KEY) || '[]');
+  const hubQueued = _hubQueueRead().length;
 
-  Swal.fire({ title: '🔧 กำลังตรวจสอบ...', html: 'ทดสอบเขียน Firebase', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+  Swal.fire({ title: '🔧 กำลังตรวจสอบ...', html: 'ทดสอบเชื่อมต่อ Hub', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
-  let fbStatus, fbColor, inboxCount = null, mpInboxCount = null;
-  if (!FIREBASE_ENABLED()) {
-    fbStatus = '⚪ Firebase ปิด (ไม่ได้ตั้ง FIREBASE_DB_URL)'; fbColor = '#888';
-  } else {
-    try {
-      const url = `${FIREBASE_DB_URL}/inbox/__DIAGTEST__.json`;
-      const res = await fetch(url, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ k: FIREBASE_WRITE_KEY, parcelId: '__DIAGTEST__', ts: Date.now() })
-      });
-      if (res.ok) { fbStatus = '✅ Firebase เขียนได้ — Rules ถูกต้อง พร้อมใช้งาน'; fbColor = '#2e7d32'; }
-      else {
-        let t = ''; try { t = await res.text(); } catch(e) {}
-        fbStatus = `❌ เขียน Firebase ไม่ได้ (${res.status})\n→ ยังไม่ได้แก้ Rules /inbox (ดูที่แอดมินบอก)`; fbColor = '#c62828';
-      }
-    } catch(e) { fbStatus = '❌ ต่อ Firebase ไม่ได้: ' + e.message; fbColor = '#c62828'; }
-    // 📨 นับ doc ค้างใน /inbox (drain ยังไม่ดูดเข้าชีต) — ค้างเยอะ = drain อาจช้า/พัง
-    try {
-      const r2 = await fetch(`${FIREBASE_DB_URL}/inbox.json?shallow=true`);
-      if (r2.ok) { const d = await r2.json(); inboxCount = d ? Object.keys(d).filter(k => k !== '__DIAGTEST__').length : 0; }
-    } catch(e) {}
-    // 📤 นับ batch ไฟล์ marketplace ค้างใน /mpInbox (ต้องเปิด Rules .read ที่ /mpInbox ถึงจะเห็น)
-    try {
-      const r3 = await fetch(`${FIREBASE_DB_URL}/mpInbox.json?shallow=true`);
-      if (r3.ok) { const d = await r3.json(); mpInboxCount = d ? Object.keys(d).length : 0; }
-    } catch(e) {}
+  let fbStatus, fbColor;
+  try {
+    const t0 = Date.now();
+    const json = await _hubGet(`${HUB_QUEUE_URL}?limit=1`, 10000);
+    const ms = Date.now() - t0;
+    fbStatus = `✅ ต่อ Hub ได้ (${ms} ms)\nคิวรอแพคในระบบ: ${json.count ?? '-'} ใบ`;
+    fbColor = '#2e7d32';
+  } catch(e) {
+    fbStatus = `❌ ต่อ Hub ไม่ได้ — ${e.message}\nชื่อสินค้า/คิวรอแพคจะเป็นของเก่าในเครื่อง`;
+    fbColor = '#c62828';
   }
 
-  // 🔴 วิดีโอที่อัป Drive ไม่สำเร็จถาวร (ครบ 6 ครั้ง) — จุดล้มเงียบที่เคยไม่แจ้ง
   let videoFailedHtml = '';
-  if (videoFailed.length > 0) {
-    const items = videoFailed.slice(-20).reverse().map(v => {
-      const t = v.ts ? new Date(v.ts).toLocaleString('th-TH', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' }) : '';
+  if (videoFailed.length) {
+    const items = videoFailed.slice(-10).reverse().map(v => {
+      const t = v.at ? new Date(v.at).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
       return `<div style="font-size:0.8rem;">• ${escHtml(v.pId)} <span style="color:#999;">${t}</span></div>`;
     }).join('');
     videoFailedHtml = `<div style="margin-top:8px; padding:8px 10px; background:#fde4e4; border-left:3px solid #d33; border-radius:6px;">
       <b style="color:#a00;">🔴 วิดีโออัป Drive ไม่สำเร็จ: ${videoFailed.length} ใบ</b>
-      <div style="font-size:0.78rem; color:#a00; margin:3px 0 6px;">วิดีโอใบเหล่านี้หาย (ลองครบแล้ว) — ควรแพคใหม่ถ้าต้องการคลิป</div>
+      <div style="font-size:0.78rem; color:#a00; margin:3px 0 6px;">วิดีโอใบเหล่านี้หาย (ลองครบแล้ว)</div>
       <div style="max-height:120px; overflow-y:auto;">${items}</div>
-      <button onclick="_clearVideoFailedLog()" style="margin-top:6px; background:#d33; color:#fff; border:none; padding:4px 12px; border-radius:8px; font-family:'Mitr',sans-serif; font-size:0.78rem; cursor:pointer;">รับทราบ — ล้างรายการ</button>
+      <button onclick="_clearVideoFailedLog()" style="margin-top:6px; background:#d33; color:#fff; border:none; padding:4px 12px; border-radius:8px; font-family:'Mitr',sans-serif; font-size:0.78rem;">ล้างรายการ</button>
     </div>`;
   }
-  const inboxLine = (inboxCount === null) ? '' :
-    `<b>📨 /inbox ค้าง:</b> ${inboxCount} ${inboxCount > 50 ? '<span style="color:#c62828;">(เยอะผิดปกติ — drain อาจช้า/พัง แจ้งแอดมิน)</span>' : '<span style="color:#2e7d32;">(ปกติ)</span>'}<br>`;
-
-  // 📤 ไฟล์ marketplace ค้าง /mpInbox — อ่านได้ต่อเมื่อเปิด Rules .read; ถ้าอ่านไม่ได้ใช้ flag จาก kick ที่ล้มแทน
-  const mpStuckFlag = !!localStorage.getItem('mpDrainStuck');
-  let mpInboxLine = '';
-  if (mpInboxCount !== null) {
-    mpInboxLine = `<b>📤 /mpInbox ค้าง:</b> ${mpInboxCount} ${mpInboxCount > 0 ? '<span style="color:#c62828;">(ไฟล์ marketplace ยังไม่เข้าชีต)</span>' : '<span style="color:#2e7d32;">(เคลียร์)</span>'}<br>`;
-  } else if (mpStuckFlag) {
-    mpInboxLine = `<b>📤 อัปไฟล์ marketplace ล่าสุด:</b> <span style="color:#c62828;">อาจยังไม่เข้าชีต (drain ล้ม)</span><br>`;
-  }
-  const mpRetryBtn = (mpStuckFlag || mpInboxCount > 0)
-    ? `<div style="margin-top:8px; padding:8px 10px; background:#e8f0f6; border-left:3px solid #457b9d; border-radius:6px;">
-        <b style="color:#1d3557;">📤 ไฟล์ marketplace ค้าง — ยังไม่เข้าชีต/มือถือ</b>
-        <div style="font-size:0.78rem; color:#1d3557; margin:3px 0 6px;">กดดูดเข้าชีตเดี๋ยวนี้ (ถ้ายังไม่ได้ = ต้อง deploy GAS เวอร์ชันใหม่)</div>
-        <button onclick="_retryMpDrain()" style="background:#457b9d; color:#fff; border:none; padding:4px 12px; border-radius:8px; font-family:'Mitr',sans-serif; font-size:0.78rem; cursor:pointer;">🔁 ดูดไฟล์ marketplace เข้าชีตเดี๋ยวนี้</button>
-      </div>` : '';
+  const inboxLine = `<b>📨 ใบแพครอส่งเข้า Hub:</b> ${hubQueued} ${hubQueued > 0 ? '<span style="color:#c62828;">(ค้าง — จะส่งเองเมื่อเน็ตกลับมา)</span>' : '<span style="color:#2e7d32;">(ไม่มีค้าง)</span>'}<br>`;
+  const mpInboxLine = '';
+  const mpRetryBtn = '';
 
   Swal.fire({
     title: '🔧 ตรวจสอบระบบ',
@@ -3964,21 +3898,15 @@ window._clearVideoFailedLog = function() {
 
 // ===== 🔧 เครื่องมือแอดมิน (เรียก GAS จากหน้าเว็บ) — เหมือนเมนู Scanner Tools ในชีต =====
 function showAdminTools() {
-  const btn = (fn, label, bg) => `<button onclick="${fn}" style="width:100%; text-align:left; padding:10px 12px; border:none; border-radius:10px; background:${bg||'#f0ebe0'}; color:#4a3f2a; font-family:'Mitr',sans-serif; font-size:0.85rem; cursor:pointer;">${label}</button>`;
+  const btn = (fn, label, bg) => `<button onclick="${fn}" style="width:100%; text-align:left; padding:10px 12px; border:none; border-radius:10px; background:${bg || '#f3ece0'}; color:#4a3a10; font-family:'Mitr',sans-serif; font-size:0.86rem;">${label}</button>`;
   Swal.fire({
     title: '🔧 เครื่องมือแอดมิน',
-    html: `<div style="display:flex; flex-direction:column; gap:7px; text-align:left; max-height:62vh; overflow-y:auto;">
-      ${btn('_admForceMirrorProducts()', '🏷️ ดันชื่อสินค้าขึ้น Firebase (แก้ขึ้น SKU)', '#e8f0f6')}
-      <div style="font-size:0.72rem; color:#999; margin-top:4px;">— แก้ข้อมูลซ้ำ/เกิน —</div>
-      ${btn('_admRemove365(false)', '1️⃣ พรีวิว: Page365 ซ้ำกับ native')}
-      ${btn('_admRemove365(true)', '2️⃣ ลบ Page365 ซ้ำ (แก้จริง)', '#fde8e8')}
-      ${btn('_admOverScan(false)', '3️⃣ พรีวิว: ออเดอร์แสกนสินค้าเกิน')}
-      ${btn('_admOverScan(true)', '4️⃣ แก้สินค้าเกิน + Firebase (แก้จริง)', '#fde8e8')}
-      <div style="font-size:0.72rem; color:#999; margin-top:4px;">— ระบบ —</div>
-      ${btn('_admSimple(\'drainInbox\',\'ดูด Firebase inbox\')', '🔥 ดูด Firebase inbox → ชีต')}
-      ${btn('_admSimple(\'mergeDuplicates\',\'รวม row ซ้ำ\')', '🧩 รวม row ซ้ำ (merge duplicates)')}
-      ${btn('_admFindLost()', '🔍 หาออเดอร์ที่หาย')}
+    html: `<div style="display:flex; flex-direction:column; gap:7px; text-align:left;">
       ${btn('_admReconcile()', '🎬 เติมลิงก์วิดีโอ (reconcile 7 วัน)')}
+      <div style="font-size:0.72rem; color:#999; margin-top:6px; line-height:1.6;">
+        เครื่องมือชุดเก่า (ดูด Firebase inbox · รวม row ซ้ำ · หาออเดอร์หาย · ลบ Page365 ซ้ำ)
+        ถูกตัดออกเมื่อ 27 ก.ย. 2569 — ใบแพคกับคิวรอแพคอยู่ที่ Hub แล้ว ไม่มีชีตให้ซ่อมอีก
+      </div>
     </div>`,
     showConfirmButton: false, showCloseButton: true, width: 380,
     customClass: { popup: 'swal-popup' }
@@ -3987,48 +3915,18 @@ function showAdminTools() {
 async function _admRun(action, payload, opts) {
   opts = opts || {};
   try {
-    if (opts.confirm) {
-      const c = await Swal.fire({ title: '⚠️ ยืนยัน', html: opts.confirm, icon: 'warning',
-        showCancelButton: true, confirmButtonText: 'ยืนยัน', cancelButtonText: 'ยกเลิก', reverseButtons: true });
-      if (!c.isConfirmed) { showAdminTools(); return; }
-    }
     Swal.fire({ title: 'กำลังทำงาน...', html: opts.busy || 'รอสักครู่', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
     const r = await callGAS(action, payload || {}, opts.timeout || 90000);
     const isErr = !r || r.error || r.success === false;
     await Swal.fire({ icon: isErr ? 'error' : 'success', title: isErr ? 'ไม่สำเร็จ' : 'เสร็จแล้ว',
-      html: isErr ? ((r && r.error) || 'GAS ไม่ตอบ — เช็คว่า deploy เวอร์ชันใหม่แล้วหรือยัง') : (opts.render ? opts.render(r) : 'เรียบร้อย'),
+      html: isErr ? ((r && r.error) || 'Apps Script ไม่ตอบ') : (opts.render ? opts.render(r) : 'เรียบร้อย'),
       confirmButtonText: 'ปิด' });
-    showAdminTools(); // กลับเมนู
+    showAdminTools();
   } catch(e) { Swal.fire('ผิดพลาด', e.message || String(e), 'error'); }
 }
-function _admForceMirrorProducts() {
-  _admRun('forceMirrorProducts', {}, { busy: 'กำลังดันชื่อสินค้าขึ้น Firebase...',
-    render: r => 'ดันชื่อสินค้า <b>' + (r.mirrored || 0) + '</b> รายการ + เตะทุกเครื่องดึงใหม่แล้ว' });
-}
-function _admRemove365(apply) {
-  if (!apply) return _admRun('removePage365Dup', { apply: false }, { busy: 'กำลังตรวจ Page365 ซ้ำ...',
-    render: r => 'พบ Page365 ที่ tracking ซ้ำกับ native: <b>' + (r.candidates || 0) + '</b> แถว' + (r.candidates > 0 ? '<br>กด 2️⃣ เพื่อลบจริง' : ' ✅ ไม่มีซ้ำ') });
-  _admRun('removePage365Dup', { apply: true }, { confirm: 'ลบแถว Page365 ที่ tracking ซ้ำกับ native (เก็บ native ไว้) + อัปเดตหน้าแสกน?',
-    busy: 'กำลังลบ + อัปเดต /pending...', render: r => 'ลบ <b>' + (r.removed || 0) + '</b> แถว + อัปเดตหน้าแสกนแล้ว' });
-}
-function _admOverScan(apply) {
-  if (!apply) return _admRun('auditOverScan', { apply: false, sinceDays: 1 }, { busy: 'กำลังตรวจออเดอร์แสกนเกิน (วันนี้)...', timeout: 120000,
-    render: r => { const s = (r.detail || []).slice(0, 12).map(d => '• ' + escHtml(d.tracking) + ': ' + d.before + '→' + d.after).join('<br>');
-      return 'ตรวจ ' + (r.scanned || 0) + ' ออเดอร์ · เกิน <b>' + (r.overScanned || 0) + '</b> ใบ' + (r.overScanned > 0 ? '<br><div style="font-size:0.78rem;max-height:120px;overflow:auto;">' + s + ((r.detail || []).length > 12 ? '<br>...' : '') + '</div>กด 4️⃣ เพื่อแก้จริง' : ' ✅'); } });
-  _admRun('auditOverScan', { apply: true, sinceDays: 1 }, { confirm: 'cap สินค้าที่แสกนเกิน (วันนี้) ลงเหลือค่าจริง + อัปเดต Firebase?<br><small>💡 ทำ 2️⃣ ก่อนเสมอ</small>',
-    busy: 'กำลังแก้ + rebuild Firebase...', timeout: 180000, render: r => 'แก้ <b>' + (r.fixed || 0) + '</b> ออเดอร์ + อัปเดต Firebase แล้ว' });
-}
-function _admSimple(action, label) {
-  _admRun(action, {}, { busy: 'กำลัง' + label + '...', render: () => label + ' เสร็จแล้ว ✅' });
-}
-function _admFindLost() {
-  _admRun('findLost', {}, { busy: 'กำลังเทียบ SaveLog vs Orders...', timeout: 120000,
-    render: r => { const lost = (r.lost || []); return lost.length === 0 ? '✅ ไม่มีออเดอร์หาย' :
-      ('⚠ พบหาย <b>' + lost.length + '</b> ใบ<br><div style="max-height:120px;overflow:auto;font-size:0.78rem;">' + lost.slice(0, 30).map(escHtml).join('<br>') + '</div>(รายละเอียดส่งอีเมลแล้ว)'); } });
-}
 function _admReconcile() {
-  _admRun('reconcileVideoUrls', { sinceDays: 7 }, { busy: 'กำลังเติมลิงก์วิดีโอจาก Drive...', timeout: 180000,
-    render: r => 'เติมลิงก์ <b>' + (r.fixed || 0) + '</b> แถว (สแกน ' + (r.scanned || 0) + ', ไฟล์ Drive ' + (r.driveFiles || 0) + ')' });
+  _admRun('reconcileVideoUrls', { sinceDays: 7 }, { busy: 'กำลังเติมลิงก์วิดีโอจาก Drive...', timeout: 120000,
+    render: r => 'เติมลิงก์ <b>' + (r.fixed || 0) + '</b> แถว (สแกน ' + (r.scanned || 0) + ')' });
 }
 
 // 🧹 ล้าง cache + SW + reload — แก้กรณีแอปติด cache เก่า (เช่น CSP เก่าบล็อก Firebase)
@@ -4626,7 +4524,6 @@ async function initScanner() {
       // fetch order cache + เช็ค product hash background (ไม่บล็อก UI)
       _fetchOrderCacheBackground();
       _checkProductCacheUpdate();
-      _startPendingSync(); // 🔄 ฟัง real-time — เครื่องอื่นอัปไฟล์ → ดึงใหม่อัตโนมัติ
     } else {
       // ✅ ไม่มี cache → fetch ทั้งคู่ก่อน แล้วค่อย setup
       btn.innerText = "กำลังโหลดข้อมูล...";
@@ -4635,7 +4532,6 @@ async function initScanner() {
       ['localOrdersCache','orderRemarkMap','orderInfoMap'].forEach(k => localStorage.removeItem(k));
       await Promise.all([_fetchProductCacheNow(), _fetchOrderCacheBackground()]);
       setupScanUI();
-      _startPendingSync(); // 🔄 ฟัง real-time — เครื่องอื่นอัปไฟล์ → ดึงใหม่อัตโนมัติ
     }
   } catch (err) {
     console.error('[initScanner error]', err);
@@ -4646,18 +4542,6 @@ async function initScanner() {
 }
 
 // ⚡ อ่าน products จาก Firebase /products (~100ms) — คืน map หรือ null
-async function _firebaseFetchProducts() {
-  if (!FIREBASE_ENABLED()) return null;
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(`${FIREBASE_DB_URL}/products.json`, { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return (data && Object.keys(data).length > 0) ? data : null;
-  } catch(e) { return null; }
-}
 
 // ✅ แปลง SKU → ชื่อสินค้า แบบทนทาน (case-insensitive) — ใช้ทั้ง search + report
 //   /stats เก็บ sku เป็น UPPERCASE, product sheet อาจ key คนละ case → index แบบ uppercase กันพลาด
@@ -4730,17 +4614,13 @@ function _saveProductPhotos(photos) {
   try { localStorage.setItem('productPhoto_cache', JSON.stringify(productPhotoMap)); } catch (e) {}
 }
 
-// ✅ ดึง productMap: Firebase /products ก่อน (เร็ว); ว่าง → fallback GAS getProductData (ดึงชื่อจากชีตตรง)
-//   ชื่อสินค้าสำคัญต่อการแพค → ต้องไม่โชว์ SKU เพราะ /products ยังไม่ถูก mirror
+// ✅ ชื่อสินค้ามาจาก Hub ของร้านที่เดียว (ชื่อย่อ, สี, ขนาด)
+//   ดึงไม่ได้ = ใช้ของที่แคชไว้ในเครื่องต่อ — ห้ามปล่อยให้จอแพคโชว์ SKU เปล่า ๆ
 async function _fetchProductCacheNow() {
   /* Hub ของเว็บร้านมาก่อน — ชื่อกับรูปชุดเดียวกับที่ใช้ในเว็บ/คีย์ลัด/สติกเกอร์บาร์โค้ด */
   const hub = await _hubFetchProducts();
   let prodRes = hub ? hub.names : null;
   if (hub) _saveProductPhotos(hub.photos);
-  if (!prodRes) prodRes = await _firebaseFetchProducts();
-  if (!prodRes || Object.keys(prodRes).length === 0) {
-    prodRes = await callGAS("getProductData").catch(() => null);
-  }
   if (prodRes && Object.keys(prodRes).length > 0) {
     productMap = prodRes;
     _rebuildProductNameIndex();
@@ -4759,7 +4639,7 @@ async function _checkProductCacheUpdate() {
     /* Hub ก่อนเหมือนตอนโหลดครั้งแรก — ดึงไม่ได้ค่อยถอยไป Firebase */
     const hub = await _hubFetchProducts();
     if (hub) _saveProductPhotos(hub.photos);
-    const prodRes = hub ? hub.names : await _firebaseFetchProducts();
+    const prodRes = hub ? hub.names : null;
     if (!prodRes || Object.keys(prodRes).length === 0) {
       // /products ว่าง — ถ้าเครื่องนี้ยัง "ไม่มีชื่อสินค้าเลย" → ดึง GAS มากัน SKU โผล่ (เครื่องที่ 2 เปิดสด)
       if (!productMap || Object.keys(productMap).length === 0) {
@@ -4797,165 +4677,39 @@ function _simpleHash(str) {
 // ✅ fetch order cache จาก GAS แล้วบันทึก (ใช้ได้ทั้ง background และ await)
 // คืน true เมื่อ fetch สำเร็จและ cache ถูกเขียนแล้ว, false ถ้า fail/error
 // retry สูงสุด 3 ครั้ง พร้อม exponential backoff กัน network blip ชั่วคราว
-// ⚡ อ่าน pending orders จาก Firebase /pending (~100ms) — คืน map หรือ null
-async function _firebaseFetchPending() {
-  if (!FIREBASE_ENABLED()) return null;
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(`${FIREBASE_DB_URL}/pending.json`, { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data || {}; // {} = ไม่มี pending (ปกติ), null = อ่านไม่ได้
-  } catch(e) { return null; }
-}
+/* เดิมมี /pending · /pendingLive · /remarkLive และตัวฟัง /cacheMeta แบบ real-time (SSE)
+   ตัดทิ้ง 27 ก.ย. 2569 — คิวรอแพคกับหมายเหตุอยู่ที่ Hub แล้ว ดึงใหม่ตอนเปิดแอป/กลับมาที่แท็บ/หลังอัปไฟล์ */
 
-// ⚡ overlay: รายการที่ PC เพิ่งอัป (เขียนตรงเข้า Firebase ก่อน GAS rebuild /pending) → มือถือเห็นทันที
-//   โครงสร้าง /pendingLive/{tracking} = { k, ts, items:[{sku,qty,remark,orderId,marketplace}] }
-async function _firebaseFetchPendingLive() {
-  if (!FIREBASE_ENABLED()) return null;
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(`${FIREBASE_DB_URL}/pendingLive.json`, { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    return (await res.json()) || {};
-  } catch(e) { return null; }
-}
-
-// ⚡ overlay หมายเหตุที่แก้จากแถบค้นหา — /remarkLive/{TRACKING} = { k, ts, tk, rm }
-//   แอปเขียนตรง (ไม่ผ่าน GAS) แล้วทุกเครื่องเอาไป "ทับ" หมายเหตุของ /pending และ /orders
-//   GAS drainRemarkLive ลงชีตตามหลัง แล้วลบรายการนั้นทิ้ง → กลับไปใช้ค่าจาก /pending ที่ตรงกันแล้ว
-//   คืน { TRACKING: remark } — rm ว่าง = ตั้งใจลบหมายเหตุ ต้องทับด้วยค่าว่างจริง ไม่ใช่ข้าม
-async function _firebaseFetchRemarkLive() {
-  if (!FIREBASE_ENABLED()) return null;
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(`${FIREBASE_DB_URL}/remarkLive.json`, { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const raw = (await res.json()) || {};
-    const out = {};
-    for (const key in raw) {
-      const d = raw[key];
-      if (!d || typeof d !== 'object') continue;
-      const tk = String(d.tk || key || '').trim().toUpperCase();
-      if (tk) out[tk] = String(d.rm == null ? '' : d.rm);
-    }
-    return out;
-  } catch(e) { return null; }
-}
-
-// ====== REAL-TIME SYNC — เครื่องอื่นอัปไฟล์ → ทุกเครื่องดึงข้อมูลใหม่อัตโนมัติ ======
-//   ฟัง Firebase /cacheMeta แบบ stream (SSE) — ts เปลี่ยนทุกครั้งที่ refreshPendingCache เขียน
-//   (รวมตอน "อัปไฟล์เสร็จ → refreshPending") → SSE ส่ง event → เครื่องนี้ดึง /pending+/products ใหม่เบื้องหลัง
-let _pendingSyncES = null;
-let _cacheRefreshTimer = null;
-function _debouncedCacheRefresh() {
-  clearTimeout(_cacheRefreshTimer);
-  _cacheRefreshTimer = setTimeout(() => {
-    console.log('[Sync] ดึงข้อมูลใหม่เบื้องหลัง (มีเครื่องอื่นอัปเดต)');
-    _fetchOrderCacheBackground();   // /pending → localOrdersCache + orderRemarkMap
-    _checkProductCacheUpdate();     // /products → productMap (ถ้าเปลี่ยน)
-  }, 1200); // debounce กันยิงถี่ถ้ามีหลาย event ติดกัน
-}
-function _startPendingSync() {
-  if (!FIREBASE_ENABLED() || typeof EventSource === 'undefined') return;
-  if (_pendingSyncES && _pendingSyncES.readyState !== 2) return; // มีอยู่แล้ว (ไม่ใช่ CLOSED)
-  try {
-    const es = new EventSource(`${FIREBASE_DB_URL}/cacheMeta.json`);
-    _pendingSyncES = es;
-    let first = true;
-    const onChange = () => {
-      if (first) { first = false; return; } // event แรก = ค่าปัจจุบันตอน connect (โหลดไปแล้วตอน start)
-      _debouncedCacheRefresh();
-    };
-    es.addEventListener('put', onChange);
-    es.addEventListener('patch', onChange);
-    es.onerror = () => { /* EventSource reconnect เองอัตโนมัติ — ไม่ต้องทำอะไร */ };
-    console.log('[Sync] เริ่มฟัง /cacheMeta (real-time) แล้ว');
-  } catch(e) { console.warn('[Sync] EventSource error:', e.message); }
-}
-
-// ====== "พัสดุนี้แพคไปแล้ว" (ข้ามเครื่อง) — set ของ tracking ที่อยู่ในชีต ======
-//   โหลด keys ของ /orders แบบ shallow (เอาแค่ key ไม่เอา value = เบามาก) → เช็คตอนสแกนแบบ O(1)
+/** เลขพัสดุที่แพคไปแล้ว (30 วันหลังสุด) — ใช้เตือนตอนสแกนใบซ้ำ */
 let _packedSet = new Set();
 async function _loadPackedSet() {
-  if (!FIREBASE_ENABLED()) return;
+  /* ใบที่แพคไปแล้ว 30 วันหลังสุด — ขอแบบ lite (เลขพัสดุ + เวลา) ก้อนเล็กกว่าราว 6 เท่า */
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(`${FIREBASE_DB_URL}/orders.json?shallow=true`, { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data && typeof data === 'object') {
-      const s = new Set();
-      for (const k in data) s.add(String(k).toUpperCase());
-      _packedSet = s;
-    }
-  } catch(e) {}
+    const docs = await _hubFetchPacks({ days: 30, limit: 20000, lite: true });
+    _packedSet = new Set(docs.map(d => String(d.tk || '').toUpperCase()).filter(Boolean));
+  } catch(e) {
+    console.warn('[แพคแล้ว] อ่านจาก Hub ไม่ได้:', e.message);
+  }
 }
 function _isParcelPacked(tracking) {
   return _packedSet.has(String(tracking || '').toUpperCase());
 }
 
 async function _fetchOrderCacheBackground(retries = 2) {
-  _loadPackedSet(); // 🔄 รีเฟรช set "แพคแล้ว" คู่กับ order cache (start/sync/visible/หลังอัป)
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      // ⚡ ลอง Firebase /pending ก่อน (เร็ว) → ไม่ได้ค่อย fallback GAS (ช้า)
-      let orderRes = await _firebaseFetchPending();
-      if (orderRes !== null) {
-        console.log('[Order Cache] จาก Firebase ⚡');
-      } else {
-        // ⏱️ timeout 30s — MarketplaceData rows เยอะ + GAS cold start
-        orderRes = await callGAS("getAllPendingOrders", {}, 30000).catch(err => ({ error: err.message || 'network error' }));
-      }
-      if (!orderRes || orderRes.error) {
-        console.warn(`[Order Cache] attempt ${attempt + 1}/${retries + 1} fail:`, orderRes?.error || 'no response');
-        if (attempt < retries) {
-          await new Promise(r => setTimeout(r, 800 * Math.pow(2, attempt))); // 800ms, 1600ms
-          continue;
-        }
-        return false;
-      }
+      /* คิวรอแพคมาจาก Hub ที่เดียว — Hub ตัดใบที่แพคไปแล้วออกให้เอง
+         จึงไม่ต้องมี /pending + /pendingLive + รายการ "แพคแล้ว" มาไล่ลบกันเองแบบเดิม */
+      const queue = await _hubFetchQueue();
       const normalizedOrderRes = {};
-      for (const tracking in orderRes) {
-        const items = orderRes[tracking];
+      for (const tracking in queue) {
+        const items = queue[tracking];
         normalizedOrderRes[tracking] = Array.isArray(items)
           ? items.map(item => ({ ...item, sku: normSku(item.sku || '', item.marketplace || '') }))
           : items;
       }
-      // ⚡ overlay /pendingLive — รายการที่เพิ่งอัปจาก PC (ยังไม่เข้า /pending ที่ GAS rebuild)
-      //   เติมเฉพาะ tracking ที่ /pending ยังไม่มี และยังไม่ถูกแพค → มือถือแสกนเจอทันทีไม่ต้องรอ GAS
-      try {
-        const live = await _firebaseFetchPendingLive();
-        if (live && typeof live === 'object') {
-          for (const tk of Object.keys(live)) {
-            const T = String(tk).toUpperCase();
-            if (normalizedOrderRes[T]) continue;          // /pending (ตัวจริง) มีแล้ว → ใช้ของจริง
-            if (_isParcelPacked(T)) continue;             // แพคไปแล้ว → ไม่ต้องโชว์
-            const items = (live[tk] && live[tk].items) || [];
-            if (Array.isArray(items) && items.length) {
-              normalizedOrderRes[T] = items.map(item => ({ ...item, sku: normSku(item.sku || '', item.marketplace || '') }));
-            }
-          }
-        }
-      } catch(e) { console.warn('[pendingLive] merge fail:', e.message); }
-      // 📝 ทับหมายเหตุด้วย /remarkLive — หมายเหตุที่เพิ่งแก้จากแถบค้นหา ยังไม่ลงชีต/ยังไม่เข้า /pending
-      try {
-        const rl = await _firebaseFetchRemarkLive();
-        if (rl) for (const T of Object.keys(rl)) {
-          if (!Array.isArray(normalizedOrderRes[T])) continue; // แพ็คแล้ว → ไม่อยู่ใน pending ไม่เกี่ยวกับการพูด
-          normalizedOrderRes[T] = normalizedOrderRes[T].map(it => ({ ...it, remark: rl[T] }));
-        }
-      } catch(e) { console.warn('[remarkLive] merge fail:', e.message); }
       localStorage.setItem('localOrdersCache', JSON.stringify(normalizedOrderRes));
-      console.log("[Order Cache] ซิงค์สำเร็จ:", Object.keys(normalizedOrderRes).length, "ออเดอร์");
+      console.log("[คิวรอแพค] จาก Hub:", Object.keys(normalizedOrderRes).length, "ออเดอร์");
       const remarkFromOrders = {}, infoFromOrders = {};
       for (const tracking in normalizedOrderRes) {
         const items = normalizedOrderRes[tracking];
@@ -4967,13 +4721,13 @@ async function _fetchOrderCacheBackground(retries = 2) {
           infoFromOrders[tracking] = { orderId: normOrderId(first.orderId || '', first.marketplace), marketplace: first.marketplace };
         }
       }
-      // ✅ เขียนทับเสมอ (รวมกรณีว่าง) — ก่อนหน้านี้ if(length>0) ทำให้ลบ marketplace ออก แต่ cache เก่ายังอยู่
-      // ✅ Prune: เก็บเฉพาะ tracking ที่ยังอยู่ใน normalizedOrderRes — กัน localStorage โตไม่หยุด
+      /* เขียนทับเสมอ (รวมกรณีว่าง) และเก็บเฉพาะ tracking ที่ยังอยู่ในคิว — กัน localStorage โตไม่หยุด */
       localStorage.setItem('orderRemarkMap', JSON.stringify(remarkFromOrders));
       localStorage.setItem('orderInfoMap', JSON.stringify(infoFromOrders));
+      _loadPackedSet();  // เตือน "ใบนี้แพคไปแล้ว" ตอนสแกนซ้ำ
       return true;
     } catch(e) {
-      console.warn(`[Order Cache] attempt ${attempt + 1}/${retries + 1} exception:`, e.message);
+      console.warn(`[คิวรอแพค] รอบ ${attempt + 1}/${retries + 1} ไม่สำเร็จ:`, e.message);
       if (attempt < retries) {
         await new Promise(r => setTimeout(r, 800 * Math.pow(2, attempt)));
         continue;
@@ -5024,7 +4778,7 @@ function setupScanUI() {
     requestWakeLock();
     speak("ระบบพร้อมแล้วค่ะ เริ่มสแกนพัสดุได้เลย");
     startScan();
-    _startMarketplaceVersionPolling(); // ✅ เริ่ม poll version เพื่อรับออเดอร์ใหม่จากคอม
+    _startQueueRefresh(); // ✅ เริ่ม poll version เพื่อรับออเดอร์ใหม่จากคอม
   } catch(err) {
     console.error('[setupScanUI error]', err);
     alert('เกิดข้อผิดพลาดในการเริ่มระบบ: ' + err.message);
@@ -5034,92 +4788,38 @@ function setupScanUI() {
   }
 }
 
-// ✅ Poll marketplace version ทุก 30 วินาที
-// ถ้า version เปลี่ยน (คอมอัปโหลดไฟล์ใหม่) → fetch order cache ใหม่อัตโนมัติ
-let _marketplaceVersionTimer = null;
-let _lastKnownMarketplaceVersion = localStorage.getItem('marketplaceVersion') || '0';
+/* เดิมมีตัวเฝ้า marketplace_version.txt ใน Drive ทุก 30 วิ เพื่อรู้ว่ามีคนอัปไฟล์ใหม่
+   ตัดทิ้ง 27 ก.ย. 2569 — คิวรอแพคอ่านจาก Hub ตอนเปิดแอป · กลับมาที่แท็บ · และหลังอัปไฟล์ */
 
-// ✅ URL ของ marketplace_version.txt ใน Drive (public read)
-// GAS จะสร้างไฟล์นี้และ return URL ครั้งแรกที่ saveMarketplaceData ถูกเรียก
-// หลังจากนั้นมือถือ fetch ตรงเลยโดยไม่ผ่าน GAS — เร็ว ~100ms ไม่มี cold start
-let _marketplaceVersionFileUrl = localStorage.getItem('marketplaceVersionUrl') || '';
 
-function _startMarketplaceVersionPolling() {
-  if (!_marketplaceVersionFileUrl) {
-    // ยังไม่มี URL — ดึงจาก GAS ก่อนครั้งเดียว แล้วเก็บไว้ถาวร
-    callGAS("getMarketplaceVersionUrl").then(res => {
-      if (res && res.url) {
-        _marketplaceVersionFileUrl = res.url;
-        localStorage.setItem('marketplaceVersionUrl', res.url);
-        console.log('[Polling] ได้ version URL แล้ว — เริ่ม poll');
-        _scheduleVersionPoll();
-      }
-    }).catch(() => {});
-  } else {
-    _scheduleVersionPoll();
-  }
-}
+/* ดึงคิวรอแพคใหม่เป็นระยะ — เดิมเฝ้าไฟล์เวอร์ชันใน Drive เพื่อรู้ว่ามีคนอัปไฟล์ใหม่
+   ตอนนี้ถาม Hub ตรง ๆ ทุก 2 นาทีเฉพาะตอนที่แอปเปิดอยู่ (ซ่อนแท็บ = หยุด) และถามทันทีที่กลับมา */
+const QUEUE_REFRESH_MS = 120000;
+let _queueRefreshTimer = null;
+let _queueVisibilityBound = false;
 
-function _startVersionPollInterval() {
-  if (_marketplaceVersionTimer) clearInterval(_marketplaceVersionTimer);
-  _marketplaceVersionTimer = setInterval(_pollMarketplaceVersion, 30000);
+function _startQueueRefreshInterval() {
+  if (_queueRefreshTimer) clearInterval(_queueRefreshTimer);
+  _queueRefreshTimer = setInterval(() => { _fetchOrderCacheBackground(); }, QUEUE_REFRESH_MS);
 }
-function _stopVersionPollInterval() {
-  if (_marketplaceVersionTimer) { clearInterval(_marketplaceVersionTimer); _marketplaceVersionTimer = null; }
+function _stopQueueRefreshInterval() {
+  if (_queueRefreshTimer) { clearInterval(_queueRefreshTimer); _queueRefreshTimer = null; }
 }
-function _scheduleVersionPoll() {
-  // ✅ เริ่ม interval เฉพาะถ้า tab ยัง visible — กัน quota ที่ Drive ถูกเรียกซ้ำๆ ตอน tab ซ่อน
-  if (document.visibilityState === 'visible') _startVersionPollInterval();
-  console.log('[Polling] เริ่ม poll marketplace version ทุก 30s (Drive direct fetch, pause เมื่อ hidden)');
-  if (!_visibilityPollBound) {
-    _visibilityPollBound = true;
-    let _lastVisibilityPollAt = 0;
-    const VISIBILITY_POLL_COOLDOWN = 5000;
-    const _triggerOnVisible = () => {
-      if (document.visibilityState !== 'visible') {
-        // tab ซ่อน → หยุด interval ประหยัด quota
-        _stopVersionPollInterval();
-        return;
-      }
-      // กลับมาที่แอป → start interval + poll ทันทีถ้าผ่าน cooldown
-      _startVersionPollInterval();
-      const now = Date.now();
-      if (now - _lastVisibilityPollAt < VISIBILITY_POLL_COOLDOWN) return;
-      _lastVisibilityPollAt = now;
-      if (!_marketplaceVersionFileUrl) return;
-      console.log('[Polling] กลับมาที่แอป → poll ทันที');
-      _pollMarketplaceVersion();
-    };
-    document.addEventListener('visibilitychange', _triggerOnVisible);
-    window.addEventListener('focus', _triggerOnVisible);
-  }
-}
-let _visibilityPollBound = false;
-
-async function _pollMarketplaceVersion() {
-  if (!_marketplaceVersionFileUrl) return;
-  try {
-    // ✅ fetch ตรงจาก Drive — ไม่ผ่าน GAS เลย ไม่มี cold start
-    const res = await fetch(_marketplaceVersionFileUrl + '&t=' + Date.now(), {
-      cache: 'no-store'
-    });
-    if (!res.ok) return;
-    const version = (await res.text()).trim();
-    if (version && version !== '0' && version !== _lastKnownMarketplaceVersion) {
-      console.log('[Polling] marketplace version เปลี่ยน →', version, '— fetch order cache ใหม่');
-      // ✅ FIX: bump version หลัง fetch สำเร็จเท่านั้น — กัน cache ค้างเมื่อ fetch ล้ม
-      const ok = await _fetchOrderCacheBackground();
-      if (ok) {
-        _lastKnownMarketplaceVersion = version;
-        localStorage.setItem('marketplaceVersion', version);
-        console.log('[Polling] order cache อัปเดตแล้ว — bump version =', version);
-      } else {
-        console.warn('[Polling] fetch order cache ล้ม — ไม่ bump version จะลองใหม่ poll รอบถัดไป');
-      }
-    }
-  } catch(e) {
-    // network error — ไม่ต้อง log เพราะอาจแค่ offline ชั่วคราว
-  }
+function _startQueueRefresh() {
+  if (document.visibilityState === 'visible') _startQueueRefreshInterval();
+  if (_queueVisibilityBound) return;
+  _queueVisibilityBound = true;
+  let lastAt = 0;
+  const onVisible = () => {
+    if (document.visibilityState !== 'visible') { _stopQueueRefreshInterval(); return; }
+    _startQueueRefreshInterval();
+    const now = Date.now();
+    if (now - lastAt < 5000) return;   // กันกระพริบตอนสลับแท็บถี่ ๆ
+    lastAt = now;
+    _fetchOrderCacheBackground();
+  };
+  document.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('focus', onVisible);
 }
 
 async function refreshAllCache() {
@@ -6183,7 +5883,7 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
     //   ❗ไม่เรียก saveData เขียนชีตตรงๆ อีกแล้ว — drain (server-side) เป็นคนเขียนชีต "คนเดียว"
     //      → หลายเครื่องแพคพร้อมกันก็ไม่แย่ง append lock = หมดปัญหา lock_timeout
     //   hadVideo บอก drain ให้ "รอ" videoUrl (grace) ก่อนเขียน row → row มี link ตั้งแต่แรก
-    const fbDone = _ensureFirebasePush({ pId, itemsArr, remarkNote, orderId, marketplace, idemToken, ts: Date.now(), hadVideo, fbPushed: false })
+    const fbDone = _hubSendPack({ pId, itemsArr, remarkNote, orderId, marketplace, idemToken, ts: Date.now(), hadVideo })
       .then(() => updateFailQueueBadge())
       .catch(() => {});
 
@@ -6217,7 +5917,6 @@ async function processBackgroundUpload(pId, itemsArr, chunks, remarkNote = '', o
       await _uploadVideoAndPatch(pId, idemToken, videoData, videoMimeForUpload);
     } else if (hadVideo) {
       // มีวิดีโอแต่แปลง/อ่านไฟล์ไม่ได้ → บอก drain ไม่ต้องรอ (เขียน no_video ได้เลย)
-      await _firebasePatchVideoUrl(idemToken, "no_video");
       _updateQueueItem(pId, (cur) => { cur.videoSent = true; cur.hadVideo = false; return cur; });
     }
 
@@ -6406,19 +6105,12 @@ async function _fetchExpectedItems(tracking) {
 
   // 2. fallback ไป GAS — แยก error จาก "ไม่มีข้อมูล" ให้ชัด
   try {
-    const res = await callGAS("getExpectedOrderDetails", { trackingNo: tracking });
-    if (res && typeof res === 'object' && res.error) {
-      console.warn("[GAS] getExpectedOrderDetails error:", res.error);
-      return null; // error — ต้อง retry
-    }
-    if (!Array.isArray(res)) {
-      console.warn("[GAS] getExpectedOrderDetails ตอบกลับรูปแบบไม่คาด:", res);
-      return null;
-    }
-    console.log("[GAS] ดึงข้อมูลออเดอร์จาก Sheet:", tracking, "ได้", res.length, "รายการ");
+    const res = await _hubFetchQueueOne(tracking);
+    if (!Array.isArray(res)) return null;   // อ่านไม่ได้ → ให้ผู้เรียก retry
+    console.log("[คิวรอแพค] ใบ", tracking, "ต้องมี", res.length, "รายการ");
     return res;
   } catch (e) {
-    console.warn("[GAS] getExpectedOrderDetails throw:", e.message);
+    console.warn("[คิวรอแพค] ถามของในใบไม่ได้:", e.message);
     return null;
   }
 }
@@ -7363,10 +7055,11 @@ async function _sendChunkWithRetry(chunk, fileName, marketplace, maxRetries = 3)
   let lastError = 'unknown';
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const resp = await callGAS("saveMarketplaceData", { data: chunk, fileName, marketplace }, 90000);
-      if (resp && resp.success) return { ok: true, resp };
+      /* ส่งเข้าคิวรอแพคที่ Hub — Hub ตัดใบที่แพคไปแล้วทิ้งให้เอง อัปไฟล์เดิมซ้ำจึงไม่ทำให้ใบเก่ากลับมา */
+      const resp = await _hubUploadQueueRows(chunk, marketplace);
+      if (resp && resp.ok) return { ok: true, resp: { success: true, count: resp.rows, duplicateSkipped: resp.skippedPacked } };
       lastError = resp?.error || 'unknown';
-      if (!/server busy/i.test(lastError)) return { ok: false, error: lastError };
+      return { ok: false, error: lastError };
       if (attempt < maxRetries - 1) await new Promise(res => setTimeout(res, 3000 * Math.pow(2, attempt)));
     } catch (err) {
       lastError = err.message;
@@ -7429,116 +7122,8 @@ async function _uploadResultsParallel(items, concurrency = 1) {
   return agg;
 }
 
-// 🔥 อัปไฟล์ marketplace ขึ้น Firebase /mpInbox (เร็ว) — drain เขียนชีต + /pending เบื้องหลัง
-//   คืน true ถ้า push ครบทุกไฟล์, false ถ้าล้ม (ให้ fallback ไปทางเขียนชีตตรง)
-let _mpPushFailReason = '';
-async function _firebasePushMarketplace(results) {
-  _mpPushFailReason = '';
-  if (!FIREBASE_ENABLED()) { _mpPushFailReason = 'Firebase ปิด (FIREBASE_DB_URL ว่าง)'; return false; }
-  try {
-    const ts = Date.now();
-    for (const r of results) {
-      const rows = r.extractData || [];
-      if (rows.length === 0) continue;
-      const batchId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (ts + '-' + Math.random().toString(36).slice(2));
-      const res = await fetch(`${FIREBASE_DB_URL}/mpInbox/${encodeURIComponent(batchId)}.json`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ k: FIREBASE_WRITE_KEY, marketplace: r.marketplace, fileName: r.file.name, ts, rows })
-      });
-      if (!res.ok) {
-        let t = ''; try { t = await res.text(); } catch(e) {}
-        _mpPushFailReason = `เขียน /mpInbox ไม่ได้ (${res.status}) — ยังไม่ได้เปิด Firebase Rules /mpInbox`;
-        console.warn('[mpInbox] PUT fail', res.status, t.slice(0, 150));
-        return false;
-      }
-    }
-    return true;
-  } catch(e) { _mpPushFailReason = 'push error: ' + e.message; console.warn('[mpInbox] push fail:', e.message); return false; }
-}
-
-// ⚡ เขียน /pendingLive ตรงเข้า Firebase ทันที (ไม่รอ GAS drain+rebuild) → มือถือแสกนเจอเลย
-//   รวม extractData → { tracking: {k, ts, items:[{sku,qty,remark,orderId,marketplace}]} } เหมือน getAllPendingOrders
-//   GAS rebuild /pending (ตัวจริง) ตามหลัง แล้ว prune /pendingLive ที่เก่าทิ้ง
-function _buildPendingLivePayload(results) {
-  const byTk = {}; // tracking -> [items]
-  for (const r of results) {
-    for (const d of (r.extractData || [])) {
-      const tracking = String(d.tracking || '').trim().toUpperCase();
-      const sku = String(d.sku || '').trim().toUpperCase();
-      if (!tracking || !sku) continue;
-      const qty = parseInt(d.qty) || 1;
-      const remark = String(d.remark || '').trim();
-      const orderId = String(d.orderId || '').trim();
-      const mp = String(d.marketplace || r.marketplace || '').trim().toLowerCase();
-      if (!byTk[tracking]) byTk[tracking] = [];
-      const ex = byTk[tracking].find(it => it.sku === sku);
-      if (ex) {
-        ex.qty += qty;
-        if (!ex.remark && remark) ex.remark = remark;
-        if (orderId && !ex.orderId.split(',').map(s => s.trim()).includes(orderId)) {
-          ex.orderId = ex.orderId ? ex.orderId + ',' + orderId : orderId;
-        }
-      } else {
-        byTk[tracking].push({ sku, qty, remark, orderId, marketplace: mp });
-      }
-    }
-  }
-  const ts = Date.now();
-  const payload = {};
-  for (const tk of Object.keys(byTk)) payload[tk] = { k: FIREBASE_WRITE_KEY, ts, items: byTk[tk] };
-  return payload;
-}
-async function _firebasePushPendingLive(results) {
-  if (!FIREBASE_ENABLED()) return false;
-  try {
-    const payload = _buildPendingLivePayload(results);
-    if (Object.keys(payload).length === 0) return false;
-    // PATCH merge — เพิ่ม/ทับเฉพาะ tracking ที่อัปรอบนี้ (multi-path: แต่ละ child มี k → ผ่าน rule)
-    const res = await fetch(`${FIREBASE_DB_URL}/pendingLive.json`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-    });
-    if (!res.ok) { console.warn('[pendingLive] PATCH fail', res.status); return false; }
-    // เตะ /cacheMeta → ทุกเครื่อง (รวมมือถือ) ดึง /pending+/pendingLive ใหม่ทันที (real-time)
-    await fetch(`${FIREBASE_DB_URL}/cacheMeta.json`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ts: Date.now(), k: FIREBASE_WRITE_KEY })
-    });
-    return true;
-  } catch(e) { console.warn('[pendingLive] push error:', e.message); return false; }
-}
-
-// เตะ drain /mpInbox แบบ "รอผล + retry" — แทน fire-and-forget เดิมที่กลืน error เงียบ
-//   สำเร็จ → /pending ถูก refresh แล้ว ดึงลง cache เครื่องนี้ + ดับจุดเตือน
-//   ล้มครบ 3 ครั้ง → ไฟล์ค้างใน /mpInbox (รอ trigger 5 นาที) → จุดแดงบนโลโก้ + toast (ไม่เงียบ)
-const MP_DRAIN_STUCK_KEY = 'mpDrainStuck';
-async function _kickMpDrainVerified() {
-  let lastErr = '';
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const dr = await callGAS("drainMpInbox", {}, 60000);
-      if (dr && dr.success) {
-        try { localStorage.removeItem(MP_DRAIN_STUCK_KEY); } catch(e) {}
-        _updateLogoAlert();
-        _fetchOrderCacheBackground(); // เครื่องนี้ดึง /pending ใหม่
-        return true;
-      }
-      lastErr = (dr && dr.error) ? dr.error : 'GAS ไม่ตอบรับ';
-    } catch(e) { lastErr = e.message || 'เรียก drain ไม่ได้'; }
-    if (attempt < 3) await new Promise(r => setTimeout(r, 2500 * attempt));
-  }
-  console.warn('[mpInbox] drain kick failed:', lastErr);
-  try { localStorage.setItem(MP_DRAIN_STUCK_KEY, String(Date.now())); } catch(e) {}
-  _updateLogoAlert();
-  try { showSyncToast('⚠️ ไฟล์ขึ้น Firebase แล้ว แต่ยังไม่เข้าชีต (' + lastErr + ') — ระบบลองใหม่ใน ~5 นาที หรือแตะโลโก้ LS'); } catch(e) {}
-  return false;
-}
-// ปุ่มในหน้า diagnostic — ดูดไฟล์ marketplace ที่ค้างเข้าชีตเดี๋ยวนี้
-window._retryMpDrain = async function() {
-  try { Swal.close(); } catch(e) {}
-  try { showSyncToast('กำลังดูดไฟล์ marketplace เข้าชีต...'); } catch(e) {}
-  const ok = await _kickMpDrainVerified();
-  try { showSyncToast(ok ? '✅ ดูดไฟล์เข้าชีตแล้ว' : '❌ ยังเขียนชีตไม่ได้ — เช็คว่า deploy GAS เวอร์ชันใหม่แล้วหรือยัง'); } catch(e) {}
-};
+/* เดิมตรงนี้มีทางลัดผ่าน Firebase (/mpInbox → drain เขียนชีต → /pendingLive → เตะ /cacheMeta)
+   ตัดทิ้งทั้งชุดเมื่อ 27 ก.ย. 2569 — คิวรอแพคอยู่ที่ Hub แล้ว อัปเสร็จทุกเครื่องเห็นทันที */
 
 async function processFileUpload() {
   const fileInput = document.getElementById('fileInput');
@@ -7690,30 +7275,8 @@ async function processFileUpload() {
     localStorage.setItem('orderInfoMap', JSON.stringify(mergedInfo));
   } catch(e) { console.warn('[OrderInfo] บันทึก localStorage ไม่ได้:', e.message); }
 
-  // ===== Phase 2 (หลัก): Firebase-first — push ขึ้น /mpInbox (เร็ว) → drain เขียนชีต + /pending เบื้องหลัง
-  //   → admin ไม่ต้องรอเขียนชีต + เครื่องอื่นดึงจาก Firebase ลง cache อัตโนมัติ (real-time sync)
-  if (await _firebasePushMarketplace(results)) {
-    document.getElementById('fileInput').value = ""; _selectedFiles = []; _renderDzList();
-    // ⚡ เขียน /pendingLive ตรง + เตะ cacheMeta → มือถือแสกนเจอ "ทันที" ไม่ต้องรอ GAS drain/rebuild
-    const liveOk = await _firebasePushPendingLive(results);
-    _kickMpDrainVerified(); // เบื้องหลัง: drain เขียนชีต + rebuild /pending ตัวจริง (รอผล+retry, เตือนถ้าล้ม)
-    let totalRows = 0; const tset = new Set();
-    results.forEach(r => (r.extractData || []).forEach(d => { totalRows++; if (d.tracking) tset.add(d.tracking); }));
-    Swal.fire({
-      icon: 'success', title: liveOk ? '✅ อัปเสร็จ — มือถือแสกนเจอได้เลย' : 'อัปขึ้น Firebase แล้ว',
-      html: `<div style="text-align:left; font-size:0.9rem; color:#7a6440; line-height:1.7;">
-        📦 ${tset.size} พัสดุ · ${totalRows} รายการ จาก ${results.length} ไฟล์<br>
-        <span style="font-size:0.82rem; color:#2e7d32;">${liveOk
-          ? 'มือถือดึงรายการแล้ว — แสกนได้ทันที (ชีตกำลังบันทึกเบื้องหลัง)'
-          : 'กำลังเขียนลงชีต + อัปเดตทุกเครื่องเบื้องหลัง (ไม่กี่วินาที)'}</span>
-      </div>`,
-      confirmButtonText: 'เรียบร้อย', customClass: { popup: 'swal-popup' },
-    });
-    return;
-  }
-  // ⬇️ fallback: Firebase push ล้ม → เขียนชีตตรงผ่าน GAS (ทางเดิม "ช้า")
-  console.warn('[mp] Firebase push ล้ม → ใช้โหมดเขียนชีตตรง (ช้า):', _mpPushFailReason);
-  try { showSyncToast('⚠️ ' + (_mpPushFailReason || 'Firebase /mpInbox เขียนไม่ได้') + ' — ใช้โหมดช้า'); } catch(e) {}
+  /* อัปเข้าคิวรอแพคที่ Hub — ทางเดียว ไม่มีเส้นทางสำรองผ่าน Firebase/ชีตอีกแล้ว
+     ทุกเครื่องอ่านคิวจาก Hub อยู่แล้ว อัปเสร็จก็สแกนได้ทันทีโดยไม่ต้องรอใครเขียนชีตตาม */
   // ===== Phase 2: อัปโหลด — concurrency 1 (sequential)
   // ⚠️ GAS saveMarketplaceData อ่าน sheet.getLastRow() แล้วเขียนต่อ — ถ้าขนานกัน 2+ request
   //    จะอ่าน lastRow ค่าเดียวกัน → เขียนทับกัน → ข้อมูลหาย
@@ -7770,9 +7333,8 @@ async function processFileUpload() {
   _renderDzList();
   // ✅ อัป Firebase /pending + /products "ทันที" (ไม่รอ trigger 5 นาที) → แล้วดึง cache ใหม่
   //   → ออเดอร์ที่เพิ่งอัปเข้า scan-start cache เลย (ทุกเครื่อง) สแกนไม่ตกไป GAS รายตัว = เร็ว
-  callGAS("refreshPending", {}, 30000)
-    .catch(() => {})
-    .finally(() => _fetchOrderCacheBackground());
+  /* Hub อัปเดตคิวให้ทันทีที่ POST สำเร็จ — แค่ดึงคิวใหม่ลงเครื่องนี้ */
+  _fetchOrderCacheBackground();
 
   const totalParseSkipped = results.reduce((s, r) => s + (r.skipped?.count || 0), 0);
   if (lastFailures.length === 0) {
@@ -8165,46 +7727,37 @@ function setPreset(type, btnEl) {
 
 // 📊 อ่าน stats จาก Firebase ตรง (~100ms, ไม่มี GAS cold start)
 //   คืน null ถ้าปิด Firebase / อ่านไม่ได้ → ให้ fallback ไป GAS
-async function _firebaseReadStats(start, end) {
-  if (!FIREBASE_ENABLED()) return null;
+async function _hubReadStats(start, end) {
+  /* สรุปเองจากใบแพคใน Hub — เดิมอ่านตัวเลขสรุปสำเร็จรูปจาก Firebase /stats
+     ที่ GAS เป็นคนไล่บวกให้ตอน drain ตอนนี้ไม่มีตัวกลางแล้ว จึงนับจากใบจริงตรง ๆ */
   try {
-    const q = `orderBy=${encodeURIComponent('"$key"')}&startAt=${encodeURIComponent('"'+start+'"')}&endAt=${encodeURIComponent('"'+end+'"')}`;
-    const url = `${FIREBASE_DB_URL}/stats.json?${q}`;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 4000); // ⏱️ 4s — ถ้า Firebase พังจะไม่ช้ากว่า GAS มาก
-    const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) {
-      // ❌ อ่านไม่ได้ — บอกสาเหตุชัดเจน (มักเป็น Rules ไม่เปิด read /stats)
-      let why = res.status;
-      try { const t = await res.text(); why += ' ' + t.slice(0, 120); } catch(e) {}
-      console.warn(`[Report] Firebase /stats อ่านไม่ได้ (${why}) → fallback GAS. เช็ค Rules: "stats":{".read":true}`);
-      return null;
-    }
-    const raw = await res.json();
-    if (!raw) return { totalOrders: 0, totalItems: 0, allProducts: [], dailyBreakdown: {}, byMarketplace: {} };
-
+    const json = await _hubGet(`${HUB_PACKS_URL}?since=${encodeURIComponent(start)}&until=${encodeURIComponent(end)}&limit=20000`, 30000);
+    const packs = json.packs || [];
     let totalOrders = 0, totalItems = 0;
     const dailyBreakdown = {}, byMarketplace = {}, skuTotals = {};
-    for (const date in raw) {
-      const d = raw[date] || {};
-      const o = d.orders || 0, it = d.items || 0;
-      totalOrders += o; totalItems += it;
-      dailyBreakdown[date] = { orders: o, items: it };
-      if (d.mp) for (const mp in d.mp) {
-        if (!byMarketplace[mp]) byMarketplace[mp] = { orders: 0, items: 0 };
-        byMarketplace[mp].orders += d.mp[mp].orders || 0;
-        byMarketplace[mp].items  += d.mp[mp].items  || 0;
-      }
-      if (d.sku) for (const sk in d.sku) skuTotals[sk] = (skuTotals[sk] || 0) + d.sku[sk];
-    }
+    const dayOf = ms => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+    packs.forEach(p => {
+      const date = dayOf(p.t || Date.now());
+      const items = (p.i || []).length;
+      totalOrders += 1; totalItems += items;
+      if (!dailyBreakdown[date]) dailyBreakdown[date] = { orders: 0, items: 0 };
+      dailyBreakdown[date].orders += 1;
+      dailyBreakdown[date].items += items;
+      const mp = String(p.m || '').trim().toLowerCase() || 'other';
+      if (!byMarketplace[mp]) byMarketplace[mp] = { orders: 0, items: 0 };
+      byMarketplace[mp].orders += 1;
+      byMarketplace[mp].items += items;
+      (p.i || []).forEach(sku => {
+        const k = String(sku || '').trim().toUpperCase();
+        if (k) skuTotals[k] = (skuTotals[k] || 0) + 1;
+      });
+    });
     const allProducts = Object.entries(skuTotals)
       .map(([sku, count]) => ({ sku, name: _productName(sku), count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 200);
-    return { totalOrders, totalItems, allProducts, dailyBreakdown, byMarketplace, _source: 'firebase' };
+      .sort((a, b) => b.count - a.count);
+    return { totalOrders, totalItems, allProducts, dailyBreakdown, byMarketplace, _source: 'hub' };
   } catch(e) {
-    console.warn('[Report] Firebase stats read fail → fallback GAS:', e.message);
+    console.warn('[รายงาน] อ่านใบแพคจาก Hub ไม่ได้:', e.message);
     return null;
   }
 }
@@ -8218,26 +7771,16 @@ let _ordersCacheAt = 0;          // เวลาโหลดล่าสุด
 const ORDERS_CACHE_TTL = 5 * 60 * 1000; // 5 นาที
 
 async function _loadOrdersCache(force) {
-  if (!FIREBASE_ENABLED()) return null;
   if (!force && _ordersCache && (Date.now() - _ordersCacheAt) < ORDERS_CACHE_TTL) return _ordersCache;
   try {
-    // ดึง 8000 รายการล่าสุด (ต้องมี rule ".indexOn": "ts" ที่ /orders)
-    const url = `${FIREBASE_DB_URL}/orders.json?orderBy=${encodeURIComponent('"ts"')}&limitToLast=8000`;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 12000);
-    const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) return _ordersCache; // คงของเก่าไว้
-    const raw = await res.json();
-    const arr = [];
-    if (raw) for (const k in raw) arr.push(raw[k]);
-    arr.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-    _ordersCache = arr;
+    /* ใบแพคย้อนหลัง 90 วันจาก Hub — เรียงใหม่สุดก่อนมาให้แล้ว */
+    const docs = await _hubFetchPacks({ days: 90, limit: 20000 });
+    _ordersCache = docs;
     _ordersCacheAt = Date.now();
     return _ordersCache;
   } catch(e) {
-    console.warn('[Search] load orders cache fail:', e.message);
-    return _ordersCache;
+    console.warn('[ค้นหา] โหลดใบแพคจาก Hub ไม่ได้:', e.message);
+    return _ordersCache; // คงของเก่าไว้
   }
 }
 
@@ -8252,25 +7795,11 @@ function _fbOrderToRow(d) {
 
 // 📋 ตาราง Orders ทั้งหมด (จาก Firebase /orders — ย้อนหลัง 90 วัน) — ปุ่มในแถบรายงาน
 async function showOrdersTable() {
-  Swal.fire({ title: '📋 กำลังโหลดตาราง...', html: 'ดึง orders จาก Firebase', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+  Swal.fire({ title: '📋 กำลังโหลดตาราง...', html: 'ดึงใบแพคจาก Hub', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
   await _ensureProductMap();
-  // ดึง orders "ทั้งหมด" ในช่วง 90 วัน (limit สูงกว่า search cache เพื่อให้ครบ) — ต้องมี rule ".indexOn":"ts"
   let orders = null;
-  if (FIREBASE_ENABLED()) {
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 20000);
-      const res = await fetch(`${FIREBASE_DB_URL}/orders.json?orderBy=${encodeURIComponent('"ts"')}&limitToLast=40000`, { signal: ctrl.signal });
-      clearTimeout(timer);
-      if (res.ok) {
-        const raw = await res.json();
-        orders = [];
-        if (raw) for (const k in raw) orders.push(raw[k]);
-        orders.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-      }
-    } catch(e) {}
-  }
-  if (!orders) { Swal.fire('โหลดไม่ได้', 'ดึง /orders จาก Firebase ไม่ได้ — เช็คเน็ต/Rules', 'error'); return; }
+  try { orders = await _hubFetchPacks({ days: 90, limit: 20000 }); } catch(e) { orders = null; }
+  if (!orders) { Swal.fire('โหลดไม่ได้', 'ดึงใบแพคจาก Hub ไม่ได้ — เช็คเน็ตแล้วลองใหม่', 'error'); return; }
   const total = orders.length;
   const MAX_SHOW = 1500; // กัน DOM หนักบนมือถือ
   const shown = orders.slice(0, MAX_SHOW);
@@ -8399,12 +7928,7 @@ async function _firebaseSearch(query) {
     String(d.oid || '').toUpperCase().includes(kw)
   );
   const rows = hits.map(_fbOrderToRow);
-  // 📝 หมายเหตุที่เพิ่งแก้ (ยังไม่ลงชีต/ยังไม่ mirror /orders) → ทับให้เห็นค่าล่าสุด
-  const rl = await _firebaseFetchRemarkLive();
-  if (rl) for (const r of rows) {
-    const T = String(r[3] || '').toUpperCase();
-    if (Object.prototype.hasOwnProperty.call(rl, T)) r[5] = rl[T];
-  }
+  /* หมายเหตุอยู่ในใบแพคที่ Hub แล้ว (แก้แล้วส่งใบเดิมซ้ำ ใบหลังชนะ) ไม่ต้องมีชั้นทับอีก */
 
   // ✅ ค้นออเดอร์ที่ "ยังไม่แพ็ค" ด้วย — /orders มีเฉพาะที่แพ็คแล้ว
   //    ถ้าไม่รวมตรงนี้ จะแก้หมายเหตุของใบที่ยังไม่แพ็คไม่ได้เลย ซึ่งเป็นใบที่ระบบต้องพูดตอนสแกน
@@ -8444,7 +7968,7 @@ function _searchPendingRows(kw) {
 
 // ออเดอร์ที่เพิ่งแพ็ก → ใส่ cache ทันที (search เจอเลยไม่ต้องรอ mirror 5 นาที)
 function _searchCacheAddOptimistic(pId, itemsArr, orderId, marketplace, remark) {
-  if (!FIREBASE_ENABLED() || !_ordersCache) return;
+  if (!_ordersCache) return;
   const key = String(pId || '').toUpperCase();
   // ถ้ามีอยู่แล้ว → ไม่ซ้ำ
   if (_ordersCache.some(d => String(d.tk || '').toUpperCase() === key)) return;
@@ -8463,7 +7987,7 @@ async function fetchReport() {
   try {
     await _ensureProductMap(); // ให้ชื่อสินค้าพร้อมก่อน render (เผื่อยังไม่กด "เริ่ม")
     // ⚡ Firebase ล้วน — ดึงไม่ได้ → แจ้ง error (ไม่ fallback GAS ที่ช้า)
-    const data = await _firebaseReadStats(start, end);
+    const data = await _hubReadStats(start, end);
     if (!data) {
       document.getElementById('dashLoading').style.display = 'none';
       Swal.fire('โหลดรายงานไม่ได้', 'ดึงข้อมูลจาก Firebase ไม่ได้ — เช็คเน็ต/Rules แล้วลองใหม่', 'error');
@@ -8573,7 +8097,7 @@ async function _renderComparePrevPeriod(start, end, curOrders, curItems) {
     const prevEnd   = new Date(s); prevEnd.setDate(s.getDate() - 1);
     const prevStart = new Date(prevEnd); prevStart.setDate(prevEnd.getDate() - (days - 1));
     const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const prev = await _firebaseReadStats(fmt(prevStart), fmt(prevEnd)); // Firebase ล้วน — ดึงไม่ได้ → ข้ามการเทียบ
+    const prev = await _hubReadStats(fmt(prevStart), fmt(prevEnd)); // Firebase ล้วน — ดึงไม่ได้ → ข้ามการเทียบ
     if (token !== _prevPeriodToken) return; // มี fetch ใหม่แทรกแล้ว
     if (!prev || prev.error) return;
     _setCompareDelta('d-box', _calcDelta(curOrders, prev.totalOrders || 0));
@@ -8626,7 +8150,7 @@ async function showDayDetail(dateStr) {
     customClass: { popup: 'swal-popup' },
   });
   try {
-    const data = await _firebaseReadStats(dateStr, dateStr); // Firebase ล้วน (ไม่ fallback GAS)
+    const data = await _hubReadStats(dateStr, dateStr); // Firebase ล้วน (ไม่ fallback GAS)
     if (!data || data.error) throw new Error(data?.error || 'ดึงข้อมูลจาก Firebase ไม่ได้ — เช็คเน็ต/Rules');
 
     const mpStyle = {
@@ -9044,38 +8568,25 @@ function _renderSearchCards(rows) {
 }
 
 // ===== เพิ่ม/แก้หมายเหตุจากแถบค้นหา =====
-// เขียนลง Firebase /remarkLive ตรง (ไม่เรียก GAS) → ทุกเครื่องเห็นทันทีผ่าน /cacheMeta
-//   GAS drainRemarkLive ลงชีตตามหลังเป็นงานเบื้องหลัง — ทั้ง MarketplaceData (ใบที่ยังไม่แพ็ค ระบบพูดตอนสแกน)
-//   และ Orders (ใบที่แพ็คแล้ว บันทึกย้อนหลัง) แล้วแต่ว่าพัสดุอยู่ที่ไหน
-//   เคยเรียก GAS เขียนชีตตรง แต่ติด ScriptLock ช่วงแพ็คถี่ ("Server busy" หลังรอ 30 วิ) — จึงเปลี่ยนมาทางนี้
+// ใบที่แพคแล้ว: ส่งใบเดิมซ้ำเข้า Hub พร้อมหมายเหตุใหม่ (Hub เอาใบหลังสุดของ id เดียวกัน)
+// ใบที่ยังไม่ได้แพค: หมายเหตุอยู่ในคิวรอแพค แก้ที่ต้นทางด้วยการอัปไฟล์ใหม่
+//   เดิมเขียนลง Firebase /remarkLive แล้วให้ GAS ลงชีตตามหลัง — ตัดทิ้งพร้อม Firebase
 let _remarkPushFailReason = '';
-async function _firebasePushRemarkLive(tracking, remark) {
+async function _hubSaveRemark(tracking, remark) {
   _remarkPushFailReason = '';
   const TK = String(tracking || '').trim().toUpperCase();
-  // key ต้องไม่มีอักขระต้องห้ามของ Firebase — ใช้กติกาเดียวกับ _fbKey ฝั่ง GAS
-  const key = TK.replace(/[.$#\[\]\/\x00-\x1f\x7f]/g, '_').slice(0, 200) || '_';
-  try {
-    const res = await fetch(`${FIREBASE_DB_URL}/remarkLive.json`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      // rm "" = ตั้งใจลบ → ต้องส่งเป็นสตริงว่าง ไม่ใช่ null (null จะลบ node ทิ้ง GAS จะไม่รู้ว่าต้องล้างชีต)
-      body: JSON.stringify({ [key]: { k: FIREBASE_WRITE_KEY, ts: Date.now(), tk: TK, rm: remark } })
-    });
-    if (!res.ok) {
-      _remarkPushFailReason = (res.status === 401 || res.status === 403)
-        ? 'Firebase ไม่อนุญาตให้เขียน /remarkLive — ต้องเพิ่ม Rule ของ remarkLive ใน Firebase Console ก่อน'
-        : `Firebase ตอบกลับ ${res.status}`;
-      return false;
-    }
-    // เตะทุกเครื่องให้ดึงใหม่ (real-time ผ่าน SSE) — ไม่ต้องรอผล
-    fetch(`${FIREBASE_DB_URL}/cacheMeta.json`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ts: Date.now(), k: FIREBASE_WRITE_KEY })
-    }).catch(() => {});
-    return true;
-  } catch (e) {
-    _remarkPushFailReason = 'เชื่อมต่อ Firebase ไม่ได้ — ' + e.message;
+  const doc = (_ordersCache || []).find(d => String(d.tk || '').toUpperCase() === TK);
+  if (!doc || !doc.id) {
+    _remarkPushFailReason = 'ใบนี้ยังไม่ได้แพค — แก้หมายเหตุได้จากไฟล์ที่อัปเข้าคิวรอแพค';
     return false;
   }
+  const ok = await _hubPushPacks([{
+    idemToken: doc.id, parcelId: doc.tk, items: doc.it || [], orderId: doc.oid || '',
+    marketplace: doc.mp || '', remark, videoUrl: doc.v || '', device: DEVICE_ID, ts: doc.ts || Date.now()
+  }]);
+  if (!ok) { _remarkPushFailReason = 'ส่งหมายเหตุขึ้น Hub ไม่ได้ — เช็คเน็ตแล้วลองใหม่'; return false; }
+  doc.rm = remark;             // ให้ผลค้นหาที่ค้างอยู่บนจอเปลี่ยนทันที
+  return true;
 }
 
 async function editSearchRemark(tracking) {
@@ -9102,13 +8613,9 @@ async function editSearchRemark(tracking) {
   const remark = String(value || '').trim();
   if (remark === current.trim()) return; // ไม่มีอะไรเปลี่ยน — ไม่ต้องยิง
 
-  if (!FIREBASE_ENABLED()) {
-    Swal.fire('บันทึกไม่ได้', 'ต้องเปิดใช้ Firebase ก่อน (FIREBASE_DB_URL ว่าง)', 'error');
-    return;
-  }
   Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false,
               background: '#fff0f3', customClass: { popup: 'swal-popup' } });
-  const ok = await _firebasePushRemarkLive(tk, remark);
+  const ok = await _hubSaveRemark(tk, remark);
   if (!ok) {
     Swal.fire('บันทึกไม่สำเร็จ', _remarkPushFailReason || 'ไม่ทราบสาเหตุ', 'error');
     return;
@@ -9245,14 +8752,6 @@ function dismissOnboarding() {
       if (el) { el.href = cached; el.style.display = ''; }
     }
   } catch(e) {}
-  // ดึง URL ใหม่จาก GAS เบื้องหลัง
-  callGAS('getSpreadsheetUrl').then(res => {
-    if (res && res.url) {
-      const el = document.getElementById('sheetLink');
-      if (el) { el.href = res.url; el.style.display = ''; }
-      try { localStorage.setItem('sheetUrl', res.url); } catch(e) {}
-    }
-  }).catch(() => {});
 })();
 
 // ===== PRELOAD ชื่อสินค้า — เปิดแอปปุ๊บมีชื่อเลย (ไม่ต้องกด "เริ่ม") =====
