@@ -3029,13 +3029,20 @@ async function _uploadVideoAndPatch(pId, idemToken, videoData, videoMime) {
     const vurl = vres.videoUrl || "";
     let packed = null;
     _updateQueueItem(pId, (c) => { c.videoSent = true; c.videoUrl = vurl; c.videoBase64 = ''; c.videoMime = ''; packed = c; return c; });
-    /* ส่งใบเดิมซ้ำเข้า Hub พร้อมลิงก์คลิป — Hub เอาใบหลังสุดของ id เดียวกัน */
-    if (idemToken && vurl) {
+    /* ส่งใบเดิมซ้ำเข้า Hub พร้อมลิงก์คลิป — Hub เอาใบหลังสุดของ id เดียวกัน
+       ⚠️ ต้องมีข้อมูลใบเดิมในคิวเท่านั้น ถ้าคิวถูกล้างไปแล้ว (วิดีโอ retry ข้ามวันหลังเปิดแอปใหม่)
+       ใบที่ส่งจะไม่มีสินค้า ไม่มีออเดอร์ และใช้เวลา "ตอนนี้" → กลายเป็นพัสดุอีกใบในรายงาน
+       **เจอจริง 27 ก.ย. 2569**: แพคใบเดียว 3 ชิ้น แต่รายงานขึ้น 2 ใบ เพราะคลิปของใบเมื่อวาน
+       อัปเสร็จตอนเปิดแอป แล้วส่งใบเปล่าทับเข้ามาเป็นของวันนี้
+       คลิปยังอยู่บน Drive และใน audit log — เสียแค่ลิงก์ในใบ ซึ่งเบากว่าพัสดุผีมาก */
+    if (idemToken && vurl && packed) {
       _hubSendPack({
         idemToken, pId, videoUrl: vurl,
-        itemsArr: packed?.itemsArr || [], orderId: packed?.orderId || '',
-        marketplace: packed?.marketplace || '', remarkNote: packed?.remarkNote || '', ts: packed?.ts
+        itemsArr: packed.itemsArr || [], orderId: packed.orderId || '',
+        marketplace: packed.marketplace || '', remarkNote: packed.remarkNote || '', ts: packed.ts
       }).catch(() => {});
+    } else if (idemToken && vurl) {
+      _auditPack(pId, 'video', 'skip', 'ไม่มีใบเดิมในคิวแล้ว — ไม่ส่งทับกันใบเปล่า');
     }
     _auditPack(pId, 'video', 'sent', vurl ? 'url patched' : '(too_large/none)');
     return vurl;

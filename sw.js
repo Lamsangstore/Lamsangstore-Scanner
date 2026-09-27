@@ -4,7 +4,7 @@
 // v5: ตัด Firebase/ชีตออกหมด — ข้อมูลทุกอย่างมาจาก Hub (เหลือ Apps Script ไว้อัปคลิปขึ้น Drive)
 //     เคยพลาดมาแล้วกับแอปคีย์ลัด: SW แคช /api/ ไว้ สต๊อกค้างทั้งวันโดยไม่มีใครรู้ว่าทำไม
 
-const CACHE_NAME = 'ls-scanner-v9';
+const CACHE_NAME = 'ls-scanner-v10';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
