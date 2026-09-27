@@ -3139,9 +3139,13 @@ const amountMappings = {
   /* Page365: ช่อง Subtotal/Discount ไม่สอดคล้องกันเอง (บางบิลเป็นราคาก่อนลด บางบิลหลังลด)
      จึงยึด Total ของบิล ซึ่งเท่ากับ Paid Amount ทุกใบที่มีค่านั้น แล้วเฉลี่ยตามราคารวมรายการ */
   page365:  { scope: 'order', keywords: ['total'], weight: ['item subtotal'], order: ['no.'] },
-  /* ยังไม่มีไฟล์ตัวอย่างให้ดูชื่อคอลัมน์ราคา */
-  shopee:   null,
-  lazada:   null
+  /* Shopee: ยอดค่าสินค้าเป็นของ "ทั้งบิล" (ซ้ำทุกบรรทัด) ต้องเฉลี่ยลงบรรทัดตามราคาขายสุทธิ
+     ไม่ใช้ "จำนวนเงินทั้งหมด" เพราะรวมค่าส่งที่ผู้ซื้อจ่าย และใบที่ยกเลิกช่องนั้นเป็น 0 */
+  shopee:   { scope: 'order', keywords: ['ราคาสินค้าที่ชำระโดยผู้ซื้อ (thb)'],
+              weight: ['ราคาขายสุทธิ'], order: ['หมายเลขคำสั่งซื้อ'] },
+  /* Lazada: 1 แถว = 1 ชิ้น · paidPrice รวมค่าส่งที่ลูกค้าจ่ายมาด้วย จึงต้องหักออก
+     (ส่วนลดในไฟล์เป็นเลขติดลบ paidPrice จึงหักให้แล้วในตัวมันเอง) */
+  lazada:   { scope: 'line',  keywords: ['paidprice'], minus: ['shippingfee'] }
 };
 
 /** อ่านตัวเลขเงินจากช่องในไฟล์ — อ่านไม่ได้/ติดลบ = 0 (ไม่ใช่ error ปล่อยให้ใบนั้นไม่มียอด) */
@@ -3172,6 +3176,8 @@ function resolveAmountColumns(marketplace, headerRow) {
   const col = findCol(cfg.keywords);
   if (col < 0) return null;
   const out = { scope: cfg.scope, col, label: String(headerRow[col] || '').trim() };
+  /* ช่องที่ต้องหักออกจากยอด (เช่นค่าส่งที่รวมอยู่ใน paidPrice ของ Lazada) — ไม่มีก็ไม่หัก */
+  out.minusCol = cfg.minus ? findCol(cfg.minus) : -1;
   if (cfg.scope === 'order') {
     out.weightCol = findCol(cfg.weight);
     out.orderCol = findCol(cfg.order);
@@ -3213,9 +3219,14 @@ function allocateSatang(totalSatang, weights) {
 function rowAmounts(rows, startRow, cfg, isUsable) {
   const out = new Array(rows.length).fill(0);
   if (!cfg) return out;
+  const valueOf = (row) => {
+    const gross = parseMoneyCell(row[cfg.col]);
+    const minus = cfg.minusCol >= 0 ? parseMoneyCell(row[cfg.minusCol]) : 0;
+    return Math.max(0, Math.round((gross - minus) * 100) / 100);
+  };
   if (cfg.scope === 'line') {
     for (let i = startRow; i < rows.length; i++) {
-      if (rows[i] && isUsable(rows[i])) out[i] = parseMoneyCell(rows[i][cfg.col]);
+      if (rows[i] && isUsable(rows[i])) out[i] = valueOf(rows[i]);
     }
     return out;
   }
@@ -3228,7 +3239,7 @@ function rowAmounts(rows, startRow, cfg, isUsable) {
     if (!key) continue;
     const g = groups.get(key) || { total: 0, idx: [], weights: [] };
     /* ยอดบิลซ้ำทุกแถวของบิลเดียวกัน — เอาค่าที่มากสุดกันแถวที่ช่องว่าง */
-    g.total = Math.max(g.total, parseMoneyCell(row[cfg.col]));
+    g.total = Math.max(g.total, valueOf(row));
     g.idx.push(i);
     g.weights.push(cfg.weightCol >= 0 ? parseMoneyCell(row[cfg.weightCol]) : 0);
     groups.set(key, g);
