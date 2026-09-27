@@ -2931,6 +2931,36 @@ async function _hubUploadQueueRows(rows, marketplace) {
   } finally { clearTimeout(timer); }
 }
 
+/**
+ * ยกเลิกใบแพคที่สแกนทดสอบ/สแกนผิดใบ — ส่ง "ธงยกเลิก" ทับใบเดิม (id เดียวกัน)
+ * Hub ไม่ได้ลบของเดิมทิ้ง เพราะกุญแจนี้ฝังอยู่ในหน้าเว็บ ใครก็อ่านได้
+ * เจ้าของร้านเอากลับคืนได้ที่ /admin/hub · ยกเลิกได้เฉพาะใบที่แพคไม่เกิน 7 วัน
+ * Hub คืนของในใบกลับเข้าคิวรอแพคให้เอง คนแพครอบหน้าจึงยังมีรายการตรวจเหมือนเดิม
+ */
+async function _hubVoidPack(doc) {
+  if (!HUB_KEY) throw new Error('ยังไม่ได้ตั้งกุญแจ Hub');
+  if (!doc || !doc.id || !doc.tk) throw new Error('ใบนี้ไม่มีรหัสอ้างอิง ลบจากแอปไม่ได้');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const res = await fetch(HUB_PACKS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + HUB_KEY },
+      body: JSON.stringify({ packs: [{ idemToken: doc.id, parcelId: doc.tk, ts: doc.ts, void: true }] }),
+      signal: ctrl.signal
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    if (!json.voided) throw new Error('Hub ไม่ได้ยกเลิกใบนี้');
+    /* ลบออกจากของที่จำไว้ในเครื่องด้วย ไม่งั้นสแกนใบนี้รอบหน้าจะยังเตือนว่า "แพคไปแล้ว" */
+    try { _packedSet.delete(String(doc.tk).toUpperCase()); } catch(e) {}
+    _ordersCacheAt = 0;
+    if (Array.isArray(_ordersCache)) _ordersCache = _ordersCache.filter(d => d.id !== doc.id);
+    return json;
+  } finally { clearTimeout(timer); }
+}
+
 /* ---- ส่งใบที่แพคเสร็จเข้า Hub · ส่งไม่ได้เก็บเข้าคิวใน localStorage แล้วส่งใหม่รอบหน้า ---- */
 const HUB_PACK_QUEUE_KEY = 'hubPackQueue';
 const HUB_PACK_QUEUE_MAX = 500;
@@ -8088,6 +8118,65 @@ function _fbOrderToRow(d) {
 }
 
 // 📋 ตารางใบแพคทั้งหมด (จาก Hub — ย้อนหลัง 90 วัน) — ปุ่มในแถบรายงาน
+let _otDocs = []; // ใบที่กำลังโชว์ในตาราง (ปุ่มลบอ้างด้วยลำดับ)
+
+/**
+ * ลบใบแพคจากในตาราง — สำหรับใบที่สแกนทดสอบหรือสแกนผิดใบ
+ * ของในใบจะถูกคืนกลับเข้าคิวรอแพคให้เอง (Hub ทำให้) คนแพครอบหน้าจึงยังมีรายการตรวจ
+ * ของเดิมไม่ได้ถูกลบทิ้ง — กดผิดก็ให้เจ้าของร้านเอากลับคืนได้ที่หน้า Hub ในหลังบ้าน
+ */
+async function _askVoidPack(i) {
+  const d = _otDocs[i];
+  if (!d) return;
+  const items = Array.isArray(d.it) ? d.it : [];
+  const when = d.ts ? new Date(d.ts).toLocaleString('th-TH') : '';
+  const r = await Swal.fire({
+    title: 'ลบใบแพคนี้?',
+    html: `<div style="text-align:left;font-size:0.88rem;color:#7a6440;line-height:1.7;">
+      <div><b>${escHtml(d.tk || '')}</b></div>
+      <div>${escHtml(when)} · ${items.length} ชิ้น${d.mp ? ' · ' + escHtml(d.mp) : ''}</div>
+      ${d.oid ? `<div>ออเดอร์ #${escHtml(d.oid)}</div>` : ''}
+      <div style="margin-top:8px;padding:8px 10px;background:#fff3cd;border-left:3px solid #d4a017;border-radius:6px;font-size:0.82rem;color:#7a5a10;">
+        ใช้เฉพาะใบที่สแกนทดสอบหรือสแกนผิดใบ — ของในใบจะกลับเข้าคิวรอแพคให้เอง
+        แพคใหม่ได้ตามปกติ · คลิปบน Google Drive ต้องไปลบเองต่างหาก
+      </div>
+    </div>`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'ลบใบนี้',
+    cancelButtonText: 'ไม่ลบ',
+    reverseButtons: true,
+    confirmButtonColor: 'transparent',
+    cancelButtonColor: 'transparent',
+    background: '#fff0f3',
+    customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn', cancelButton: 'swal-btn' },
+  });
+  if (!r.isConfirmed) return;
+  try {
+    const res = await _hubVoidPack(d);
+    /* ซ่อนแถวนั้นทันที ไม่ต้องโหลดตารางใหม่ทั้งหน้า */
+    const row = document.querySelector(`#otWrap tr[data-otrow="${i}"]`);
+    if (row) {
+      const detail = row.nextElementSibling;
+      if (detail && detail.classList.contains('ot-detail')) detail.remove();
+      row.remove();
+    }
+    _otDocs[i] = null;
+    beep('ok');
+    Swal.fire({
+      icon: 'success',
+      title: 'ลบแล้ว',
+      html: `<div style="font-size:0.88rem;color:#7a6440;">${escHtml(d.tk || '')}${res.requeued ? ' · คืนเข้าคิวรอแพคให้แล้ว' : ''}</div>`,
+      timer: 2200,
+      showConfirmButton: false,
+      background: '#fff0f3',
+      customClass: { popup: 'swal-popup' },
+    });
+  } catch (e) {
+    Swal.fire('ลบไม่สำเร็จ', escHtml(e.message || 'ลองใหม่อีกครั้ง'), 'error');
+  }
+}
+
 async function showOrdersTable() {
   Swal.fire({ title: '📋 กำลังโหลดตาราง...', html: 'ดึงใบแพคจาก Hub', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
   await _ensureProductMap();
@@ -8097,6 +8186,7 @@ async function showOrdersTable() {
   const total = orders.length;
   const MAX_SHOW = 1500; // กัน DOM หนักบนมือถือ
   const shown = orders.slice(0, MAX_SHOW);
+  _otDocs = shown; // ปุ่มลบในตารางอ้างถึงใบด้วยลำดับในชุดนี้
   const p2 = n => String(n).padStart(2, '0');
   const rowsHtml = shown.map((d, i) => {
     const dt = d.ts ? new Date(d.ts) : null;
@@ -8114,14 +8204,19 @@ async function showOrdersTable() {
     const tkCell = trkUrl
       ? `<a href="${escHtml(trkUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--pink);text-decoration:none;font-weight:700;">${escHtml(d.tk || '')} ↗</a>`
       : escHtml(d.tk || '');
-    return `<tr class="ot-row ${i % 2 ? 'ot-odd' : 'ot-even'}" onclick="_toggleOrderRow(this)">
+    /* ปุ่มลบ — ใช้ตอนสแกนทดสอบหรือสแกนผิดใบ · ยืนยันก่อนเสมอ */
+    const del = d.id
+      ? `<span onclick="event.stopPropagation();_askVoidPack(${i})" title="ลบใบนี้" style="color:#c44;cursor:pointer;font-size:0.95rem;">🗑</span>`
+      : '<span style="color:#ddd;">–</span>';
+    return `<tr class="ot-row ${i % 2 ? 'ot-odd' : 'ot-even'}" data-otrow="${i}" onclick="_toggleOrderRow(this)">
         <td class="ot-time">▸ ${tstr}</td>
         <td class="ot-tk">${tkCell}</td>
         <td>${escHtml(d.mp || '')}</td>
         <td style="text-align:center;font-weight:700;color:var(--pink);">${items.length}</td>
         <td style="text-align:center;">${vid}</td>
+        <td style="text-align:center;">${del}</td>
       </tr>
-      <tr class="ot-detail" style="display:none;"><td colspan="5">
+      <tr class="ot-detail" style="display:none;"><td colspan="6">
         ${meta ? `<div style="font-size:0.74rem;color:#7a6440;margin-bottom:5px;">${meta}</div>` : ''}
         ${itemsHtml}
       </td></tr>`;
@@ -8146,7 +8241,7 @@ async function showOrdersTable() {
       <div id="otWrap" style="max-height:62vh;overflow:auto;border:1px solid #f0d8e4;border-radius:10px;box-shadow:0 1px 4px rgba(194,24,91,0.08);">
         <table>
           <thead><tr>
-            <th>เวลา</th><th>Tracking</th><th>ร้าน</th><th class="c">ชิ้น</th><th class="c">คลิป</th>
+            <th>เวลา</th><th>Tracking</th><th>ร้าน</th><th class="c">ชิ้น</th><th class="c">คลิป</th><th class="c">ลบ</th>
           </tr></thead>
           <tbody>${rowsHtml}</tbody>
         </table>
