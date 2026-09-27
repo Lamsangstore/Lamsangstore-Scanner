@@ -1,7 +1,9 @@
-// Lamsangstore Scanner — Service Worker v3
+// Lamsangstore Scanner — Service Worker v4
 // v3: network-only สำหรับ Firebase/GAS/non-GET (ห้าม cache ข้อมูลสด)
+// v4: เพิ่ม Hub ของร้าน (/api/) เข้าในรายการห้ามแคช — ชื่อ/รูป/สต๊อกต้องสดเสมอ
+//     เคยพลาดมาแล้วกับแอปคีย์ลัด: SW แคช /api/ ไว้ สต๊อกค้างทั้งวันโดยไม่มีใครรู้ว่าทำไม
 
-const CACHE_NAME = 'ls-scanner-v3';
+const CACHE_NAME = 'ls-scanner-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -44,6 +46,7 @@ self.addEventListener('fetch', (event) => {
   // ✅ Network-only — ห้าม intercept/cache: ข้อมูลสด (Firebase, GAS) + non-GET
   //    ถ้า cache ข้อมูลพวกนี้ → เสิร์ฟของเก่า (pending/stats เพี้ยน) + cache.put POST = error
   if (event.request.method !== 'GET' ||
+      url.pathname.indexOf('/api/') !== -1 ||
       url.hostname.indexOf('script.google') !== -1 ||
       url.hostname.indexOf('googleusercontent') !== -1 ||
       url.hostname.indexOf('firebasedatabase.app') !== -1 ||

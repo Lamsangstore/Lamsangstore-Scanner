@@ -2846,6 +2846,16 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbz9V3qh2Ea8sapU7BLMZTlr
 const GAS_API_KEY = "d0be0cec0771dbb705616a737a5d3c76e42b1a4bbd10e376dd9d5bd88d77adc5";
 
 // ============================================================
+// 🏬 HUB ของร้าน (lamsangstore.com) — ชื่อสินค้ากลาง + รูปประจำสี
+//   ชื่อที่พูดตอนแพคและชื่อในเช็คลิสต์เอามาจากที่นี่ (ชื่อย่อ, สี, ขนาด)
+//   แทนชีตที่ต้องคอยซิงก์เอง · รูปประจำสีมาด้วย จะได้เห็นว่าหยิบถูกตัวไหม
+//   กุญแจออกที่ หลังบ้านเว็บ → Hub เชื่อมแอป (origin https://scan.lamsangstore.com · ไม่เปิดต้นทุน)
+//   **เว้นว่าง หรือ Hub ล่ม = ใช้ของเดิม (Firebase /products → GAS) ทุกอย่างเหมือนเดิม ไม่พัง**
+const HUB_URL = "https://lamsangstore.com/api/hub/v1/products?inactive=1";
+const HUB_PACKS_URL = "https://lamsangstore.com/api/hub/v1/packs";
+const HUB_KEY = "lsh_vLhpqTnZQoJjoISQXXgjfQCwk0UlTKQjxTzsNnhLo84";
+
+// ============================================================
 // 🔥 FIREBASE — durable safety net ฝั่ง server (กันออเดอร์หายแม้เครื่องหาย)
 //   ทำงานคู่ขนานกับ GAS: client เขียนออเดอร์ลง Firebase /inbox ด้วย
 //   แล้ว GAS cron (drainFirebaseInbox) ดูดเข้า sheet → ออเดอร์ไม่หายเด็ดขาด
@@ -2906,7 +2916,84 @@ async function _firebasePushOrder(job) {
 
 // ✅ ensure ออเดอร์ถูก mirror ลง Firebase แล้ว (push ถ้ายัง) — best-effort
 //   อัปเดต flag fbPushed ใน queue เพื่อไม่ push ซ้ำ
+/* ---------------------------------------------------------------------------
+   📦 ส่งใบที่แพคเสร็จเข้า Hub ของร้าน — ที่เก็บกลางที่ Good-Products มาอ่านที่เดียว
+   ทำคู่ขนานกับ Firebase/ชีตเหมือนเดิม **ไม่ได้แทนที่** (ของเดิมเป็นตาข่ายกันออเดอร์หาย)
+   ส่งไม่สำเร็จ → เก็บเข้าคิวใน localStorage แล้วลองใหม่ตอนเปิดแอปครั้งหน้า
+   ส่งใบเดิมซ้ำได้ Hub ตัดซ้ำด้วย id ให้เอง (ใบหลังชนะ — ใช้ตอนเติมลิงก์คลิป)
+--------------------------------------------------------------------------- */
+const HUB_PACK_QUEUE_KEY = 'hubPackQueue';
+const HUB_PACK_QUEUE_MAX = 500;
+
+function _hubPackRecord(job) {
+  return {
+    idemToken: job.idemToken || '',
+    parcelId: job.pId || '',
+    items: job.itemsArr || [],
+    orderId: job.orderId || '',
+    marketplace: job.marketplace || '',
+    remark: job.remarkNote || '',
+    videoUrl: job.videoUrl || '',
+    device: DEVICE_ID,
+    ts: job.ts || Date.now()
+  };
+}
+
+function _hubQueueRead() {
+  try { const q = JSON.parse(localStorage.getItem(HUB_PACK_QUEUE_KEY) || '[]'); return Array.isArray(q) ? q : []; } catch (e) { return []; }
+}
+function _hubQueueWrite(list) {
+  try { localStorage.setItem(HUB_PACK_QUEUE_KEY, JSON.stringify(list.slice(-HUB_PACK_QUEUE_MAX))); } catch (e) {}
+}
+function _hubQueueAdd(rec) {
+  const q = _hubQueueRead().filter(r => !(r.idemToken && r.idemToken === rec.idemToken));
+  q.push(rec);
+  _hubQueueWrite(q);
+}
+
+/** ส่งใบแพคเข้า Hub — คืน true เมื่อ Hub รับแล้ว · ล้มเหลวเก็บเข้าคิวเสมอ ไม่ throw */
+async function _hubPushPacks(records) {
+  if (!HUB_KEY || !records.length) return false;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    const res = await fetch(HUB_PACKS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + HUB_KEY },
+      body: JSON.stringify({ packs: records }),
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return true;
+  } catch (e) {
+    console.warn('[Hub] ส่งบันทึกการแพคไม่ได้ — เก็บไว้ส่งใหม่รอบหน้า', e);
+    return false;
+  }
+}
+
+/** ส่งใบเดียว (ตอนแพคเสร็จ / ตอนอัปคลิปเสร็จ) */
+async function _hubSendPack(job) {
+  if (!HUB_KEY) return;
+  const rec = _hubPackRecord(job);
+  if (!rec.parcelId) return;
+  const ok = await _hubPushPacks([rec]);
+  if (!ok) _hubQueueAdd(rec);
+}
+
+/** ส่งใบที่ค้างในคิว — เรียกตอนเปิดแอปและหลังแพคเสร็จ */
+async function _hubFlushPackQueue() {
+  if (!HUB_KEY) return;
+  const q = _hubQueueRead();
+  if (!q.length) return;
+  const batch = q.slice(0, 200);
+  const ok = await _hubPushPacks(batch);
+  if (ok) _hubQueueWrite(q.slice(batch.length));
+}
+
 async function _ensureFirebasePush(job) {
+  /* Hub ของร้านเป็นอีกที่หนึ่งที่ต้องได้ใบนี้ — ยิงคู่กันไป ไม่ต้องรอผลของกันและกัน */
+  _hubSendPack(job).then(() => _hubFlushPackQueue()).catch(() => {});
   if (!FIREBASE_ENABLED() || !job || !job.idemToken || job.fbPushed) return;
   const ok = await _firebasePushOrder(job);
   if (ok) {
@@ -2944,7 +3031,16 @@ async function _uploadVideoAndPatch(pId, idemToken, videoData, videoMime) {
   if (vres && vres.success) {
     const vurl = vres.videoUrl || "";
     if (idemToken) await _firebasePatchVideoUrl(idemToken, vurl);
-    _updateQueueItem(pId, (c) => { c.videoSent = true; c.videoUrl = vurl; c.videoBase64 = ''; c.videoMime = ''; return c; });
+    let packed = null;
+    _updateQueueItem(pId, (c) => { c.videoSent = true; c.videoUrl = vurl; c.videoBase64 = ''; c.videoMime = ''; packed = c; return c; });
+    /* ส่งใบเดิมซ้ำเข้า Hub พร้อมลิงก์คลิป — Hub เอาใบหลังสุดของ id เดียวกัน */
+    if (idemToken && vurl) {
+      _hubSendPack({
+        idemToken, pId, videoUrl: vurl,
+        itemsArr: packed?.itemsArr || [], orderId: packed?.orderId || '',
+        marketplace: packed?.marketplace || '', remarkNote: packed?.remarkNote || '', ts: packed?.ts
+      }).catch(() => {});
+    }
     _auditPack(pId, 'video', 'sent', vurl ? 'url patched' : '(too_large/none)');
     return vurl;
   }
@@ -2969,6 +3065,8 @@ function navigateByHash() {
 }
 window.addEventListener('hashchange', navigateByHash);
 window.addEventListener('load', () => setTimeout(navigateByHash, 100));
+/* ใบแพคที่ส่งเข้า Hub ไม่สำเร็จ (เน็ตหลุดตอนแพค) — ลองใหม่ตอนเปิดแอป */
+window.addEventListener('load', () => setTimeout(() => { _hubFlushPackQueue().catch(() => {}); }, 3000));
 
 // --- Marketplace Selector ---
 function selectMarketplace(value, el) {
@@ -3130,6 +3228,15 @@ function _videoForSave(b64) {
   return (b64.length <= MAX_VIDEO_B64_LEN) ? b64 : "video_too_large";
 }
 let productMap = {}, currentP = "", items = [], scanner, searchScanner, lastScanTime = 0;
+/* รูปประจำสีจาก Hub (sku → url) — โหลดจาก cache ก่อนเสมอ จะได้มีรูปตั้งแต่เปิดแอป */
+let productPhotoMap = (() => { try { return JSON.parse(localStorage.getItem('productPhoto_cache') || '{}'); } catch (e) { return {}; } })();
+
+/** รูปเล็กหน้าชื่อสินค้าในเช็คลิสต์ — ไม่มีรูปก็ไม่ต้องเว้นที่ */
+function _productThumb(sku) {
+  const url = productPhotoMap[String(sku || '').trim()];
+  if (!url) return '';
+  return '<img src="' + escHtml(url) + '" alt="" loading="lazy" style="width:34px;height:34px;object-fit:cover;border-radius:8px;flex-shrink:0;margin-right:7px;background:var(--pink-light);" onerror="this.style.display=\'none\'">';
+}
 let sessionParcels = {}, scanBuffer = [], bufferTimeout = null, isFinishing = false, isEditingId = false;
 let isSpeakingRemark = false; // ✅ ล็อคสแกนสินค้าระหว่างพูดเลขพัสดุ + remark
 let isSpeakingQtyGuide = false; // 🔒 ล็อคสแกน "ทุกชนิด" ระหว่างพูดจำนวนสินค้าที่ลูกค้าสั่ง (ต้องฟังให้จบก่อน)
@@ -4583,10 +4690,54 @@ async function _ensureProductMap() {
   if (Object.keys(_productNameUpper).length === 0) _rebuildProductNameIndex();
 }
 
+/** ค่าตัวเลือกบนเว็บมีวงเล็บบอกรอบเอวต่อท้าย — เอาเฉพาะคำหน้า ("XS (เอว 22-23.5…)" → "XS") */
+function _hubOptText(v) { return String(v || '').split('(')[0].split('|')[0].trim(); }
+
+/**
+ * ดึงสินค้าจาก Hub → { names: {sku: "ชื่อย่อ, สี, ขนาด"}, photos: {sku: url} }
+ * รูปแบบชื่อคงเดิมกับที่ชีตเคยให้มา (ชื่อ, สี, ขนาด) เพราะเสียงพูดตอนแพคอ่านค่านี้ทั้งก้อน
+ * คืน null เมื่อใช้ไม่ได้ — ผู้เรียกต้องถอยไปใช้ Firebase/GAS เหมือนเดิม
+ */
+async function _hubFetchProducts() {
+  if (!HUB_KEY) return null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const res = await fetch(HUB_URL, { headers: { Authorization: 'Bearer ' + HUB_KEY }, signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    const names = {}, photos = {};
+    (json.items || []).forEach(it => {
+      if (!it || !it.sku) return;
+      const sku = String(it.sku).trim();
+      const opts = (it.options || []).map(_hubOptText).filter(Boolean);
+      names[sku] = [it.shortName || it.productName, ...opts].filter(Boolean).join(', ');
+      const img = it.colorImageUrl || it.imageUrl || it.coverUrl;
+      if (img) photos[sku] = img;
+    });
+    if (!Object.keys(names).length) return null;
+    return { names, photos };
+  } catch (e) {
+    console.warn('[Hub] ดึงสินค้าจากเว็บร้านไม่ได้ — ใช้ข้อมูลเดิมต่อ', e);
+    return null;
+  }
+}
+
+/** เก็บรูปประจำสีไว้ใช้ตอนวาดเช็คลิสต์ (sku → url) */
+function _saveProductPhotos(photos) {
+  productPhotoMap = photos || {};
+  try { localStorage.setItem('productPhoto_cache', JSON.stringify(productPhotoMap)); } catch (e) {}
+}
+
 // ✅ ดึง productMap: Firebase /products ก่อน (เร็ว); ว่าง → fallback GAS getProductData (ดึงชื่อจากชีตตรง)
 //   ชื่อสินค้าสำคัญต่อการแพค → ต้องไม่โชว์ SKU เพราะ /products ยังไม่ถูก mirror
 async function _fetchProductCacheNow() {
-  let prodRes = await _firebaseFetchProducts();
+  /* Hub ของเว็บร้านมาก่อน — ชื่อกับรูปชุดเดียวกับที่ใช้ในเว็บ/คีย์ลัด/สติกเกอร์บาร์โค้ด */
+  const hub = await _hubFetchProducts();
+  let prodRes = hub ? hub.names : null;
+  if (hub) _saveProductPhotos(hub.photos);
+  if (!prodRes) prodRes = await _firebaseFetchProducts();
   if (!prodRes || Object.keys(prodRes).length === 0) {
     prodRes = await callGAS("getProductData").catch(() => null);
   }
@@ -4605,7 +4756,10 @@ async function _fetchProductCacheNow() {
 // ✅ เช็คว่า /products เปลี่ยนไหม (background) — Firebase ล้วน, mirror จากชีตให้แล้ว
 async function _checkProductCacheUpdate() {
   try {
-    const prodRes = await _firebaseFetchProducts();
+    /* Hub ก่อนเหมือนตอนโหลดครั้งแรก — ดึงไม่ได้ค่อยถอยไป Firebase */
+    const hub = await _hubFetchProducts();
+    if (hub) _saveProductPhotos(hub.photos);
+    const prodRes = hub ? hub.names : await _firebaseFetchProducts();
     if (!prodRes || Object.keys(prodRes).length === 0) {
       // /products ว่าง — ถ้าเครื่องนี้ยัง "ไม่มีชื่อสินค้าเลย" → ดึง GAS มากัน SKU โผล่ (เครื่องที่ 2 เปิดสด)
       if (!productMap || Object.keys(productMap).length === 0) {
@@ -6189,7 +6343,7 @@ function renderList() {
     const realIdx = items.length - 1 - i;
     const borderColor = known ? 'var(--pink-light)' : '#e8b070';
     html += `<div class="checklist-item" style="display:flex;align-items:center;justify-content:space-between;gap:6px;border-left-color:${borderColor};">
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg> ${label}</span>
+      ${_productThumb(c)}<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg> ${label}</span>
       <button class="btn-delete-item" onclick="removeItem(${realIdx})" title="ลบ" style="flex-shrink:0;">✕</button>
     </div>`;
   });
@@ -6677,7 +6831,7 @@ function updateChecklistUI() {
       ? `<button onclick="removeLastScanned('${escHtml(item.sku)}')" class="btn-delete-item ms-1" title="ลบ 1 ชิ้น" style="flex-shrink:0;">✕</button>`
       : `<span style="width:28px; flex-shrink:0; display:inline-block;"></span>`;
     html += `<div class="checklist-item ${statusClass}" style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
-      <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${icon} ${escHtml(productMap[item.sku] || item.sku)}</span>
+      ${_productThumb(item.sku)}<span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${icon} ${escHtml(productMap[item.sku] || item.sku)}</span>
       <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
         <span class="badge bg-${scanQty === item.qty ? 'success' : (scanQty > item.qty ? 'danger' : 'secondary')} rounded-pill">${scanQty} / ${item.qty}</span>
         ${delBtn}
