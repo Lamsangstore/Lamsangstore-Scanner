@@ -3086,6 +3086,10 @@ window.HubLogin = (function () {
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
   })();
 
+  /* ร้านสั่ง 30 ก.ย. 2569: ยังไม่ล็อกอิน = ค้างหน้าเข้าสู่ระบบ ห้ามเห็นหน้าแอปเลย
+     ปิดทันทีตั้งแต่โหลดหน้า ไม่รอถามเซิร์ฟเวอร์ (ไม่งั้นหน้าแอปแวบขึ้นมาให้เห็นก่อน) */
+  if (!token) lock();
+
   function setUser(u) {
     user = u || null;
     try {
@@ -3115,7 +3119,7 @@ window.HubLogin = (function () {
     el.id = 'hub-login-gate';
     el.setAttribute('style', [
       'position:fixed', 'inset:0', 'z-index:2147483600',
-      'background:rgba(248,250,252,.97)', '-webkit-backdrop-filter:blur(6px)', 'backdrop-filter:blur(6px)',
+      'background:#f8fafc',
       'display:flex', 'align-items:center', 'justify-content:center', 'padding:24px',
       'font-family:inherit', 'color:#0f172a', 'text-align:center'
     ].join(';'));
@@ -3152,13 +3156,15 @@ window.HubLogin = (function () {
    * เรียกตอนเปิดแอป — กั้นหน้าจอถ้าเว็บร้านสั่งให้บังคับล็อกอิน
    * appKey = กุญแจของแอป (ใช้ถามว่าตอนนี้บังคับหรือยัง ตอนที่ยังไม่มีคนล็อกอิน)
    *
-   * **เน็ตล่มไม่กั้น** — ใช้ชื่อที่จำไว้ในเครื่องต่อไปก่อน
+   * **ไม่มีโทเค็น = ล็อกเสมอ** ไม่ว่าเว็บร้านจะเปิดสวิตช์บังคับหรือยัง
+   * **มีโทเค็นแล้วเน็ตล่ม = ไม่กั้น** — ใช้ชื่อที่จำไว้ในเครื่องต่อไปก่อน
    * (งานหน้าร้านต้องไม่หยุดเพราะเว็บร้านเข้าไม่ถึงชั่วคราว · ถ้าถูกตัดสิทธิ์จริง
    *  คำขอถัดไปที่ยิงถึงเซิร์ฟเวอร์จะโดน 401 แล้วประตูจะปิดเอง)
    */
   async function enforce(appKey) {
     try {
-      const r = await ask(token || appKey || 'none');
+      if (!token) { lock(); return false; }
+      const r = await ask(token);
       if (r.status === 401) {
         if (token) drop();
         lock(r.body && r.body.error);
