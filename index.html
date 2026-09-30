@@ -2407,6 +2407,7 @@
     <div style="display:flex; align-items:center; gap:6px;">
       <a id="sheetLink" href="#" target="_blank" rel="noopener"
         title="เปิด Google Sheet" style="font-size:1.1rem; padding:5px 7px; text-decoration:none; cursor:pointer; display:none;"><svg viewBox="0 0 20 20" fill="none" style="width:1.1em;height:1.1em;display:block"><rect x="2" y="2" width="16" height="16" rx="4" fill="#bfdbfe"/><circle cx="5.5" cy="7" r="1.3" fill="#3b82f6"/><rect x="8" y="6.2" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><circle cx="5.5" cy="11" r="1.3" fill="#60a5fa"/><rect x="8" y="10.2" width="6" height="1.5" rx="0.75" fill="#60a5fa" opacity="0.7"/><circle cx="5.5" cy="15" r="1.3" fill="#93c5fd"/><rect x="8" y="14.2" width="7" height="1.5" rx="0.75" fill="#93c5fd" opacity="0.7"/></svg></a>
+      <button id="userChip" onclick="userChipClick()" style="font-size:0.72rem; font-weight:600; padding:4px 8px; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">👤 เข้าสู่ระบบ</button>
       <button id="darkModeBtn" onclick="toggleDarkMode()" title="สลับธีม" style="font-size:1.1rem; padding:5px 7px;">🌙</button>
       <span id="networkBadge" style="font-size:0.72rem; font-weight:600; padding:4px 10px; letter-spacing:0.2px; color:var(--success); filter:sepia(0.3) saturate(1.2);"><svg viewBox="0 0 10 10" fill="none" style="width:0.75em;height:0.75em;display:inline-block;vertical-align:0.05em;margin-right:2px"><circle cx="5" cy="5" r="4" fill="#52b788"/><circle cx="5" cy="5" r="2.2" fill="#b5ead7"/></svg> ออนไลน์</span>
     </div>
@@ -2862,11 +2863,16 @@ const HUB_QUEUE_URL = "https://lamsangstore.com/api/hub/v1/pack-queue";
 
 /** GET จาก Hub พร้อมกุญแจ — โยน error เมื่อเรียกไม่ได้ ผู้เรียกตัดสินเองว่าจะทำอะไรต่อ */
 async function _hubGet(url, timeoutMs = 20000) {
-  if (!HUB_KEY) throw new Error('ยังไม่ได้ตั้งกุญแจ Hub');
+  if (!_hubAuth()) throw new Error('ยังไม่ได้ตั้งกุญแจ Hub');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + HUB_KEY }, signal: ctrl.signal, cache: 'no-store' });
+    let res = await fetch(url, { headers: { Authorization: 'Bearer ' + _hubAuth() }, signal: ctrl.signal, cache: 'no-store' });
+    /* โทเค็นของคนหมดอายุหรือถูกตัดสิทธิ์ระหว่างวัน — ทิ้งแล้วลองใหม่ด้วยกุญแจของแอป
+       คนแพคจะเห็นปุ่มกลับเป็น "เข้าสู่ระบบ" เอง แต่ของยังแพคต่อได้ไม่สะดุด */
+    if (res.status === 401 && await HubLogin.denied(res)) {
+      res = await fetch(url, { headers: { Authorization: 'Bearer ' + HUB_KEY }, signal: ctrl.signal, cache: 'no-store' });
+    }
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return await res.json();
   } finally { clearTimeout(timer); }
@@ -2916,13 +2922,13 @@ async function _hubFetchQueueOne(tracking) {
 
 /** อัปรายการจากไฟล์ export เข้าคิวรอแพค */
 async function _hubUploadQueueRows(rows, marketplace) {
-  if (!HUB_KEY) throw new Error('ยังไม่ได้ตั้งกุญแจ Hub');
+  if (!_hubAuth()) throw new Error('ยังไม่ได้ตั้งกุญแจ Hub');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 90000);
   try {
     const res = await fetch(HUB_QUEUE_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + HUB_KEY },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _hubAuth() },
       body: JSON.stringify({ rows, marketplace }),
       signal: ctrl.signal
     });
@@ -2938,14 +2944,14 @@ async function _hubUploadQueueRows(rows, marketplace) {
  * Hub คืนของในใบกลับเข้าคิวรอแพคให้เอง คนแพครอบหน้าจึงยังมีรายการตรวจเหมือนเดิม
  */
 async function _hubVoidPack(doc) {
-  if (!HUB_KEY) throw new Error('ยังไม่ได้ตั้งกุญแจ Hub');
+  if (!_hubAuth()) throw new Error('ยังไม่ได้ตั้งกุญแจ Hub');
   if (!doc || !doc.id || !doc.tk) throw new Error('ใบนี้ไม่มีรหัสอ้างอิง ลบจากแอปไม่ได้');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 20000);
   try {
     const res = await fetch(HUB_PACKS_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + HUB_KEY },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _hubAuth() },
       body: JSON.stringify({ packs: [{ idemToken: doc.id, parcelId: doc.tk, ts: doc.ts, void: true }] }),
       signal: ctrl.signal
     });
@@ -2992,16 +2998,25 @@ function _hubQueueAdd(rec) {
 
 /** ส่งใบแพคเข้า Hub — คืน true เมื่อ Hub รับแล้ว · ไม่ throw */
 async function _hubPushPacks(records) {
-  if (!HUB_KEY || !records.length) return false;
+  if (!_hubAuth() || !records.length) return false;
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 15000);
-    const res = await fetch(HUB_PACKS_URL, {
+    let res = await fetch(HUB_PACKS_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + HUB_KEY },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _hubAuth() },
       body: JSON.stringify({ packs: records }),
       signal: ctrl.signal
     });
+    /* โทเค็นของคนใช้ไม่ได้แล้ว — ส่งซ้ำด้วยกุญแจของแอป ใบนี้จะไม่มีชื่อคนแพคแต่ไม่หาย */
+    if (res.status === 401 && await HubLogin.denied(res)) {
+      res = await fetch(HUB_PACKS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + HUB_KEY },
+        body: JSON.stringify({ packs: records }),
+        signal: ctrl.signal
+      });
+    }
     clearTimeout(timer);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return true;
@@ -3013,7 +3028,7 @@ async function _hubPushPacks(records) {
 
 /** ส่งใบเดียว (ตอนแพคเสร็จ / ตอนอัปคลิปเสร็จ) — คืน true เมื่อ Hub รับแล้ว */
 async function _hubSendPack(job) {
-  if (!HUB_KEY) return false;
+  if (!_hubAuth()) return false;
   const rec = _hubPackRecord(job);
   if (!rec.parcelId) return false;
   const ok = await _hubPushPacks([rec]);
@@ -3023,7 +3038,7 @@ async function _hubSendPack(job) {
 
 /** ส่งใบที่ค้างในคิว — เรียกตอนเปิดแอปและหลังแพคเสร็จ */
 async function _hubFlushPackQueue() {
-  if (!HUB_KEY) return;
+  if (!_hubAuth()) return;
   const q = _hubQueueRead();
   if (!q.length) return;
   const batch = q.slice(0, 200);
@@ -3031,6 +3046,197 @@ async function _hubFlushPackQueue() {
 }
 
 const HUB_KEY = "lsh_vLhpqTnZQoJjoISQXXgjfQCwk0UlTKQjxTzsNnhLo84";
+
+/* ---------------------------------------------------------------------------
+   ล็อกอินกลางของร้าน (เฟส G · 30 ก.ย. 2569) — ก้อนนี้เหมือนกันทุกแอป
+   แก้ APP ให้ตรงกับ slug ในทะเบียน `src/lib/hub-apps.ts` ของเว็บร้านเท่านั้น
+
+   กุญแจ Hub ที่ฝังในหน้าเว็บบอกได้แค่ว่า "คำขอมาจากแอปไหน" (ใครเปิด view-source ก็ได้ไป)
+   ส่วนก้อนนี้ทำให้รู้ว่า **ใคร** กำลังใช้ — พนักงานเข้าสู่ระบบด้วยบัญชีเดียวกับ HRIS
+   เว็บร้านออกโทเค็นของคนนั้นให้ (อายุ 30 วัน เก็บไว้ในเครื่องนี้)
+
+   **ร้านสั่ง 30 ก.ย. 2569 ว่าทุกแอปต้องล็อกอินก่อนถึงใช้งานได้**
+   แต่สวิตช์บังคับอยู่ที่เว็บร้าน (หลังบ้าน → Hub เชื่อมแอป) ไม่ได้อยู่ในโค้ดนี้ —
+   แอปถามเซิร์ฟเวอร์ว่าบังคับหรือยัง แล้วค่อยกั้นหน้าจอ เปิด/ปิดได้โดยไม่ต้องแก้แอป
+
+   เจ้าของร้านปิดบัญชี / กด "บังคับออกจากระบบ" / พนักงานลาออกใน HRIS = ตัดทุกแอปพร้อมกัน
+--------------------------------------------------------------------------- */
+window.HubLogin = (function () {
+  const APP  = 'scanner';
+  const BASE = 'https://lamsangstore.com';
+
+  let token = '', user = null, locked = false;
+  try {
+    token = localStorage.getItem('hubUserToken') || '';
+    user  = JSON.parse(localStorage.getItem('hubUser') || 'null');
+  } catch (e) {}
+
+  const listeners = [];
+  function notify() { listeners.forEach(function (fn) { try { fn(user); } catch (e) {} }); }
+
+  /* รับโทเค็นที่เว็บร้านส่งกลับมาทาง `#lsa=…` แล้วลบออกจากแถบที่อยู่ทันที
+     (ส่งทาง hash ไม่ใช่ query โทเค็นจึงไม่ไปโผล่ใน log ของเซิร์ฟเวอร์ไหนเลย) */
+  (function catchLogin() {
+    const m = /[#&]lsa=([^&]+)/.exec(location.hash || '');
+    if (!m) return;
+    try {
+      token = decodeURIComponent(m[1]);
+      localStorage.setItem('hubUserToken', token);
+    } catch (e) {}
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  })();
+
+  /* ร้านสั่ง 30 ก.ย. 2569: ยังไม่ล็อกอิน = ค้างหน้าเข้าสู่ระบบ ห้ามเห็นหน้าแอปเลย
+     ปิดทันทีตั้งแต่โหลดหน้า ไม่รอถามเซิร์ฟเวอร์ (ไม่งั้นหน้าแอปแวบขึ้นมาให้เห็นก่อน) */
+  if (!token) lock();
+
+  function setUser(u) {
+    user = u || null;
+    try {
+      if (user) localStorage.setItem('hubUser', JSON.stringify(user));
+      else localStorage.removeItem('hubUser');
+    } catch (e) {}
+    notify();
+  }
+
+  /** โทเค็นใช้ไม่ได้แล้ว (หมดอายุ · ถูกตัดสิทธิ์ · ลาออก) */
+  function drop() {
+    token = '';
+    try { localStorage.removeItem('hubUserToken'); } catch (e) {}
+    setUser(null);
+  }
+
+  function loginHref() {
+    return BASE + '/app-login?app=' + APP + '&return=' +
+      encodeURIComponent(location.origin + location.pathname);
+  }
+
+  /** ประตูกั้นเต็มจอ — ใช้แอปต่อไม่ได้จนกว่าจะเข้าสู่ระบบ */
+  function lock(msg) {
+    if (locked) return;
+    locked = true;
+    const el = document.createElement('div');
+    el.id = 'hub-login-gate';
+    el.setAttribute('style', [
+      'position:fixed', 'inset:0', 'z-index:2147483600',
+      'background:#f8fafc',
+      'display:flex', 'align-items:center', 'justify-content:center', 'padding:24px',
+      'font-family:inherit', 'color:#0f172a', 'text-align:center'
+    ].join(';'));
+    el.innerHTML =
+      '<div style="max-width:340px">' +
+        '<div style="font-size:44px;line-height:1;margin-bottom:14px">🔒</div>' +
+        '<div style="font-size:17px;font-weight:700;margin-bottom:6px">ต้องเข้าสู่ระบบก่อนใช้งาน</div>' +
+        '<div style="font-size:13px;color:#475569;margin-bottom:18px">' +
+          (msg || 'ใช้อีเมลกับรหัสผ่านเดียวกับระบบ HR ของร้าน') +
+        '</div>' +
+        '<a href="' + loginHref() + '" style="display:block;padding:13px 18px;border-radius:12px;' +
+          'background:#0f172a;color:#fff;font-weight:700;font-size:15px;text-decoration:none">เข้าสู่ระบบ</a>' +
+      '</div>';
+    const put = function () { document.body.appendChild(el); };
+    if (document.body) put(); else document.addEventListener('DOMContentLoaded', put);
+  }
+
+  function unlock() {
+    locked = false;
+    const el = document.getElementById('hub-login-gate');
+    if (el) el.remove();
+  }
+
+  /** ถามเว็บร้านว่าโทเค็น (หรือกุญแจของแอป) ยังใช้ได้ไหม และเป็นของใคร */
+  async function ask(auth) {
+    const res = await fetch(BASE + '/api/hub/v1/session', {
+      headers: { Authorization: 'Bearer ' + auth }, cache: 'no-store'
+    });
+    const body = await res.json().catch(function () { return {}; });
+    return { status: res.status, body: body };
+  }
+
+  /**
+   * เรียกตอนเปิดแอป — กั้นหน้าจอถ้าเว็บร้านสั่งให้บังคับล็อกอิน
+   * appKey = กุญแจของแอป (ใช้ถามว่าตอนนี้บังคับหรือยัง ตอนที่ยังไม่มีคนล็อกอิน)
+   *
+   * **ไม่มีโทเค็น = ล็อกเสมอ** ไม่ว่าเว็บร้านจะเปิดสวิตช์บังคับหรือยัง
+   * **มีโทเค็นแล้วเน็ตล่ม = ไม่กั้น** — ใช้ชื่อที่จำไว้ในเครื่องต่อไปก่อน
+   * (งานหน้าร้านต้องไม่หยุดเพราะเว็บร้านเข้าไม่ถึงชั่วคราว · ถ้าถูกตัดสิทธิ์จริง
+   *  คำขอถัดไปที่ยิงถึงเซิร์ฟเวอร์จะโดน 401 แล้วประตูจะปิดเอง)
+   */
+  async function enforce(appKey) {
+    try {
+      if (!token) { lock(); return false; }
+      const r = await ask(token);
+      if (r.status === 401) {
+        if (token) drop();
+        lock(r.body && r.body.error);
+        return false;
+      }
+      if (r.status < 400) {
+        setUser((r.body && r.body.user) || null);
+        unlock();
+        return true;
+      }
+    } catch (e) { /* ออฟไลน์ — ปล่อยผ่านด้วยชื่อที่จำไว้ */ }
+    return true;
+  }
+
+  return {
+    app: APP,
+    user: function () { return user; },
+    token: function () { return token; },
+    locked: function () { return locked; },
+    /** กุญแจที่ควรใช้ยิง Hub — โทเค็นของคนมาก่อน ไม่มีค่อยใช้กุญแจของแอป */
+    auth: function (appKey) { return token || appKey || ''; },
+    /**
+     * เรียกเมื่อ Hub ตอบ 401 — คืน true ถ้ายังลองใหม่ด้วยกุญแจของแอปได้
+     * (เว็บร้านยังไม่บังคับล็อกอินสำหรับแอปนี้) · คืน false = ปิดประตูแล้ว
+     */
+    async denied(res) {
+      let msg = '';
+      try { msg = ((await res.clone().json()) || {}).error || ''; } catch (e) {}
+      const needLogin = msg.indexOf('เข้าสู่ระบบ') >= 0;
+      if (token) drop();
+      if (needLogin) { lock(msg); return false; }
+      return true;
+    },
+    loginHref: loginHref,
+    lock: lock,
+    enforce: enforce,
+    async signOut() {
+      if (!token) return;
+      try {
+        await fetch(BASE + '/api/hub/v1/session', {
+          method: 'DELETE', headers: { Authorization: 'Bearer ' + token }
+        });
+      } catch (e) {}
+      drop();
+    },
+    onChange: function (fn) { listeners.push(fn); fn(user); }
+  };
+})();
+
+/* ตัวเชื่อมของแอปนี้ — โค้ดเดิมเรียก _hubAuth() อยู่หลายที่ จึงคงชื่อไว้ */
+function _hubAuth() { return HubLogin.auth(HUB_KEY); }
+
+/** ปุ่ม 👤 บนแถบบน — ยังไม่ล็อกอินกดแล้วไปหน้าล็อกอิน · ล็อกอินแล้วกดเพื่อออก */
+async function userChipClick() {
+  const u = HubLogin.user();
+  if (!u) { location.href = HubLogin.loginHref(); return; }
+  if (!confirm('ออกจากระบบของ ' + u.name + ' บนเครื่องนี้?')) return;
+  await HubLogin.signOut();
+  /* บังคับล็อกอินอยู่ไหม ให้เซิร์ฟเวอร์ตัดสิน — ถ้าบังคับ ประตูจะปิดทันทีหลังออกจากระบบ */
+  HubLogin.enforce(HUB_KEY);
+}
+
+function _hubRenderUser() {
+  const el = document.getElementById('userChip');
+  if (!el) return;
+  const u = HubLogin.user();
+  el.textContent = u ? ('👤 ' + u.name) : '👤 เข้าสู่ระบบ';
+  el.title = u
+    ? (u.name + ' — กดเพื่อออกจากระบบเครื่องนี้')
+    : 'เข้าสู่ระบบด้วยบัญชีร้าน เพื่อให้บันทึกการแพครู้ว่าใครเป็นคนแพค';
+  el.style.opacity = u ? '1' : '0.7';
+}
 
 // ============================================================
 // 🔥 เดิมมี Firebase Realtime Database เป็นตาข่ายกันออเดอร์หาย (/inbox → GAS ดูดเข้าชีต)
@@ -4786,11 +4992,11 @@ function _hubOptText(v) { return String(v || '').split('(')[0].split('|')[0].tri
  * คืน null เมื่อใช้ไม่ได้ — ผู้เรียกต้องถอยไปใช้ Firebase/GAS เหมือนเดิม
  */
 async function _hubFetchProducts() {
-  if (!HUB_KEY) return null;
+  if (!_hubAuth()) return null;
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 15000);
-    const res = await fetch(HUB_URL, { headers: { Authorization: 'Bearer ' + HUB_KEY }, signal: ctrl.signal });
+    const res = await fetch(HUB_URL, { headers: { Authorization: 'Bearer ' + _hubAuth() }, signal: ctrl.signal });
     clearTimeout(timer);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
@@ -7966,6 +8172,14 @@ function spawnMiniConfetti(count, colors) {
 }
 
 // ── File Input Change Animation ──
+/* ชื่อคนที่ล็อกอินไว้ — โชว์ทันทีจากที่จำไว้ในเครื่อง แล้วถามเว็บร้านว่ายังใช้ได้ไหม
+   และบังคับล็อกอินหรือยัง (เว็บร้านเป็นคนตัดสิน) — ถ้าบังคับแล้วจะมีประตูกั้นเต็มจอ
+   **เน็ตล่มไม่กั้น** ของที่แพคไว้ยังส่งเข้า Hub รอบหน้าได้เหมือนเดิม */
+document.addEventListener('DOMContentLoaded', () => {
+  HubLogin.onChange(_hubRenderUser);
+  HubLogin.enforce(HUB_KEY);
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   const fi = document.getElementById('fileInput');
   if (fi) {
