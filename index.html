@@ -2870,8 +2870,7 @@ async function _hubGet(url, timeoutMs = 20000) {
     let res = await fetch(url, { headers: { Authorization: 'Bearer ' + _hubAuth() }, signal: ctrl.signal, cache: 'no-store' });
     /* โทเค็นของคนหมดอายุหรือถูกตัดสิทธิ์ระหว่างวัน — ทิ้งแล้วลองใหม่ด้วยกุญแจของแอป
        คนแพคจะเห็นปุ่มกลับเป็น "เข้าสู่ระบบ" เอง แต่ของยังแพคต่อได้ไม่สะดุด */
-    if (res.status === 401 && HUB_USER_TOKEN) {
-      _hubDropToken();
+    if (res.status === 401 && await HubLogin.denied(res)) {
       res = await fetch(url, { headers: { Authorization: 'Bearer ' + HUB_KEY }, signal: ctrl.signal, cache: 'no-store' });
     }
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -3010,8 +3009,7 @@ async function _hubPushPacks(records) {
       signal: ctrl.signal
     });
     /* โทเค็นของคนใช้ไม่ได้แล้ว — ส่งซ้ำด้วยกุญแจของแอป ใบนี้จะไม่มีชื่อคนแพคแต่ไม่หาย */
-    if (res.status === 401 && HUB_USER_TOKEN) {
-      _hubDropToken();
+    if (res.status === 401 && await HubLogin.denied(res)) {
       res = await fetch(HUB_PACKS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + HUB_KEY },
@@ -3050,98 +3048,189 @@ async function _hubFlushPackQueue() {
 const HUB_KEY = "lsh_vLhpqTnZQoJjoISQXXgjfQCwk0UlTKQjxTzsNnhLo84";
 
 /* ---------------------------------------------------------------------------
-   ล็อกอินกลาง — เข้าด้วยบัญชีหลังบ้านของร้าน (เฟส G · 30 ก.ย. 2569)
+   ล็อกอินกลางของร้าน (เฟส G · 30 ก.ย. 2569) — ก้อนนี้เหมือนกันทุกแอป
+   แก้ APP ให้ตรงกับ slug ในทะเบียน `src/lib/hub-apps.ts` ของเว็บร้านเท่านั้น
 
-   กุญแจข้างบนฝังอยู่ในหน้าเว็บ ใครเปิด view-source ก็ได้ไป มันจึงบอกได้แค่ว่า
-   "คำขอนี้มาจากแอป Scanner" ไม่ได้บอกว่า **ใคร** เป็นคนแพค
-   พนักงานกด "เข้าสู่ระบบ" → เว็บร้านออกโทเค็นของคนนั้นให้ (`lsa_…` เก็บในเครื่องนี้)
-   → ใบแพคที่ส่งขึ้นไปหลังจากนั้น Hub เติมชื่อคนแพคให้เองฝั่งเซิร์ฟเวอร์
+   กุญแจ Hub ที่ฝังในหน้าเว็บบอกได้แค่ว่า "คำขอมาจากแอปไหน" (ใครเปิด view-source ก็ได้ไป)
+   ส่วนก้อนนี้ทำให้รู้ว่า **ใคร** กำลังใช้ — พนักงานเข้าสู่ระบบด้วยบัญชีเดียวกับ HRIS
+   เว็บร้านออกโทเค็นของคนนั้นให้ (อายุ 30 วัน เก็บไว้ในเครื่องนี้)
 
-   **ยังไม่ล็อกอินก็แพคได้ตามปกติ** (ถอยไปใช้กุญแจของแอป) — ตั้งใจให้เป็นแบบนี้
-   จนกว่าพนักงานจะมีบัญชีครบทุกคน งานแพคของต้องไม่สะดุดเพราะเรื่องล็อกอิน
+   **ร้านสั่ง 30 ก.ย. 2569 ว่าทุกแอปต้องล็อกอินก่อนถึงใช้งานได้**
+   แต่สวิตช์บังคับอยู่ที่เว็บร้าน (หลังบ้าน → Hub เชื่อมแอป) ไม่ได้อยู่ในโค้ดนี้ —
+   แอปถามเซิร์ฟเวอร์ว่าบังคับหรือยัง แล้วค่อยกั้นหน้าจอ เปิด/ปิดได้โดยไม่ต้องแก้แอป
+
+   เจ้าของร้านปิดบัญชี / กด "บังคับออกจากระบบ" / พนักงานลาออกใน HRIS = ตัดทุกแอปพร้อมกัน
 --------------------------------------------------------------------------- */
-const HUB_LOGIN_URL   = 'https://lamsangstore.com/app-login';
-const HUB_SESSION_URL = 'https://lamsangstore.com/api/hub/v1/session';
+window.HubLogin = (function () {
+  const APP  = 'scanner';
+  const BASE = 'https://lamsangstore.com';
 
-let HUB_USER_TOKEN = '';
-let HUB_USER = null;
-try {
-  HUB_USER_TOKEN = localStorage.getItem('hubUserToken') || '';
-  HUB_USER = JSON.parse(localStorage.getItem('hubUser') || 'null');
-} catch (e) {}
-
-/** กุญแจที่ใช้ยิง Hub — โทเค็นของคนมาก่อน ไม่มีค่อยใช้กุญแจของแอป */
-function _hubAuth() { return HUB_USER_TOKEN || HUB_KEY; }
-
-/* รับโทเค็นที่เว็บร้านส่งกลับมาทาง `#lsa=…` แล้วลบออกจากแถบที่อยู่ทันที
-   (ส่งมาทาง hash ไม่ใช่ query โทเค็นจึงไม่ไปโผล่ใน log ของเซิร์ฟเวอร์ไหนเลย) */
-(function _hubCatchLogin() {
-  const m = /[#&]lsa=([^&]+)/.exec(location.hash || '');
-  if (!m) return;
+  let token = '', user = null, locked = false;
   try {
-    HUB_USER_TOKEN = decodeURIComponent(m[1]);
-    localStorage.setItem('hubUserToken', HUB_USER_TOKEN);
+    token = localStorage.getItem('hubUserToken') || '';
+    user  = JSON.parse(localStorage.getItem('hubUser') || 'null');
   } catch (e) {}
-  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+
+  const listeners = [];
+  function notify() { listeners.forEach(function (fn) { try { fn(user); } catch (e) {} }); }
+
+  /* รับโทเค็นที่เว็บร้านส่งกลับมาทาง `#lsa=…` แล้วลบออกจากแถบที่อยู่ทันที
+     (ส่งทาง hash ไม่ใช่ query โทเค็นจึงไม่ไปโผล่ใน log ของเซิร์ฟเวอร์ไหนเลย) */
+  (function catchLogin() {
+    const m = /[#&]lsa=([^&]+)/.exec(location.hash || '');
+    if (!m) return;
+    try {
+      token = decodeURIComponent(m[1]);
+      localStorage.setItem('hubUserToken', token);
+    } catch (e) {}
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  })();
+
+  function setUser(u) {
+    user = u || null;
+    try {
+      if (user) localStorage.setItem('hubUser', JSON.stringify(user));
+      else localStorage.removeItem('hubUser');
+    } catch (e) {}
+    notify();
+  }
+
+  /** โทเค็นใช้ไม่ได้แล้ว (หมดอายุ · ถูกตัดสิทธิ์ · ลาออก) */
+  function drop() {
+    token = '';
+    try { localStorage.removeItem('hubUserToken'); } catch (e) {}
+    setUser(null);
+  }
+
+  function loginHref() {
+    return BASE + '/app-login?app=' + APP + '&return=' +
+      encodeURIComponent(location.origin + location.pathname);
+  }
+
+  /** ประตูกั้นเต็มจอ — ใช้แอปต่อไม่ได้จนกว่าจะเข้าสู่ระบบ */
+  function lock(msg) {
+    if (locked) return;
+    locked = true;
+    const el = document.createElement('div');
+    el.id = 'hub-login-gate';
+    el.setAttribute('style', [
+      'position:fixed', 'inset:0', 'z-index:2147483600',
+      'background:rgba(248,250,252,.97)', '-webkit-backdrop-filter:blur(6px)', 'backdrop-filter:blur(6px)',
+      'display:flex', 'align-items:center', 'justify-content:center', 'padding:24px',
+      'font-family:inherit', 'color:#0f172a', 'text-align:center'
+    ].join(';'));
+    el.innerHTML =
+      '<div style="max-width:340px">' +
+        '<div style="font-size:44px;line-height:1;margin-bottom:14px">🔒</div>' +
+        '<div style="font-size:17px;font-weight:700;margin-bottom:6px">ต้องเข้าสู่ระบบก่อนใช้งาน</div>' +
+        '<div style="font-size:13px;color:#475569;margin-bottom:18px">' +
+          (msg || 'ใช้อีเมลกับรหัสผ่านเดียวกับระบบ HR ของร้าน') +
+        '</div>' +
+        '<a href="' + loginHref() + '" style="display:block;padding:13px 18px;border-radius:12px;' +
+          'background:#0f172a;color:#fff;font-weight:700;font-size:15px;text-decoration:none">เข้าสู่ระบบ</a>' +
+      '</div>';
+    const put = function () { document.body.appendChild(el); };
+    if (document.body) put(); else document.addEventListener('DOMContentLoaded', put);
+  }
+
+  function unlock() {
+    locked = false;
+    const el = document.getElementById('hub-login-gate');
+    if (el) el.remove();
+  }
+
+  /** ถามเว็บร้านว่าโทเค็น (หรือกุญแจของแอป) ยังใช้ได้ไหม และเป็นของใคร */
+  async function ask(auth) {
+    const res = await fetch(BASE + '/api/hub/v1/session', {
+      headers: { Authorization: 'Bearer ' + auth }, cache: 'no-store'
+    });
+    const body = await res.json().catch(function () { return {}; });
+    return { status: res.status, body: body };
+  }
+
+  /**
+   * เรียกตอนเปิดแอป — กั้นหน้าจอถ้าเว็บร้านสั่งให้บังคับล็อกอิน
+   * appKey = กุญแจของแอป (ใช้ถามว่าตอนนี้บังคับหรือยัง ตอนที่ยังไม่มีคนล็อกอิน)
+   *
+   * **เน็ตล่มไม่กั้น** — ใช้ชื่อที่จำไว้ในเครื่องต่อไปก่อน
+   * (งานหน้าร้านต้องไม่หยุดเพราะเว็บร้านเข้าไม่ถึงชั่วคราว · ถ้าถูกตัดสิทธิ์จริง
+   *  คำขอถัดไปที่ยิงถึงเซิร์ฟเวอร์จะโดน 401 แล้วประตูจะปิดเอง)
+   */
+  async function enforce(appKey) {
+    try {
+      const r = await ask(token || appKey || 'none');
+      if (r.status === 401) {
+        if (token) drop();
+        lock(r.body && r.body.error);
+        return false;
+      }
+      if (r.status < 400) {
+        setUser((r.body && r.body.user) || null);
+        unlock();
+        return true;
+      }
+    } catch (e) { /* ออฟไลน์ — ปล่อยผ่านด้วยชื่อที่จำไว้ */ }
+    return true;
+  }
+
+  return {
+    app: APP,
+    user: function () { return user; },
+    token: function () { return token; },
+    locked: function () { return locked; },
+    /** กุญแจที่ควรใช้ยิง Hub — โทเค็นของคนมาก่อน ไม่มีค่อยใช้กุญแจของแอป */
+    auth: function (appKey) { return token || appKey || ''; },
+    /**
+     * เรียกเมื่อ Hub ตอบ 401 — คืน true ถ้ายังลองใหม่ด้วยกุญแจของแอปได้
+     * (เว็บร้านยังไม่บังคับล็อกอินสำหรับแอปนี้) · คืน false = ปิดประตูแล้ว
+     */
+    async denied(res) {
+      let msg = '';
+      try { msg = ((await res.clone().json()) || {}).error || ''; } catch (e) {}
+      const needLogin = msg.indexOf('เข้าสู่ระบบ') >= 0;
+      if (token) drop();
+      if (needLogin) { lock(msg); return false; }
+      return true;
+    },
+    loginHref: loginHref,
+    lock: lock,
+    enforce: enforce,
+    async signOut() {
+      if (!token) return;
+      try {
+        await fetch(BASE + '/api/hub/v1/session', {
+          method: 'DELETE', headers: { Authorization: 'Bearer ' + token }
+        });
+      } catch (e) {}
+      drop();
+    },
+    onChange: function (fn) { listeners.push(fn); fn(user); }
+  };
 })();
 
-function _hubSaveUser(u) {
-  HUB_USER = u || null;
-  try {
-    if (HUB_USER) localStorage.setItem('hubUser', JSON.stringify(HUB_USER));
-    else localStorage.removeItem('hubUser');
-  } catch (e) {}
-  _hubRenderUser();
-}
+/* ตัวเชื่อมของแอปนี้ — โค้ดเดิมเรียก _hubAuth() อยู่หลายที่ จึงคงชื่อไว้ */
+function _hubAuth() { return HubLogin.auth(HUB_KEY); }
 
-/** โทเค็นใช้ไม่ได้แล้ว (หมดอายุ · ถูกตัดสิทธิ์ · ลาออก) — ถอยไปใช้กุญแจของแอปต่อ */
-function _hubDropToken() {
-  HUB_USER_TOKEN = '';
-  try { localStorage.removeItem('hubUserToken'); } catch (e) {}
-  _hubSaveUser(null);
-}
-
-/** ถามเว็บร้านว่าโทเค็นนี้ยังใช้ได้ไหมและเป็นของใคร */
-async function _hubWhoAmI() {
-  if (!HUB_USER_TOKEN) { _hubSaveUser(null); return; }
-  try {
-    const res = await fetch(HUB_SESSION_URL, {
-      headers: { Authorization: 'Bearer ' + HUB_USER_TOKEN }, cache: 'no-store'
-    });
-    if (res.status === 401) { _hubDropToken(); return; }
-    if (!res.ok) return;                       // เว็บมีปัญหาชั่วคราว — เก็บชื่อเดิมไว้ก่อน
-    const json = await res.json();
-    _hubSaveUser(json.user || null);
-  } catch (e) { /* ออฟไลน์ — ใช้ชื่อที่จำไว้ในเครื่อง */ }
-}
-
-function _hubLoginHref() {
-  return HUB_LOGIN_URL + '?app=scanner&return=' +
-    encodeURIComponent(location.origin + location.pathname);
+/** ปุ่ม 👤 บนแถบบน — ยังไม่ล็อกอินกดแล้วไปหน้าล็อกอิน · ล็อกอินแล้วกดเพื่อออก */
+async function userChipClick() {
+  const u = HubLogin.user();
+  if (!u) { location.href = HubLogin.loginHref(); return; }
+  if (!confirm('ออกจากระบบของ ' + u.name + ' บนเครื่องนี้?')) return;
+  await HubLogin.signOut();
+  /* บังคับล็อกอินอยู่ไหม ให้เซิร์ฟเวอร์ตัดสิน — ถ้าบังคับ ประตูจะปิดทันทีหลังออกจากระบบ */
+  HubLogin.enforce(HUB_KEY);
 }
 
 function _hubRenderUser() {
   const el = document.getElementById('userChip');
   if (!el) return;
-  el.textContent = HUB_USER ? ('👤 ' + HUB_USER.name) : '👤 เข้าสู่ระบบ';
-  el.title = HUB_USER
-    ? (HUB_USER.name + ' — กดเพื่อออกจากระบบเครื่องนี้')
+  const u = HubLogin.user();
+  el.textContent = u ? ('👤 ' + u.name) : '👤 เข้าสู่ระบบ';
+  el.title = u
+    ? (u.name + ' — กดเพื่อออกจากระบบเครื่องนี้')
     : 'เข้าสู่ระบบด้วยบัญชีร้าน เพื่อให้บันทึกการแพครู้ว่าใครเป็นคนแพค';
-  el.style.opacity = HUB_USER ? '1' : '0.7';
+  el.style.opacity = u ? '1' : '0.7';
 }
-
-/** ปุ่มบนแถบบน — ยังไม่ล็อกอินกดแล้วไปหน้าล็อกอิน · ล็อกอินแล้วกดเพื่อออก */
-async function userChipClick() {
-  if (!HUB_USER) { location.href = _hubLoginHref(); return; }
-  if (!confirm('ออกจากระบบของ ' + HUB_USER.name + ' บนเครื่องนี้?')) return;
-  try {
-    await fetch(HUB_SESSION_URL, {
-      method: 'DELETE', headers: { Authorization: 'Bearer ' + HUB_USER_TOKEN }
-    });
-  } catch (e) {}
-  _hubDropToken();
-}
-
 
 // ============================================================
 // 🔥 เดิมมี Firebase Realtime Database เป็นตาข่ายกันออเดอร์หาย (/inbox → GAS ดูดเข้าชีต)
@@ -8077,8 +8166,13 @@ function spawnMiniConfetti(count, colors) {
 }
 
 // ── File Input Change Animation ──
-/* ชื่อคนที่ล็อกอินไว้ — โชว์ทันทีจากที่จำไว้ในเครื่อง แล้วค่อยถามเว็บร้านว่ายังใช้ได้อยู่ไหม */
-document.addEventListener('DOMContentLoaded', () => { _hubRenderUser(); _hubWhoAmI(); });
+/* ชื่อคนที่ล็อกอินไว้ — โชว์ทันทีจากที่จำไว้ในเครื่อง แล้วถามเว็บร้านว่ายังใช้ได้ไหม
+   และบังคับล็อกอินหรือยัง (เว็บร้านเป็นคนตัดสิน) — ถ้าบังคับแล้วจะมีประตูกั้นเต็มจอ
+   **เน็ตล่มไม่กั้น** ของที่แพคไว้ยังส่งเข้า Hub รอบหน้าได้เหมือนเดิม */
+document.addEventListener('DOMContentLoaded', () => {
+  HubLogin.onChange(_hubRenderUser);
+  HubLogin.enforce(HUB_KEY);
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   const fi = document.getElementById('fileInput');
