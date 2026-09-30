@@ -2855,6 +2855,8 @@ const GAS_API_KEY = "d0be0cec0771dbb705616a737a5d3c76e42b1a4bbd10e376dd9d5bd88d7
 const HUB_URL = "https://lamsangstore.com/api/hub/v1/products?inactive=1";
 const HUB_PACKS_URL = "https://lamsangstore.com/api/hub/v1/packs";
 const HUB_QUEUE_URL = "https://lamsangstore.com/api/hub/v1/pack-queue";
+/** ส่งไฟล์ Page365 ให้เว็บคัดลูกค้าที่ทักแชท — ดูหมายเหตุที่ _hubSendChatCustomers() */
+const HUB_CHAT_URL = "https://lamsangstore.com/api/hub/v1/chat-customers";
 
 /* ---------------------------------------------------------------------------
    คุยกับ Hub ของร้าน — ชื่อสินค้า · คิวรอแพค · ใบที่แพคแล้ว
@@ -2918,6 +2920,43 @@ async function _hubFetchQueueOne(tracking) {
   const p = json.parcel;
   if (!p) return [];
   return (p.items || []).map(i => ({ sku: i.sku, qty: i.qty, remark: p.remark || '' }));
+}
+
+/**
+ * ส่งไฟล์ Page365 ให้เว็บคัดลูกค้าที่ทักแชท (ทำเงียบ ๆ ท้ายการอัปคิวรอแพค)
+ *
+ * ออเดอร์ที่ลูกค้าทักแชทมาสั่งไม่เคยผ่านเว็บร้าน จึงไม่มีในฐานข้อมูลของเว็บเลย
+ * และหายไปจากทุกกลุ่มลูกค้าที่เอาไปยิงโฆษณา — ไฟล์ที่พนักงานอัปอยู่แล้วทุกวัน
+ * มีข้อมูลครบ จึงส่งไปให้เว็บคัดเอง รายชื่อจะได้อัปเดตทุกวันโดยไม่มีใครต้องจำ
+ *
+ * ⚠️ **ส่งด้วยโทเค็นของคนที่ล็อกอินเท่านั้น ห้ามใช้กุญแจของแอป**
+ * กุญแจของแอปฝังอยู่ในไฟล์นี้ ใครเปิด view-source ก็ได้ไป — ไฟล์นี้มีชื่อกับเบอร์
+ * ลูกค้า ส่งด้วยกุญแจนั้นเมื่อไรใครก็ยิงเบอร์ของคนที่ไม่เคยซื้อเข้าระบบได้
+ * ยังไม่ได้ล็อกอิน = ข้ามไปเงียบ ๆ งานแพคต้องไม่สะดุดเพราะเรื่องนี้
+ *
+ * **ไม่ตัดสินเองว่าใบไหนเป็นลูกค้าแชท** ส่งไฟล์ทั้งไฟล์ไปให้เว็บอ่าน
+ * การตัดสินจึงอยู่ที่เดียว ไม่มีทางที่สองฝั่งจะใช้กติกาคนละชุด
+ */
+async function _hubSendChatCustomers(file, marketplace) {
+  if (marketplace !== 'page365' || !file) return null;
+  const token = (typeof HubLogin !== 'undefined' && HubLogin.token && HubLogin.token()) || '';
+  if (!token) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 120000);
+  try {
+    const body = new FormData();
+    body.append('file', file, file.name);
+    const res = await fetch(HUB_CHAT_URL, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+      body,
+      signal: ctrl.signal
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;   // ล้มเหลวห้ามทำให้การอัปคิวรอแพคพัง
+  } finally { clearTimeout(timer); }
 }
 
 /** อัปรายการจากไฟล์ export เข้าคิวรอแพค */
@@ -7723,7 +7762,9 @@ function _chunkEnd(all, start) {
 async function _uploadOneWithRetry(r) {
   const all = r.extractData || [];
   if (all.length <= MP_UPLOAD_CHUNK) {
-    return _sendChunkWithRetry(all, r.file.name, r.marketplace);
+    const one = await _sendChunkWithRetry(all, r.file.name, r.marketplace);
+    if (one.ok) one.chat = await _hubSendChatCustomers(r.file, r.marketplace);
+    return one;
   }
   // ไฟล์ใหญ่ → แบ่งส่งทีละก้อน, รวมผล
   let count = 0, dup = 0, parcels = 0, withAmount = 0, amount = 0;
@@ -7740,7 +7781,8 @@ async function _uploadOneWithRetry(r) {
     withAmount += res.resp.parcelsWithAmount || 0;
     amount += res.resp.amount || 0;
   }
-  return { ok: true, resp: { success: true, count, duplicateSkipped: dup, parcels, parcelsWithAmount: withAmount, amount } };
+  const chat = await _hubSendChatCustomers(r.file, r.marketplace);
+  return { ok: true, chat, resp: { success: true, count, duplicateSkipped: dup, parcels, parcelsWithAmount: withAmount, amount } };
 }
 
 // ✅ concurrency = 1 — saveMarketplaceData ใช้ lock เดียวกันอยู่แล้ว
@@ -7757,6 +7799,7 @@ async function _uploadResultsParallel(items, concurrency = 1) {
       r._serverDup     = resp.duplicateSkipped || 0;
       r._serverAmount  = resp.amount || 0;
       r._serverWithAmount = resp.parcelsWithAmount || 0;
+      r._chat = result.chat || null;
       agg.totalCount += resp.count || 0;
       agg.totalDup   += resp.duplicateSkipped || 0;
       agg.totalBf    += resp.backfilled || 0;
@@ -7805,6 +7848,28 @@ function _amountTotalOf(results) {
 function _amountParcelsOf(results) {
   return results.reduce((sum, r) => sum + (r.amountInfo?.parcels || 0), 0);
 }
+/**
+ * บรรทัด "ลูกค้าที่ทักแชท" ใต้ชื่อไฟล์ — **ต้องโชว์เสมอสำหรับไฟล์ Page365**
+ * ถ้าไม่โชว์ ไม่มีใครรู้ว่ามันทำงานอยู่ และจะไม่มีใครรู้ด้วยว่าตอนไม่ได้ล็อกอิน
+ * รายชื่อลูกค้าไม่ได้ถูกส่งไปเลย (ซึ่งเงียบที่สุดและแย่ที่สุด)
+ */
+function _chatFileHtml(r) {
+  if (r.marketplace !== 'page365') return '';
+  const c = r._chat;
+  if (!c) {
+    const token = (typeof HubLogin !== 'undefined' && HubLogin.token && HubLogin.token()) || '';
+    return token
+      ? '<div style="font-size:0.78rem; color:#a08a5a; margin-top:3px;">ลูกค้าที่ทักแชท — ส่งไม่สำเร็จรอบนี้ (อัปไฟล์เดิมซ้ำได้ ไม่นับซ้ำ)</div>'
+      : '<div style="font-size:0.78rem; color:#c44; margin-top:3px;">⚠ ยังไม่ได้เข้าสู่ระบบ — รายชื่อลูกค้าที่ทักแชทไม่ได้ถูกส่งไปที่เว็บ</div>';
+  }
+  if (c.skipped) return '';
+  const added = c.added || 0, updated = c.updated || 0;
+  const msg = (added || updated)
+    ? `ลูกค้าที่ทักแชท — ใหม่ ${added} คน${updated ? ` · เพิ่มบิลให้คนเดิม ${updated} คน` : ''} · รวม ${(c.total || 0).toLocaleString('th-TH')} คน`
+    : `ลูกค้าที่ทักแชท — ไม่มีคนใหม่ (บิลที่เคยนับแล้ว ${c.duplicateBills || 0} ใบ)`;
+  return `<div style="font-size:0.78rem; color:#4a7c59; margin-top:3px;">${msg}</div>`;
+}
+
 function _amountFileHtml(r, parcelCount) {
   const info = r.amountInfo || {};
   if (!info.column) {
@@ -7917,6 +7982,7 @@ async function processFileUpload() {
       return `<div style="font-size:0.78rem; color:#c44; margin-top:3px;">⚠ ข้าม ${skipCount} แถว — ${parts}</div>`;
     })() : '';
     const amtHtml = _amountFileHtml(r, tCount);
+    const chatHtml = _chatFileHtml(r);
     return `<div style="padding:8px 10px; margin:6px 0; background:${bg}; border-left:4px solid ${s.bg}; border-radius:8px;">
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         ${mpBadge(r.marketplace)}
@@ -7924,6 +7990,7 @@ async function processFileUpload() {
       </div>
       <div style="font-size:0.82rem; color:#7a6440; margin-top:4px;">${rowSummary}</div>
       ${amtHtml}
+      ${chatHtml}
       ${skipHtml}
     </div>`;
   }).join('');
