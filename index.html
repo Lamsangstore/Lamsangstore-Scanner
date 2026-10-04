@@ -8,7 +8,7 @@
   <title>Lamsangstore — Scanner</title>
   <!-- PWA -->
   <link rel="manifest" href="manifest.json?v=2">
-  <meta name="theme-color" content="#fdf8ed">
+  <meta name="theme-color" content="#f8fafc">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="LS Scanner">
@@ -28,172 +28,88 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"
           integrity="sha384-D/t0ZMqQW31H3az8ktEiNb39wyKnS82iFY52QPACM+IjKW3jDUhyIgh2PApRqJZs"
           crossorigin="anonymous"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@700;800&family=Mitr:wght@300;400;500;600&family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+  <!-- ฟอนต์กลาง Lamsang (LAMSANG-THEME.md) -->
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- บังคับ default = light mode ทุกครั้งที่โหลดไฟล์ใหม่ -->
   <script>
     try { localStorage.setItem('darkMode', '0'); } catch(e) {}
   </script>
   
   <style>
+    /* ===== ธีมกลาง Lamsang — สี/ฟอนต์ตาม App/LAMSANG-THEME.md (ต้นฉบับ = หลังบ้าน lamsangstore.com) =====
+       ชื่อตัวแปรเดิม (--pink, --corn-milk …) คงไว้ให้โค้ดเก่าใช้ได้ แต่ค่าเปลี่ยนเป็นทอง/เทาของร้านแล้ว */
     :root {
-      --pink:        #d4a843;
-      --pink-light:  #f0dda0;
-      --pink-pale:   #fdf8ed;
-      --peach:       #f5e6b8;
-      --lilac:       #f5e6b8;
-      --mint:        #c8e6a0;
-      --cream:       #fffdf3;
-      --brown:       #7a6a40;
-      --text:        #4a4030;
-      --text2:       #7a7060;
-      --text3:       #a09580;
-      --card-bg:     #fdf8ed;
-      --surface:     #fdf8ed;
-      --surface2:    #f5edd8;
-      --border:      rgba(210,195,150,0.3);
-      --border2:     #e8dcc0;
-      --success:     #7ab87a;
-      --danger:      #e08888;
-      --warning:     #e8b070;
-      --info:        #88b8d8;
+      /* ── ทองแบรนด์ ── */
+      --brand-50:    #faf6ec;
+      --brand-100:   #f3ead4;
+      --brand-200:   #e7d5a8;
+      --brand-300:   #d9bf7d;
+      --brand-400:   #ccac60;
+      --brand-500:   #bf9c4f;
+      --brand-600:   #a8853f;   /* ปุ่มหลัก · แท็บที่เลือก */
+      --brand-700:   #886a32;   /* ปุ่มหลักตอน hover · ตัวหนังสือทองบนพื้นขาว */
+      --brand-800:   #6b5329;
+      --brand-900:   #4a3a1d;
+      --panel-900:   #1c1b19;   /* พื้นแถบมืด (เมนูข้างหลังบ้าน) */
+      --pink:        #a8853f;   /* สีเน้นหลัก = brand-600 */
+      --pink-light:  #e7d5a8;   /* brand-200 */
+      --pink-pale:   #faf6ec;   /* brand-50 */
+      --peach:       #f3ead4;
+      --lilac:       #f3ead4;
+      --mint:        #ecfdf5;
+      --cream:       #ffffff;
+      --brown:       #886a32;
+      --text-strong: #0f172a;   /* หัวข้อ */
+      --text:        #334155;   /* เนื้อหา */
+      --text2:       #64748b;   /* คำอธิบาย */
+      --text3:       #94a3b8;   /* placeholder / จาง */
+      --card-bg:     #ffffff;
+      --surface:     #ffffff;
+      --surface2:    #f1f5f9;
+      --border:      #e2e8f0;
+      --border2:     #cbd5e1;
+      /* ── สีสถานะ (เขียว=สำเร็จ แดง=ผิดพลาด ห้ามสลับ) ── */
+      --success:     #059669;
+      --success-bg:  #ecfdf5;
+      --danger:      #dc2626;
+      --danger-bg:   #fef2f2;
+      --warning:     #b45309;
+      --warning-bg:  #fffbeb;
+      --info:        #0369a1;
+      --info-bg:     #f0f9ff;
       --nav-h:       64px;
       --topbar-h:    58px;
       --radius:      24px;
       --radius-sm:   16px;
       --radius-xs:   10px;
       /* ── Neumorphic ── */
-      --bg:          #fdf8ed;
-      --bg-d:        #f5edd8;
-      --sd:          rgba(200,185,140,0.45);
-      --sl:          rgba(255,255,250,0.92);
-      /* ── Pastel Accents ── */
-      --pastel-yellow: #f5e6a0;
-      --pastel-peach:  #f8d8b0;
-      --pastel-green:  #c8e8b8;
-      --pastel-blue:   #b8d8f0;
-      --pastel-pink:   #f0c8c8;
-      --pastel-lavender:#d8c8e8;
-      --corn-milk:     #f5e0a0;
-      --corn-milk-light:#faf0c8;
-      --corn-milk-dark: #d4b860;
-      --accent-rgb:    212,168,67;
+      --bg:          #f8fafc;
+      --bg-d:        #f1f5f9;
+      --sd:          rgba(148,163,184,0.38);
+      --sl:          rgba(255,255,255,0.92);
+      /* ── Pastel Accents (ชื่อเดิม → โทนธีมกลาง) ── */
+      --pastel-yellow: #f3ead4;
+      --pastel-peach:  #fffbeb;
+      --pastel-green:  #ecfdf5;
+      --pastel-blue:   #f0f9ff;
+      --pastel-pink:   #fef2f2;
+      --pastel-lavender:#f1f5f9;
+      --corn-milk:     #f3ead4;
+      --corn-milk-light:#faf6ec;
+      --corn-milk-dark: #bf9c4f;
+      --accent-rgb:    168,133,63;
     }
 
-    /* ===== DAY THEME — โทนสีตามวัน (pastel) ===== */
-    /* จันทร์ — เหลือง */
-    html.day-1 {
-      --pink:        #c8a830;
-      --pink-light:  #f0e090;
-      --pink-pale:   #fdf9e8;
-      --bg:          #fdfaec;
-      --bg-d:        #f5f0d0;
-      --sd:          rgba(195,175,100,0.40);
-      --sl:          rgba(255,255,248,0.92);
-      --day-accent:  #c8a830;
-      --accent-rgb:  200,168,48;
-      background:    #fdfaec;
-    }
-    html.day-1 body { background: #fdfaec !important; }
-    /* อังคาร — ชมพู */
-    html.day-2 {
-      --pink:        #d4748a;
-      --pink-light:  #f5c0cc;
-      --pink-pale:   #fef0f3;
-      --bg:          #fef2f4;
-      --bg-d:        #f8dce2;
-      --sd:          rgba(210,140,155,0.38);
-      --sl:          rgba(255,250,252,0.92);
-      --day-accent:  #d4748a;
-      --accent-rgb:  212,116,138;
-      background:    #fef2f4;
-    }
-    html.day-2 body { background: #fef2f4 !important; }
-    /* พุธ — เขียว */
-    html.day-3 {
-      --pink:        #70a870;
-      --pink-light:  #b8e0b8;
-      --pink-pale:   #f0faf0;
-      --bg:          #f2faf2;
-      --bg-d:        #d8eed8;
-      --sd:          rgba(130,190,130,0.35);
-      --sl:          rgba(248,255,248,0.92);
-      --day-accent:  #70a870;
-      --accent-rgb:  112,168,112;
-      background:    #f2faf2;
-    }
-    html.day-3 body { background: #f2faf2 !important; }
-    /* พฤหัส — ส้ม */
-    html.day-4 {
-      --pink:        #d08040;
-      --pink-light:  #f5c898;
-      --pink-pale:   #fef6ee;
-      --bg:          #fef6ee;
-      --bg-d:        #f8e0c0;
-      --sd:          rgba(210,165,110,0.38);
-      --sl:          rgba(255,252,248,0.92);
-      --day-accent:  #d08040;
-      --accent-rgb:  208,128,64;
-      background:    #fef6ee;
-    }
-    html.day-4 body { background: #fef6ee !important; }
-    /* ศุกร์ — ฟ้า */
-    html.day-5 {
-      --pink:        #5090c0;
-      --pink-light:  #a8d0f0;
-      --pink-pale:   #eef6fc;
-      --bg:          #eef6fd;
-      --bg-d:        #cce4f5;
-      --sd:          rgba(110,170,215,0.35);
-      --sl:          rgba(245,252,255,0.92);
-      --day-accent:  #5090c0;
-      --accent-rgb:  80,144,192;
-      background:    #eef6fd;
-    }
-    html.day-5 body { background: #eef6fd !important; }
-    /* เสาร์ — ม่วง */
-    html.day-6 {
-      --pink:        #8870b8;
-      --pink-light:  #ccc0e8;
-      --pink-pale:   #f5f0fc;
-      --bg:          #f5f0fc;
-      --bg-d:        #e0d4f5;
-      --sd:          rgba(160,140,210,0.35);
-      --sl:          rgba(252,250,255,0.92);
-      --day-accent:  #8870b8;
-      --accent-rgb:  136,112,184;
-      background:    #f5f0fc;
-    }
-    html.day-6 body { background: #f5f0fc !important; }
-    /* อาทิตย์ — แดง */
-    html.day-0 {
-      --pink:        #c85858;
-      --pink-light:  #f0b0b0;
-      --pink-pale:   #fef2f2;
-      --bg:          #fef2f2;
-      --bg-d:        #f8d8d8;
-      --sd:          rgba(210,140,140,0.38);
-      --sl:          rgba(255,250,250,0.92);
-      --day-accent:  #c85858;
-      --accent-rgb:  200,88,88;
-      background:    #fef2f2;
-    }
-    html.day-0 body { background: #fef2f2 !important; }
-
-    /* dark-mode + day: ปรับ shadow ให้เข้มขึ้น รักษา dark bg */
-    html.dark-mode.day-1 { --pink: #c8a830; --pink-light: #3a3010; }
-    html.dark-mode.day-2 { --pink: #d4748a; --pink-light: #3a1820; }
-    html.dark-mode.day-3 { --pink: #70a870; --pink-light: #183018; }
-    html.dark-mode.day-4 { --pink: #d08040; --pink-light: #3a2010; }
-    html.dark-mode.day-5 { --pink: #5090c0; --pink-light: #102838; }
-    html.dark-mode.day-6 { --pink: #8870b8; --pink-light: #281840; }
-    html.dark-mode.day-0 { --pink: #c85858; --pink-light: #381818; }
+    /* ===== DAY THEME — ปิดแล้ว (4 ต.ค. 2569) ทุกวันใช้ธีมกลาง Lamsang สีเดียวกัน
+       JS ยังใส่ class day-0…6 ให้ แต่ไม่มี CSS ผูกกับ class นี้แล้ว ===== */
 
     
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    table, .stat-num, .dash-count, #count { font-variant-numeric: tabular-nums; }
     
     body {
       background: var(--bg);
-      font-family: 'Mitr', 'Sarabun', sans-serif;
+      font-family: 'Noto Sans Thai', system-ui, -apple-system, sans-serif;
       font-size: 17px;
       color: var(--text);
       min-height: 100vh;
@@ -243,7 +159,7 @@
     }
     .topbar-logo {
       width: 38px; height: 38px; border-radius: 13px;
-      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
       display: flex; align-items: center; justify-content: center;
       font-size: 1.2rem; flex-shrink: 0;
       box-shadow: 4px 4px 10px var(--sd), -3px -3px 8px var(--sl);
@@ -274,7 +190,7 @@
       gap: 3px; padding: 7px 10px; border-radius: 20px;
       color: var(--text3); font-size: 0.82rem; font-weight: 500;
       transition: all 0.2s ease;
-      cursor: pointer; font-family: 'Mitr', sans-serif;
+      cursor: pointer; font-family: 'Noto Sans Thai', sans-serif;
       flex: 1;
     }
     .tab-btn .tab-icon { width:28px; height:28px; display:block; transition: transform 0.2s; opacity:0.72; }
@@ -338,7 +254,7 @@
 
     /* ปุ่มคุมกล้อง (ซูม / ไฟฉาย) */
     .cam-ctrl-btn {
-      font-family: 'Mitr', sans-serif; font-size: 0.75rem;
+      font-family: 'Noto Sans Thai', sans-serif; font-size: 0.75rem;
       border: none; border-radius: 14px; padding: 3px 12px;
       background: rgba(var(--accent-rgb),0.14); color: var(--text2);
       box-shadow: 2px 2px 6px var(--sd), -2px -2px 6px var(--sl);
@@ -352,14 +268,14 @@
       border-radius: var(--radius-sm); padding: 14px 16px;
       font-weight: 600; font-size: 1.05rem;
       border: none; transition: all 0.2s ease;
-      font-family: 'Mitr', sans-serif;
+      font-family: 'Noto Sans Thai', sans-serif;
       cursor: pointer;
     }
     .btn-custom:active { box-shadow: inset 3px 3px 8px rgba(0,0,0,0.2), inset -2px -2px 5px rgba(255,255,255,0.1) !important; transform: scale(0.98); }
     .btn-main {
-      background: linear-gradient(135deg, var(--pink-light), var(--pink));
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
       background-size: 200% 200%;
-      color: #5a4820;
+      color: #ffffff;
       font-size: 1.15rem;
       letter-spacing: 0.3px;
       box-shadow: 6px 6px 18px rgba(var(--accent-rgb),0.45), -4px -4px 12px var(--sl),
@@ -375,9 +291,9 @@
                   inset 0 1px 0 rgba(255,255,255,0.4);
       transform: translateY(-1px);
     }
-    html.dark-mode .btn-main { color: #faf5e0; box-shadow: 6px 6px 18px rgba(120,90,10,0.55), -4px -4px 12px var(--sl); }
+    html.dark-mode .btn-main { color: #ffffff; box-shadow: 6px 6px 18px rgba(0,0,0,0.55), -4px -4px 12px var(--sl); }
     .btn-save {
-      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
       color: white;
       box-shadow: 6px 6px 14px rgba(var(--accent-rgb),0.4), -4px -4px 10px var(--sl);
     }
@@ -387,12 +303,12 @@
       color: var(--text2);
     }
     .btn-restart {
-      background: linear-gradient(135deg, #e9a23b, #f4c46a);
+      background: linear-gradient(135deg, var(--warning), var(--warning));
       color: #fff;
-      box-shadow: 5px 5px 12px rgba(212,140,40,0.35), -3px -3px 8px var(--sl);
+      box-shadow: 5px 5px 12px rgba(180,83,9,0.35), -3px -3px 8px var(--sl);
     }
-    .btn-restart:hover { box-shadow: 7px 7px 16px rgba(212,140,40,0.5), -3px -3px 8px var(--sl); }
-    html.dark-mode .btn-restart { color: #fffaeb; box-shadow: 5px 5px 14px rgba(212,140,40,0.5), -3px -3px 8px var(--sl); }
+    .btn-restart:hover { box-shadow: 7px 7px 16px rgba(180,83,9,0.5), -3px -3px 8px var(--sl); }
+    html.dark-mode .btn-restart { color: #ffffff; box-shadow: 5px 5px 14px rgba(180,83,9,0.5), -3px -3px 8px var(--sl); }
 
     /* ===== STATUS BAR FULL WIDTH ===== */
     .status-bar-full {
@@ -400,7 +316,7 @@
       padding: 8px 14px; border-radius: var(--radius-xs);
       font-size: 0.82rem; font-weight: 500;
       margin-top: 10px; transition: all 0.35s ease;
-      font-family: 'Mitr', sans-serif;
+      font-family: 'Noto Sans Thai', sans-serif;
       background: var(--bg); color: var(--text3);
       border-left: 4px solid var(--sd);
       box-shadow: inset 3px 3px 7px var(--sd), inset -3px -3px 7px var(--sl);
@@ -432,17 +348,17 @@
       min-width: 44px; min-height: 44px;
       display: flex; align-items: center; justify-content: center;
       border-radius: 12px; border: none; background: transparent;
-      color: #e08888; font-size: 1rem; cursor: pointer;
+      color: var(--danger); font-size: 1rem; cursor: pointer;
       transition: background 0.15s;
       flex-shrink: 0;
     }
-    .list-group-item .btn-delete-item:hover { background: #fae8e8; }
+    .list-group-item .btn-delete-item:hover { background: var(--danger-bg); }
 
     /* ===== PARCEL BOX FLASH ANIMATION ===== */
     @keyframes parcelFlash {
-      0%   { box-shadow: 0 0 0 0 rgba(122,184,122,0.6); background: linear-gradient(135deg,#e0f8e0,#d0f0d0); }
-      50%  { box-shadow: 0 0 0 12px rgba(122,184,122,0); }
-      100% { box-shadow: none; background: linear-gradient(135deg, rgba(255,240,243,0.7), rgba(255,248,255,0.7)); }
+      0%   { box-shadow: 0 0 0 0 rgba(5,150,105,0.6); background: linear-gradient(135deg,var(--success-bg),#d1fae5); }
+      50%  { box-shadow: 0 0 0 12px rgba(5,150,105,0); }
+      100% { box-shadow: none; background: linear-gradient(135deg, rgba(255,255,255,0.7), rgba(255,255,255,0.7)); }
     }
     .parcel-box.flash-new { animation: parcelFlash 0.7s ease-out forwards; }
 
@@ -466,7 +382,7 @@
       font-size: 0.72rem; color: rgba(255,255,255,0.85);
       background: rgba(0,0,0,0.35); padding: 3px 12px;
       border-radius: 20px; white-space: nowrap;
-      font-family: 'Mitr', sans-serif; pointer-events: none;
+      font-family: 'Noto Sans Thai', sans-serif; pointer-events: none;
     }
 
     /* ===== ONBOARDING TOOLTIP ===== */
@@ -490,13 +406,13 @@
 
     /* ===== STATUS BAR ===== */
     .status-bar-full.bg-light    { background:var(--bg) !important; color:var(--text3); border-left-color:var(--border2); }
-    .status-bar-full.bg-success  { background:#d8f0d0 !important; color:#3a7a3a; border-left-color:var(--success); }
-    .status-bar-full.bg-danger   { background:#f8e0e0 !important; color:#8a4040; border-left-color:var(--danger); }
-    .status-bar-full.bg-warning  { background:var(--bg-d) !important; color:var(--text2); border-left-color:var(--pink); }
-    .status-bar-full.bg-primary  { background:#d0e8f8 !important; color:#2a5a8a; border-left-color:#88b8d8; }
-    .status-bar-full.bg-info     { background:#d0f0f8 !important; color:#1a6a8a; border-left-color:#70c0e0; }
-    .status-bar-full.bg-secondary{ background:#f5f0e8 !important; color:#7a6840; border-left-color:#b0a890; }
-    .status-bar-full.text-muted  { color:#a09580 !important; }
+    .status-bar-full.bg-success  { background:var(--success-bg) !important; color:var(--success); border-left-color:var(--success); }
+    .status-bar-full.bg-danger   { background:var(--danger-bg) !important; color:var(--danger); border-left-color:var(--danger); }
+    .status-bar-full.bg-warning  { background:var(--warning-bg) !important; color:var(--warning); border-left-color:var(--warning); }
+    .status-bar-full.bg-primary  { background:var(--info-bg) !important; color:var(--info); border-left-color:var(--info); }
+    .status-bar-full.bg-info     { background:var(--info-bg) !important; color:var(--info); border-left-color:var(--info); }
+    .status-bar-full.bg-secondary{ background:#f1f5f9 !important; color:#64748b; border-left-color:#cbd5e1; }
+    .status-bar-full.text-muted  { color:#94a3b8 !important; }
     html.dark-mode .status-bar-full.bg-success  { background:rgba(6,78,59,0.4) !important; color:#6ee7b7 !important; }
     html.dark-mode .status-bar-full.bg-danger   { background:rgba(127,29,29,0.4) !important; color:#fca5a5 !important; }
     html.dark-mode .status-bar-full.bg-primary  { background:rgba(30,58,138,0.4) !important; color:#93c5fd !important; }
@@ -540,7 +456,7 @@
     #reader__dashboard { padding: 2px 0 0 !important; background: transparent !important; border: none !important; }
     #reader__dashboard_section_csr { text-align: center; }
     #reader__dashboard_section_csr button {
-      font-family: 'Mitr', sans-serif !important;
+      font-family: 'Noto Sans Thai', sans-serif !important;
       font-size: 0.7rem !important;
       border-radius: 20px !important;
       padding: 3px 14px !important;
@@ -570,7 +486,7 @@
       50% { transform: scale(1.15); opacity: 0.75; }
     }
     html.dark-mode .skeleton-line {
-      background: linear-gradient(90deg, #2a2518 25%, #3a3020 50%, #2a2518 75%);
+      background: linear-gradient(90deg, #2a2825 25%, #3a3833 50%, #2a2825 75%);
       background-size: 200% 100%;
       animation: shimmer 1.4s infinite;
     }
@@ -592,15 +508,15 @@
       box-shadow: 6px 6px 14px var(--sd), -6px -6px 14px var(--sl);
     }
     .btn-cancel:hover { color: var(--text); box-shadow: 7px 7px 16px var(--sd), -7px -7px 16px var(--sl); }
-    html.dark-mode .btn-cancel { color: #c0b080 !important; box-shadow: 4px 4px 10px rgba(0,0,0,0.5), -4px -4px 10px rgba(80,40,60,0.3) !important; }
+    html.dark-mode .btn-cancel { color: #a8a29e !important; box-shadow: 4px 4px 10px rgba(0,0,0,0.5), -4px -4px 10px rgba(58,56,51,0.35) !important; }
 
     /* ===== SAVE BUTTON READY GLOW ===== */
     @keyframes saveGlow {
-      0%,100% { box-shadow: 0 4px 16px rgba(122,184,122,0.4); }
-      50%      { box-shadow: 0 4px 28px rgba(122,184,122,0.75), 0 0 0 4px rgba(122,184,122,0.15); }
+      0%,100% { box-shadow: 0 4px 16px rgba(5,150,105,0.4); }
+      50%      { box-shadow: 0 4px 28px rgba(5,150,105,0.75), 0 0 0 4px rgba(5,150,105,0.15); }
     }
     #saveBtn.ready {
-      background: linear-gradient(135deg, #7ab87a, #90d890) !important;
+      background: linear-gradient(135deg, var(--success), var(--success)) !important;
       animation: saveGlow 1.6s ease-in-out infinite;
     }
 
@@ -610,11 +526,11 @@
       border-radius: 20px; border: none;
       background: var(--bg); color: var(--pink);
       transition: all 0.15s; cursor: pointer;
-      white-space: nowrap; font-family: 'Mitr', sans-serif;
+      white-space: nowrap; font-family: 'Noto Sans Thai', sans-serif;
       box-shadow: 3px 3px 8px var(--sd), -3px -3px 8px var(--sl);
     }
     .btn-edit-inline:hover { box-shadow: inset 2px 2px 5px var(--sd), inset -2px -2px 5px var(--sl); }
-    html.dark-mode .btn-edit-inline { background: #2a2518 !important; }
+    html.dark-mode .btn-edit-inline { background: #2a2825 !important; }
 
     /* ===== PULL TO REFRESH — silent (ไม่แสดง indicator) ===== */
 
@@ -629,28 +545,28 @@
     .order-checklist h6 { font-size: 0.78rem !important; margin-bottom: 6px !important; }
     .checklist-item {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 5px 8px; border-bottom: 1px solid #f5e6a0;
+      padding: 5px 8px; border-bottom: 1px solid var(--border);
       font-size: 0.78rem; border-radius: 6px; margin-bottom: 1px;
     }
     .checklist-item:last-child { border-bottom: none; }
-    .checklist-item.matched { background: #e0f8e0; color: var(--success); font-weight: 600; }
-    .checklist-item.over    { background: #fae8e8; color: var(--danger); font-weight: 600; }
+    .checklist-item.matched { background: var(--success-bg); color: var(--success); font-weight: 600; }
+    .checklist-item.over    { background: var(--danger-bg); color: var(--danger); font-weight: 600; }
     .checklist-item .badge  { font-size: 0.65rem !important; padding: 2px 7px !important; }
 
     /* ===== CUSTOMER REMARK DISPLAY BOX ===== */
     .remark-display-box {
       display: none;
-      background: var(--bg-d);
-      border: 1.5px solid #e8c050;
-      border-left: 5px solid #e8c050;
+      background: var(--warning-bg);
+      border: 1.5px solid var(--warning);
+      border-left: 5px solid var(--warning);
       border-radius: var(--radius-xs);
       padding: 10px 14px;
       margin-top: 10px;
       font-size: 0.88rem;
-      color: #8a6820;
-      font-family: 'Mitr', sans-serif;
+      color: var(--warning);
+      font-family: 'Noto Sans Thai', sans-serif;
       line-height: 1.5;
-      box-shadow: 3px 3px 8px rgba(245,158,11,0.15);
+      box-shadow: 3px 3px 8px rgba(180,83,9,0.12);
       animation: fadeInUp 0.3s ease both;
     }
     html.dark-mode .remark-display-box {
@@ -671,7 +587,7 @@
       font-size: 0.92rem; font-weight: 500; margin: 3px;
       border: none; background: var(--bg);
       cursor: pointer; transition: all 0.2s;
-      font-family: 'Mitr', sans-serif; color: var(--text2);
+      font-family: 'Noto Sans Thai', sans-serif; color: var(--text2);
       box-shadow: 3px 3px 8px var(--sd), -3px -3px 8px var(--sl);
     }
     .remark-btn:hover, .remark-btn.selected {
@@ -681,116 +597,117 @@
 
     /* ===== CLASS-BASED DARK MODE ===== */
     html.dark-mode {
-      --pink:        #c8a84b;
-      --pink-light:  #4a3a1a;
-      --pink-pale:   #1a1917;
-      --text:        #e8e4dc;
-      --text2:       #b0a890;
-      --text3:       #786858;
-      --card-bg:     #252320;
-      --surface:     #2c2a25;
-      --surface2:    #302e28;
-      --border:      rgba(80,75,60,0.45);
-      --border2:     #4a4535;
-      --brown:       #c8b890;
-      --bg:          #252320;
-      --bg-d:        #1e1c19;
-      --sd:          rgba(10,8,5,0.65);
-      --sl:          rgba(80,70,45,0.35);
-      background: #252320;
-      color: #e8e4dc;
+      --pink:        #ccac60;   /* brand-400 สีเน้นในโหมดมืด */
+      --pink-light:  #4a3a1d;   /* brand-900 */
+      --pink-pale:   #1c1b19;
+      --text-strong: #f5f5f4;
+      --text:        #e7e5e4;
+      --text2:       #a8a29e;
+      --text3:       #a8a29e;
+      --card-bg:     #2a2825;
+      --surface:     #2a2825;
+      --surface2:    #3a3833;
+      --border:      #3a3833;
+      --border2:     #3a3833;
+      --brown:       #d9bf7d;
+      --bg:          #1c1b19;
+      --bg-d:        #2a2825;
+      --sd:          rgba(0,0,0,0.55);
+      --sl:          rgba(58,56,51,0.35);
+      background: #1c1b19;
+      color: #e7e5e4;
     }
 
     /* Layout — dark mode uses dark neu shadows */
-    html.dark-mode #app-header  { background: #252320 !important; }
-    html.dark-mode #app-tabs    { background: #252320 !important; }
-    html.dark-mode .tab-btn     { color: #786858 !important; }
-    html.dark-mode .tab-btn.active { color: #e8e4dc !important; }
+    html.dark-mode #app-header  { background: #2a2825 !important; }
+    html.dark-mode #app-tabs    { background: #2a2825 !important; }
+    html.dark-mode .tab-btn     { color: #a8a29e !important; }
+    html.dark-mode .tab-btn.active { color: #e7e5e4 !important; }
 
     /* Cards & surfaces */
-    html.dark-mode .card        { background: #252320 !important; }
-    html.dark-mode .parcel-box  { background: #252320 !important; }
-    html.dark-mode .order-checklist { background: #252320 !important; }
-    html.dark-mode .dash-table-card { background: #252320 !important; }
-    html.dark-mode #dailyTargetInput { background: #1e1c19 !important; color: #e8e4dc !important; border-color: #4a4535 !important; }
-    html.dark-mode .stat-card   { background: #252320 !important; }
-    html.dark-mode .onboarding-tip  { background: #252320 !important; color: #b0a890 !important; }
+    html.dark-mode .card        { background: #2a2825 !important; }
+    html.dark-mode .parcel-box  { background: #2a2825 !important; }
+    html.dark-mode .order-checklist { background: #2a2825 !important; }
+    html.dark-mode .dash-table-card { background: #2a2825 !important; }
+    html.dark-mode #dailyTargetInput { background: #1c1b19 !important; color: #e7e5e4 !important; border-color: #3a3833 !important; }
+    html.dark-mode .stat-card   { background: #2a2825 !important; }
+    html.dark-mode .onboarding-tip  { background: #2a2825 !important; color: #a8a29e !important; }
 
     /* Text */
-    html.dark-mode .section-title { color: #786858 !important; }
-    html.dark-mode .form-text    { color: #786858 !important; }
-    html.dark-mode .text-muted   { color: #786858 !important; }
-    html.dark-mode h6            { color: #e8e4dc !important; }
-    html.dark-mode .small        { color: #b0a890; }
-    html.dark-mode .topbar-title { color: #e8e4dc !important; }
-    html.dark-mode .topbar-sub   { color: #786858 !important; }
+    html.dark-mode .section-title { color: #a8a29e !important; }
+    html.dark-mode .form-text    { color: #a8a29e !important; }
+    html.dark-mode .text-muted   { color: #a8a29e !important; }
+    html.dark-mode h6            { color: #e7e5e4 !important; }
+    html.dark-mode .small        { color: #a8a29e; }
+    html.dark-mode .topbar-title { color: #e7e5e4 !important; }
+    html.dark-mode .topbar-sub   { color: #a8a29e !important; }
 
     /* Status bar */
-    html.dark-mode .status-bar-full                  { background: #252320 !important; color: #786858 !important; border-left-color: #4a4535 !important; }
-    html.dark-mode .status-bar-full.bg-success        { background: rgba(6,78,59,0.35) !important;   color: #6ee7b7 !important; border-left-color: #7ab87a !important; }
-    html.dark-mode .status-bar-full.bg-danger         { background: rgba(127,29,29,0.35) !important;  color: #fca5a5 !important; border-left-color: #e08888 !important; }
-    html.dark-mode .status-bar-full.bg-primary        { background: rgba(30,58,138,0.35) !important;  color: #93c5fd !important; border-left-color: #88b8d8 !important; }
-    html.dark-mode .status-bar-full.bg-warning        { background: rgba(120,53,15,0.35) !important;  color: #fcd34d !important; border-left-color: #e8c050 !important; }
-    html.dark-mode .status-bar-full.bg-info           { background: rgba(3,105,161,0.35) !important;  color: #7dd3fc !important; border-left-color: #70c0e0 !important; }
+    html.dark-mode .status-bar-full                  { background: #2a2825 !important; color: #a8a29e !important; border-left-color: #3a3833 !important; }
+    html.dark-mode .status-bar-full.bg-success        { background: rgba(6,78,59,0.35) !important;   color: #6ee7b7 !important; border-left-color: #059669 !important; }
+    html.dark-mode .status-bar-full.bg-danger         { background: rgba(127,29,29,0.35) !important;  color: #fca5a5 !important; border-left-color: #dc2626 !important; }
+    html.dark-mode .status-bar-full.bg-primary        { background: rgba(30,58,138,0.35) !important;  color: #93c5fd !important; border-left-color: #0369a1 !important; }
+    html.dark-mode .status-bar-full.bg-warning        { background: rgba(120,53,15,0.35) !important;  color: #fcd34d !important; border-left-color: #b45309 !important; }
+    html.dark-mode .status-bar-full.bg-info           { background: rgba(3,105,161,0.35) !important;  color: #7dd3fc !important; border-left-color: #0369a1 !important; }
     html.dark-mode .status-bar-full.bg-secondary      { background: rgba(51,65,85,0.5) !important;    color: #cbd5e1 !important; border-left-color: #64748b !important; }
 
     /* List items */
-    html.dark-mode .list-group-item { background: #2c2a25 !important; color: #e8e4dc !important; border-left-color: #4a4535 !important; }
-    html.dark-mode .list-group-item .btn-delete-item { color: #c8a84b !important; }
-    html.dark-mode .list-group-item[style*="e17055"] { background: #2e2a1e !important; }
+    html.dark-mode .list-group-item { background: #2a2825 !important; color: #e7e5e4 !important; border-left-color: #3a3833 !important; }
+    html.dark-mode .list-group-item .btn-delete-item { color: #fca5a5 !important; }
+    html.dark-mode .list-group-item[style*="e17055"] { background: #3a3833 !important; }
 
     /* Action bar */
-    html.dark-mode .action-bar-sticky { background: rgba(30,28,25,0.96) !important; border-top-color: #4a4535 !important; }
-    html.dark-mode #refreshCacheBtn   { background: #2c2a25 !important; color: var(--pink) !important; }
-    html.dark-mode .btn-neu-sm        { background: #2c2a25 !important; color: var(--pink) !important; }
-    html.dark-mode .btn-neu-icon      { background: #2c2a25 !important; color: #b0a890 !important; }
-    html.dark-mode .input-neu-wrap    { background: #1e1c19 !important; }
-    html.dark-mode .file-input-neu    { background: #1e1c19 !important; color: #b0a890 !important; }
-    html.dark-mode #dailyTargetInput  { background: #1e1c19 !important; color: #e8e4dc !important; }
+    html.dark-mode .action-bar-sticky { background: rgba(28,27,25,0.96) !important; border-top-color: #3a3833 !important; }
+    html.dark-mode #refreshCacheBtn   { background: #2a2825 !important; color: var(--pink) !important; }
+    html.dark-mode .btn-neu-sm        { background: #2a2825 !important; color: var(--pink) !important; }
+    html.dark-mode .btn-neu-icon      { background: #2a2825 !important; color: #a8a29e !important; }
+    html.dark-mode .input-neu-wrap    { background: #1c1b19 !important; }
+    html.dark-mode .file-input-neu    { background: #1c1b19 !important; color: #a8a29e !important; }
+    html.dark-mode #dailyTargetInput  { background: #1c1b19 !important; color: #e7e5e4 !important; }
 
     /* Forms */
     html.dark-mode input:not([type=file]),
     html.dark-mode select,
-    html.dark-mode .form-control:not([type=file]) { background: #2c2a25 !important; color: #e8e4dc !important; border-color: #4a4535 !important; }
-    html.dark-mode input[type=file].form-control  { background: #2c2a25 !important; color: #b0a890 !important; border-color: #4a4535 !important; }
-    html.dark-mode .input-group .btn-primary  { background: #2a2820 !important; border-color: #4a4535 !important; }
-    html.dark-mode .input-group .btn-success  { background: #1a3a2a !important; border-color: #7ab87a !important; }
-    html.dark-mode .table          { color: #e8e4dc !important; }
-    html.dark-mode .table-light    { background: #2c2a25 !important; color: #b0a890 !important; }
+    html.dark-mode .form-control:not([type=file]) { background: #2a2825 !important; color: #e7e5e4 !important; border-color: #3a3833 !important; }
+    html.dark-mode input[type=file].form-control  { background: #2a2825 !important; color: #a8a29e !important; border-color: #3a3833 !important; }
+    html.dark-mode .input-group .btn-primary  { background: #2a2825 !important; border-color: #3a3833 !important; }
+    html.dark-mode .input-group .btn-success  { background: #1a3a2a !important; border-color: #059669 !important; }
+    html.dark-mode .table          { color: #e7e5e4 !important; }
+    html.dark-mode .table-light    { background: #2a2825 !important; color: #a8a29e !important; }
     html.dark-mode .table-hover tbody tr:hover { background: rgba(var(--accent-rgb),0.06) !important; }
-    html.dark-mode .dash-date-input { background: #2c2a25 !important; color: #e8e4dc !important; border-color: #4a4535 !important; }
+    html.dark-mode .dash-date-input { background: #2a2825 !important; color: #e7e5e4 !important; border-color: #3a3833 !important; }
 
     /* Dashboard */
-    html.dark-mode .dash-presets   { background: rgba(37,35,32,0.8) !important; border-color: #4a4535 !important; }
-    html.dark-mode .preset-btn     { color: #b0a890 !important; }
-    html.dark-mode .preset-btn.active { background: linear-gradient(135deg,#3a3020,#2a2810) !important; color: white !important; }
-    html.dark-mode .stat-num       { color: #c8a84b !important; }
-    html.dark-mode .dash-period-badge { background: linear-gradient(135deg,#302e20,#28260e) !important; color: #e8e4dc !important; }
+    html.dark-mode .dash-presets   { background: rgba(42,40,37,0.8) !important; border-color: #3a3833 !important; }
+    html.dark-mode .preset-btn     { color: #a8a29e !important; }
+    html.dark-mode .preset-btn.active { background: linear-gradient(135deg,#6b5329,#4a3a1d) !important; color: white !important; }
+    html.dark-mode .stat-num       { color: #ccac60 !important; }
+    html.dark-mode .dash-period-badge { background: linear-gradient(135deg,#3a3833,#2a2825) !important; color: #e7e5e4 !important; }
 
     /* Checklist */
-    html.dark-mode .checklist-item          { border-bottom-color: #3a3820 !important; color: #b0a890 !important; }
-    html.dark-mode .checklist-item.matched  { background: rgba(122,184,122,0.15) !important; color: #6ee7b7 !important; }
+    html.dark-mode .checklist-item          { border-bottom-color: #3a3833 !important; color: #a8a29e !important; }
+    html.dark-mode .checklist-item.matched  { background: rgba(5,150,105,0.15) !important; color: #6ee7b7 !important; }
     html.dark-mode .checklist-item.over     { background: rgba(214,48,49,0.15) !important; color: #fca5a5 !important; }
 
     /* Remark panel */
-    html.dark-mode .remark-panel  { background: #2a2818 !important; border-color: #6b5010 !important; }
-    html.dark-mode .remark-btn    { background: #302e18 !important; border-color: #6b5010 !important; color: #e8d090 !important; }
-    html.dark-mode .remark-btn:hover, html.dark-mode .remark-btn.selected { background: #6b5010 !important; color: #faf5e0 !important; }
+    html.dark-mode .remark-panel  { background: #2a2825 !important; border-color: #6b5329 !important; }
+    html.dark-mode .remark-btn    { background: #3a3833 !important; border-color: #6b5329 !important; color: #d9bf7d !important; }
+    html.dark-mode .remark-btn:hover, html.dark-mode .remark-btn.selected { background: #6b5329 !important; color: #ffffff !important; }
 
     /* Modal — อัปโหลด */
-    html.dark-mode .modal-content  { background: #252320 !important; }
-    html.dark-mode .modal-body     { background: #252320 !important; color: #e8e4dc !important; }
-    html.dark-mode .modal-footer   { background: #1e1c19 !important; }
-    html.dark-mode .mp-option      { background: #252320 !important; color: #e8e4dc !important; }
-    html.dark-mode .mp-name        { color: #e8e4dc !important; }
-    html.dark-mode .mp-desc        { color: #786858 !important; }
-    html.dark-mode .mp-guide-btn   { background: #1e1c19 !important; color: var(--pink) !important; border: none !important; }
-    html.dark-mode .modal-footer .btn { color: #b0a890 !important; background: #1e1c19 !important; border: none !important; }
+    html.dark-mode .modal-content  { background: #2a2825 !important; }
+    html.dark-mode .modal-body     { background: #2a2825 !important; color: #e7e5e4 !important; }
+    html.dark-mode .modal-footer   { background: #1c1b19 !important; }
+    html.dark-mode .mp-option      { background: #2a2825 !important; color: #e7e5e4 !important; }
+    html.dark-mode .mp-name        { color: #e7e5e4 !important; }
+    html.dark-mode .mp-desc        { color: #a8a29e !important; }
+    html.dark-mode .mp-guide-btn   { background: #1c1b19 !important; color: var(--pink) !important; border: none !important; }
+    html.dark-mode .modal-footer .btn { color: #a8a29e !important; background: #1c1b19 !important; border: none !important; }
 
     /* Swal overrides */
-    html.dark-mode .swal2-popup    { background: #252320 !important; color: #e8e4dc !important; }
+    html.dark-mode .swal2-popup    { background: #2a2825 !important; color: #e7e5e4 !important; }
     html.dark-mode .swal2-title,
-    html.dark-mode .swal2-html-container { color: #e8e4dc !important; }
+    html.dark-mode .swal2-html-container { color: #e7e5e4 !important; }
 
     /* ===== PARCEL INFO BOX ===== */
     .parcel-box {
@@ -808,12 +725,12 @@
       box-shadow: 12px 12px 28px var(--sd), -12px -12px 28px var(--sl) !important;
     }
     .modal-header {
-      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink))) !important;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700)) !important;
       border-radius: calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0 !important;
       padding: 14px 18px !important;
     }
     .modal-body { background: var(--bg) !important; }
-    .modal-footer { background: var(--bg-d) !important; border-top: 1px solid rgba(212,185,120,0.2) !important; }
+    .modal-footer { background: var(--bg-d) !important; border-top: 1px solid var(--border) !important; }
     .modal-title { color: white !important; font-size: 1rem !important; font-weight: 600 !important; }
 
     /* ===== DASHBOARD CARDS ===== */
@@ -826,7 +743,7 @@
     }
     .stat-num {
       font-size: 3rem; font-weight: 600;
-      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
+      background: linear-gradient(135deg, var(--pink), var(--pink));
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
@@ -834,7 +751,7 @@
     /* ===== SCROLLBAR ===== */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg-d); }
-    ::-webkit-scrollbar-thumb { background: rgba(190,188,180,0.55); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.55); border-radius: 10px; }
 
     /* ===== ANIMATE ===== */
     .fade-in-up { animation: fadeInUp 0.25s ease both; }
@@ -864,7 +781,7 @@
       font-size: 0.78rem; font-weight: 500;
       border: none; background: var(--bg); color: var(--text3);
       cursor: pointer; transition: all 0.15s;
-      font-family: 'Mitr', sans-serif;
+      font-family: 'Noto Sans Thai', sans-serif;
       box-shadow: 3px 3px 8px var(--sd), -3px -3px 8px var(--sl);
     }
     .preset-btn:hover, .preset-btn.active {
@@ -880,13 +797,13 @@
     }
     .dash-date-input {
       border: none; border-radius: 12px;
-      padding: 6px 10px; font-family: 'Mitr', sans-serif;
+      padding: 6px 10px; font-family: 'Noto Sans Thai', sans-serif;
       font-size: 0.82rem; color: var(--text);
       flex: 1; min-width: 0; background: transparent;
     }
     .dash-search-btn {
       border-radius: 12px; padding: 6px 14px;
-      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
       border: none; color: white; font-size: 0.9rem;
       cursor: pointer; transition: all 0.2s;
       box-shadow: 4px 4px 10px rgba(var(--accent-rgb),0.4), -3px -3px 8px var(--sl);
@@ -897,11 +814,11 @@
       border: none;
       border-radius: 20px; padding: 5px 16px;
       font-size: 0.8rem; color: var(--text3);
-      font-family: 'Mitr', sans-serif;
+      font-family: 'Noto Sans Thai', sans-serif;
       box-shadow: 3px 3px 8px var(--sd), -3px -3px 8px var(--sl);
     }
     .dash-table-card {
-      background: var(--bg); border-radius: 22px;
+      background: var(--card-bg); border-radius: 22px;
       padding: 16px; border: none;
       box-shadow: 8px 8px 20px var(--sd), -8px -8px 20px var(--sl);
     }
@@ -932,35 +849,35 @@
     .swal-popup {
       border-radius: var(--radius) !important;
       border: none !important;
-      font-family: 'Mitr', sans-serif !important;
+      font-family: 'Noto Sans Thai', sans-serif !important;
       background: var(--bg) !important;
       box-shadow: 12px 12px 28px var(--sd), -12px -12px 28px var(--sl) !important;
     }
     .swal-ttl {
-      font-family: 'Mitr', sans-serif !important;
+      font-family: 'Noto Sans Thai', sans-serif !important;
       color: var(--text) !important;
       font-size: 1.1rem !important; font-weight: 600 !important;
     }
     .swal-btn {
       border-radius: var(--radius-sm) !important;
-      font-family: 'Mitr', sans-serif !important;
+      font-family: 'Noto Sans Thai', sans-serif !important;
       font-size: 0.92rem !important; font-weight: 600 !important;
       padding: 10px 22px !important;
     }
-    /* ✅ Swal confirm button ใช้สีตามวัน */
+    /* ✅ Swal confirm button ใช้ทองธีมกลาง (brand-600) */
     .swal2-confirm.swal-btn,
     .swal2-confirm.swal-remark-confirm {
-      background: linear-gradient(135deg, var(--pink-light), var(--pink)) !important;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700)) !important;
       color: white !important;
       border: none !important;
     }
     .swal2-confirm.swal-btn {
-      background: linear-gradient(135deg, var(--pink-light), var(--pink)) !important;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700)) !important;
       color: white !important;
       border: none !important;
     }
     .swal2-cancel.swal-btn {
-      background: #b2bec3 !important;
+      background: #64748b !important;
     }
 
     /* === MARKETPLACE SELECTOR === */
@@ -997,13 +914,13 @@
     }
     .mp-label { display: flex; flex-direction: column; }
     .mp-name { font-weight: 600; font-size: 0.92rem; color: var(--text); }
-    .mp-desc { font-size: 0.72rem; color: #b89840; margin-top: 1px; }
+    .mp-desc { font-size: 0.72rem; color: var(--brand-700); margin-top: 1px; }
     .mp-guide-btn {
       margin-left: auto; flex-shrink: 0;
       font-size: 0.72rem; padding: 5px 11px;
       border-radius: 12px; border: none;
       background: var(--bg); color: var(--pink);
-      text-decoration: none; font-family: 'Mitr', sans-serif;
+      text-decoration: none; font-family: 'Noto Sans Thai', sans-serif;
       transition: all 0.2s; white-space: nowrap;
       display: flex; align-items: center; gap: 4px;
       box-shadow: 3px 3px 7px var(--sd), -3px -3px 7px var(--sl);
@@ -1029,7 +946,7 @@
     .btn-neu-sm {
       border: none; background: var(--bg); border-radius: 12px;
       box-shadow: 3px 3px 8px var(--sd), -3px -3px 8px var(--sl);
-      color: var(--pink); font-family: 'Mitr', sans-serif; font-weight: 500;
+      color: var(--pink); font-family: 'Noto Sans Thai', sans-serif; font-weight: 500;
       cursor: pointer; transition: all 0.15s;
     }
     .btn-neu-sm:hover { box-shadow: inset 2px 2px 5px var(--sd), inset -2px -2px 5px var(--sl); }
@@ -1042,14 +959,14 @@
     }
     .search-act-none {
       cursor: default; border-radius: 12px; border: 1.5px dashed var(--text3);
-      color: var(--text2); font-family: 'Mitr', sans-serif; font-weight: 500; background: transparent;
+      color: var(--text2); font-family: 'Noto Sans Thai', sans-serif; font-weight: 500; background: transparent;
     }
     .search-status {
       display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
       font-size: 0.8rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; white-space: nowrap;
     }
-    .search-status.packed  { background: #2e7d5b; color: #fff; }
-    .search-status.pending { background: #f4d58d; color: #5a4410; }
+    .search-status.packed  { background: var(--success); color: #fff; }
+    .search-status.pending { background: #fef3c7; color: var(--warning); }
     /* scan actions row (undo + manual) */
     #scanActions { display: none; }
     #scanActions.active { display: flex !important; gap: 6px; }
@@ -1060,7 +977,7 @@
       border-radius: 14px;
       padding: 3px 11px;
       font-size: 0.74rem;
-      font-family: 'Mitr', sans-serif;
+      font-family: 'Noto Sans Thai', sans-serif;
       color: var(--text2);
       cursor: pointer;
       box-shadow: 2px 2px 5px var(--sd), -2px -2px 5px var(--sl);
@@ -1076,16 +993,16 @@
       border-color: var(--chip-color, var(--pink));
       box-shadow: inset 2px 2px 5px rgba(0,0,0,0.18);
     }
-    html.dark-mode .filter-chip { background: #2c2a25; color: #e8e4dc; }
+    html.dark-mode .filter-chip { background: #2a2825; color: #e7e5e4; }
     /* Recent searches dropdown items */
     .recent-search-item {
       display: flex; align-items: center; gap: 8px;
       padding: 7px 10px; border-radius: 10px;
       cursor: pointer; font-size: 0.85rem;
-      color: var(--text2); font-family: 'Mitr', sans-serif;
+      color: var(--text2); font-family: 'Noto Sans Thai', sans-serif;
       transition: background 0.15s;
     }
-    .recent-search-item:hover { background: rgba(155,114,207,0.1); }
+    .recent-search-item:hover { background: rgba(var(--accent-rgb),0.1); }
     .recent-search-item .rs-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .recent-search-item .rs-remove {
       background: none; border: none; color: var(--text3); cursor: pointer;
@@ -1104,7 +1021,7 @@
       text-align: center;
       min-width: 72px;
       transition: all 0.18s ease;
-      font-family: 'Mitr', sans-serif;
+      font-family: 'Noto Sans Thai', sans-serif;
       color: var(--text);
       line-height: 1.2;
     }
@@ -1112,14 +1029,14 @@
     .scan-history-chip:active { box-shadow: inset 2px 2px 5px var(--sd), inset -2px -2px 5px var(--sl); transform: translateY(0); }
     .scan-history-chip .shc-tail { font-weight: 700; color: var(--pink); font-size: 0.78rem; letter-spacing: 0.3px; }
     .scan-history-chip .shc-meta { font-size: 0.65rem; color: var(--text3); margin-top: 1px; }
-    html.dark-mode .scan-history-chip { background: #2c2a25; color: #e8e4dc; }
+    html.dark-mode .scan-history-chip { background: #2a2825; color: #e7e5e4; }
     #scanHistoryList::-webkit-scrollbar { height: 4px; }
-    #scanHistoryList::-webkit-scrollbar-thumb { background: rgba(155,114,207,0.3); border-radius: 4px; }
+    #scanHistoryList::-webkit-scrollbar-thumb { background: rgba(var(--accent-rgb),0.3); border-radius: 4px; }
     /* neumorphic gold action button */
     .btn-neu-gold {
-      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)));
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
       color: white; border: none; border-radius: 12px;
-      font-family: 'Mitr', sans-serif; font-weight: 600;
+      font-family: 'Noto Sans Thai', sans-serif; font-weight: 600;
       cursor: pointer; transition: all 0.2s; flex-shrink: 0;
       box-shadow: 4px 4px 10px rgba(var(--accent-rgb),0.4), -3px -3px 8px var(--sl);
     }
@@ -1133,7 +1050,7 @@
     .input-neu-wrap input {
       background: transparent; border: none; outline: none;
       padding: 12px 14px; width: 100%;
-      font-family: 'Mitr', sans-serif; font-size: 0.93rem; color: var(--text);
+      font-family: 'Noto Sans Thai', sans-serif; font-size: 0.93rem; color: var(--text);
     }
     /* neumorphic inset file input */
     .file-input-neu {
@@ -1141,30 +1058,30 @@
       border-radius: 14px !important; outline: none !important;
       box-shadow: inset 4px 4px 10px var(--sd), inset -4px -4px 10px var(--sl) !important;
       color: var(--text2) !important; padding: 10px 14px !important;
-      font-family: 'Mitr', sans-serif !important;
+      font-family: 'Noto Sans Thai', sans-serif !important;
     }
     /* Drag-and-drop zone */
     .drop-zone {
       position: relative;
       background: var(--bg);
-      border: 2px dashed #d4a843;
+      border: 2px dashed var(--pink);
       border-radius: 16px;
       padding: 22px 16px;
       text-align: center;
       cursor: pointer;
       color: var(--text2);
-      font-family: 'Mitr', sans-serif;
+      font-family: 'Noto Sans Thai', sans-serif;
       box-shadow: inset 3px 3px 8px var(--sd), inset -3px -3px 8px var(--sl);
       transition: all 0.2s ease;
     }
     .drop-zone:hover {
       border-color: var(--pink);
-      background: #fff8e8;
+      background: var(--brand-50);
     }
     .drop-zone.dragover {
       border-color: var(--pink);
-      background: #fff0c2;
-      box-shadow: 0 0 0 4px rgba(212,168,67,0.18), inset 3px 3px 8px var(--sd), inset -3px -3px 8px var(--sl);
+      background: var(--brand-100);
+      box-shadow: 0 0 0 4px rgba(var(--accent-rgb),0.18), inset 3px 3px 8px var(--sd), inset -3px -3px 8px var(--sl);
       transform: scale(1.01);
     }
     .drop-zone .dz-icon {
@@ -1174,7 +1091,7 @@
       font-size: 0.95rem; line-height: 1.5;
     }
     .drop-zone .dz-hint {
-      font-size: 0.78rem; color: #a08a5a; margin-top: 4px;
+      font-size: 0.78rem; color: var(--text2); margin-top: 4px;
     }
     .drop-zone input[type=file] {
       position: absolute; inset: 0; opacity: 0; cursor: pointer;
@@ -1199,14 +1116,14 @@
       background: none; border: none; color: var(--pink); font-size: 1.1rem;
       cursor: pointer; padding: 0 4px; line-height: 1;
     }
-    html.dark-mode .drop-zone { background: #1e1c19; color: #b0a890; border-color: #6b5a30; }
-    html.dark-mode .drop-zone:hover { background: #2a2620; border-color: var(--pink); }
-    html.dark-mode .drop-zone.dragover { background: #3a3220; }
-    html.dark-mode .dz-filelist .dz-file { background: #2c2a25; color: #e8e4dc; }
+    html.dark-mode .drop-zone { background: #1c1b19; color: #a8a29e; border-color: #6b5329; }
+    html.dark-mode .drop-zone:hover { background: #3a3833; border-color: var(--pink); }
+    html.dark-mode .drop-zone.dragover { background: #3a3833; }
+    html.dark-mode .dz-filelist .dz-file { background: #2a2825; color: #e7e5e4; }
     /* Global drop overlay — ลากไฟล์มาวางที่ไหนก็ได้ในแอป */
     .global-drop-overlay {
       position: fixed; inset: 0;
-      background: rgba(212,168,67,0.18);
+      background: rgba(var(--accent-rgb),0.18);
       backdrop-filter: blur(4px);
       -webkit-backdrop-filter: blur(4px);
       display: none;
@@ -1219,20 +1136,20 @@
       background: white;
       padding: 36px 52px;
       border-radius: 22px;
-      border: 3px dashed #d4a843;
+      border: 3px dashed var(--pink);
       text-align: center;
       box-shadow: 0 12px 50px rgba(0,0,0,0.25);
       animation: gdoPop 0.3s cubic-bezier(0.34,1.56,0.64,1);
     }
     @keyframes gdoPop { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .global-drop-overlay .gdo-icon { font-size: 4rem; line-height: 1; }
-    .global-drop-overlay .gdo-text { font-size: 1.3rem; font-weight: 600; color: #7a6440; margin-top: 10px; font-family: 'Mitr', sans-serif; }
-    .global-drop-overlay .gdo-hint { font-size: 0.88rem; color: #a08a5a; margin-top: 4px; font-family: 'Mitr', sans-serif; }
-    html.dark-mode .global-drop-overlay .gdo-inner { background: #2c2a25; }
-    html.dark-mode .global-drop-overlay .gdo-text { color: #e8d8a8; }
+    .global-drop-overlay .gdo-text { font-size: 1.3rem; font-weight: 600; color: var(--text-strong); margin-top: 10px; font-family: 'Noto Sans Thai', sans-serif; }
+    .global-drop-overlay .gdo-hint { font-size: 0.88rem; color: var(--text2); margin-top: 4px; font-family: 'Noto Sans Thai', sans-serif; }
+    html.dark-mode .global-drop-overlay .gdo-inner { background: #2a2825; }
+    html.dark-mode .global-drop-overlay .gdo-text { color: #d9bf7d; }
     /* Progress bar inside Swal */
     .upload-progress-bar {
-      background: #f0e0c0;
+      background: var(--border);
       border-radius: 8px;
       height: 14px;
       overflow: hidden;
@@ -1240,7 +1157,7 @@
       margin: 8px 0;
     }
     .upload-progress-bar > div {
-      background: linear-gradient(90deg, #d4a843, #e9c46a, #f5d97e);
+      background: linear-gradient(90deg, var(--brand-600), var(--brand-500), var(--brand-300));
       background-size: 200% 100%;
       animation: progressShimmer 2s linear infinite;
       height: 100%;
@@ -1251,7 +1168,7 @@
       0% { background-position: 200% 0; }
       100% { background-position: -200% 0; }
     }
-    html.dark-mode .upload-progress-bar { background: #3a3220; }
+    html.dark-mode .upload-progress-bar { background: #3a3833; }
     /* network badge — neumorphic */
     #networkBadge {
       background: var(--bg); border-radius: 20px;
@@ -1272,20 +1189,20 @@
     .search-bar-row {
       display: flex; gap: 8px; align-items: center;
     }
-    html.dark-mode .input-neu-wrap input { color: #e8e4dc; }
-    html.dark-mode .btn-neu-icon { color: #b0a890; }
-    html.dark-mode .btn-neu-sm { background: #2c2a25 !important; }
+    html.dark-mode .input-neu-wrap input { color: #e7e5e4; }
+    html.dark-mode .btn-neu-icon { color: #a8a29e; }
+    html.dark-mode .btn-neu-sm { background: #2a2825 !important; }
 
     /* ===== SWAL REMARK POPUP ===== */
     .swal-remark-popup {
       border-radius: var(--radius) !important;
-      font-family: 'Mitr', sans-serif !important;
+      font-family: 'Noto Sans Thai', sans-serif !important;
     }
     .swal-remark-btn {
       display: block; width: 100%;
       padding: 12px 16px;
       font-size: 0.95rem; font-weight: 500;
-      font-family: 'Mitr', sans-serif;
+      font-family: 'Noto Sans Thai', sans-serif;
       border: 2px solid var(--border2);
       border-radius: var(--radius-sm);
       background: var(--bg);
@@ -1306,13 +1223,13 @@
       box-shadow: 0 0 0 3px rgba(var(--accent-rgb),0.2);
     }
     html.dark-mode .swal-remark-btn {
-      background: #2c2a25; border-color: #4a4535; color: #e8e4dc;
+      background: #2a2825; border-color: #3a3833; color: #e7e5e4;
     }
     html.dark-mode .swal-remark-btn:hover {
-      border-color: #8a7840; background: #3a3525;
+      border-color: #886a32; background: #3a3833;
     }
     html.dark-mode .swal-remark-btn.swal-remark-selected {
-      border-color: var(--pink); background: #3a3020; color: #e0c860;
+      border-color: var(--pink); background: #4a3a1d; color: #d9bf7d;
     }
 
     /* ============================================================
@@ -1349,7 +1266,7 @@
 
     /* ── Top Bar Logo Pulse ── */
     .topbar-logo {
-      background: linear-gradient(135deg, var(--pink-light), var(--pink), var(--day-accent, var(--pink))) !important;
+      background: linear-gradient(135deg, var(--brand-500), var(--brand-600), var(--brand-700)) !important;
       animation: logoPulse 3s ease-in-out infinite, logoAppear 0.8s cubic-bezier(0.34,1.56,0.64,1) 0.2s both;
     }
     @keyframes logoPulse {
@@ -1381,7 +1298,7 @@
       content: '';
       position: absolute;
       inset: 0;
-      background: radial-gradient(circle at center, rgba(var(--day-accent, 212,168,67),0.15) 0%, transparent 70%);
+      background: radial-gradient(circle at center, rgba(var(--accent-rgb),0.15) 0%, transparent 70%);
       opacity: 0;
       transition: opacity 0.3s;
       border-radius: inherit;
@@ -1403,7 +1320,7 @@
     /* ── Cards Entrance ── */
     .card {
       animation: cardFloatIn 0.6s cubic-bezier(0.23,1,0.32,1) 0.3s both;
-      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
+      background: var(--card-bg) !important;
       transition: transform 0.3s ease, box-shadow 0.3s ease !important;
     }
     .card:hover {
@@ -1425,8 +1342,8 @@
 
     /* ── Buttons – Corn Milk Glow ── */
     .btn-main {
-      background: linear-gradient(135deg, var(--pink-light), var(--pink), var(--day-accent, var(--pink))) !important;
-      color: #5a4820 !important;
+      background: linear-gradient(135deg, var(--brand-500), var(--brand-600), var(--brand-700)) !important;
+      color: #ffffff !important;
       position: relative;
       overflow: hidden;
       animation: startBtnShimmer 3s ease-in-out infinite, btnAppear 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.5s both;
@@ -1449,8 +1366,8 @@
     }
 
     .btn-save {
-      background: linear-gradient(135deg, #a8d8a0, #7ab87a) !important;
-      color: #2a5a2a !important;
+      background: linear-gradient(135deg, var(--success), var(--success)) !important;
+      color: #ffffff !important;
       transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
     .btn-save:hover { transform: translateY(-2px) scale(1.02); }
@@ -1461,11 +1378,11 @@
       color: var(--text3) !important;
       transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
-    .btn-cancel:hover { transform: translateY(-1px); color: #7a7060 !important; }
+    .btn-cancel:hover { transform: translateY(-1px); color: var(--text2) !important; }
 
     .btn-neu-gold {
-      background: linear-gradient(135deg, var(--pink-light), var(--pink)) !important;
-      color: #5a4820 !important;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700)) !important;
+      color: #ffffff !important;
       transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1) !important;
       position: relative;
       overflow: hidden;
@@ -1486,7 +1403,7 @@
     .btn-neu-gold:hover { transform: translateY(-2px) scale(1.02); }
 
     .btn-neu-sm {
-      color: #b89840 !important;
+      color: var(--brand-700) !important;
       transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
     .btn-neu-sm:hover { transform: scale(1.03); }
@@ -1513,19 +1430,19 @@
       to   { opacity: 1; transform: translateX(0); }
     }
     .status-bar-full.bg-success { 
-      background: linear-gradient(135deg, #d8f0d0, #c0e8b0) !important;
-      color: #3a7a3a !important;
-      border-left-color: #7ab87a !important;
+      background: linear-gradient(135deg, var(--success-bg), #d1fae5) !important;
+      color: var(--success) !important;
+      border-left-color: var(--success) !important;
       animation: statusSlideIn 0.4s cubic-bezier(0.23,1,0.32,1) both, successPulse 2s ease-in-out;
     }
     @keyframes successPulse {
       0%,100% { box-shadow: inset 3px 3px 7px var(--sd), inset -3px -3px 7px var(--sl); }
-      50%     { box-shadow: inset 3px 3px 7px var(--sd), inset -3px -3px 7px var(--sl), 0 0 12px rgba(122,184,122,0.3); }
+      50%     { box-shadow: inset 3px 3px 7px var(--sd), inset -3px -3px 7px var(--sl), 0 0 12px rgba(5,150,105,0.3); }
     }
     .status-bar-full.bg-danger { 
-      background: linear-gradient(135deg, #f8d8d8, #f0c0c0) !important;
-      color: #8a4040 !important;
-      border-left-color: #e08888 !important;
+      background: linear-gradient(135deg, var(--danger-bg), #fee2e2) !important;
+      color: var(--danger) !important;
+      border-left-color: var(--danger) !important;
       animation: statusSlideIn 0.4s both, dangerShake 0.5s ease-in-out;
     }
     @keyframes dangerShake {
@@ -1536,24 +1453,24 @@
       80%     { transform: translateX(2px); }
     }
     .status-bar-full.bg-warning { 
-      background: linear-gradient(135deg, var(--bg-d), var(--pink-light)) !important;
-      color: #8a6820 !important;
-      border-left-color: #e8b070 !important;
+      background: linear-gradient(135deg, var(--warning-bg), #fef3c7) !important;
+      color: var(--warning) !important;
+      border-left-color: var(--warning) !important;
     }
     .status-bar-full.bg-primary { 
-      background: linear-gradient(135deg, #d0e8f8, #b8d8f0) !important;
-      color: #2a5a8a !important;
-      border-left-color: #88b8d8 !important;
+      background: linear-gradient(135deg, var(--info-bg), var(--info-bg)) !important;
+      color: var(--info) !important;
+      border-left-color: var(--info) !important;
     }
     .status-bar-full.bg-info { 
-      background: linear-gradient(135deg, #d0f0f8, #b0e0f0) !important;
-      color: #1a6a8a !important;
-      border-left-color: #70c0e0 !important;
+      background: linear-gradient(135deg, var(--info-bg), var(--info-bg)) !important;
+      color: var(--info) !important;
+      border-left-color: var(--info) !important;
     }
 
     /* ── Parcel Box Animations ── */
     .parcel-box {
-      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
+      background: var(--card-bg) !important;
       transition: all 0.4s cubic-bezier(0.23,1,0.32,1) !important;
       animation: parcelBoxAppear 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
     }
@@ -1562,8 +1479,8 @@
       to   { opacity: 1; transform: scale(1) translateY(0); }
     }
     @keyframes parcelFlash {
-      0%   { box-shadow: 0 0 0 0 rgba(122,184,122,0.6); background: linear-gradient(135deg,#e8fae8,#d0f0d0); }
-      50%  { box-shadow: 0 0 0 14px rgba(122,184,122,0); }
+      0%   { box-shadow: 0 0 0 0 rgba(5,150,105,0.6); background: linear-gradient(135deg,var(--success-bg),#d1fae5); }
+      50%  { box-shadow: 0 0 0 14px rgba(5,150,105,0); }
       100% { box-shadow: 8px 8px 18px var(--sd), -8px -8px 18px var(--sl); background: linear-gradient(145deg, var(--bg), var(--bg-d)); }
     }
 
@@ -1601,12 +1518,12 @@
     }
     @keyframes viewfinderPulse {
       0%,100% { border-color: rgba(var(--accent-rgb),0.85); box-shadow: 0 0 0 2000px rgba(0,0,0,0.18); }
-      50%     { border-color: rgba(245,224,160,0.95); box-shadow: 0 0 0 2000px rgba(0,0,0,0.12), 0 0 20px rgba(var(--accent-rgb),0.3); }
+      50%     { border-color: rgba(217,191,125,0.95); box-shadow: 0 0 0 2000px rgba(0,0,0,0.12), 0 0 20px rgba(var(--accent-rgb),0.3); }
     }
 
     /* ── Stat Cards ── */
     .stat-card {
-      background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
+      background: var(--card-bg) !important;
       transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
       animation: statCardPop 0.6s cubic-bezier(0.34,1.56,0.64,1) both;
     }
@@ -1619,7 +1536,7 @@
     .stat-card:nth-child(2) { animation-delay: 0.2s; }
 
     .stat-num {
-      background: linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink))) !important;
+      background: linear-gradient(135deg, var(--pink), var(--pink)) !important;
       -webkit-background-clip: text !important;
       -webkit-text-fill-color: transparent !important;
       background-clip: text !important;
@@ -1706,28 +1623,28 @@
 
     /* ── Checklist Items ── */
     .checklist-item {
-      border-bottom-color: #f5e6a0 !important;
+      border-bottom-color: var(--border) !important;
       transition: all 0.3s ease !important;
       animation: checkItemIn 0.3s ease both;
     }
-    .checklist-item:hover { background: rgba(245,230,160,0.3); transform: translateX(3px); }
+    .checklist-item:hover { background: rgba(var(--accent-rgb),0.08); transform: translateX(3px); }
     @keyframes checkItemIn {
       from { opacity: 0; transform: translateX(-8px); }
       to   { opacity: 1; transform: translateX(0); }
     }
     .checklist-item.matched {
-      background: linear-gradient(135deg, #e0f8e0, #c8f0c8) !important;
-      color: #4a8a4a !important;
+      background: linear-gradient(135deg, var(--success-bg), #d1fae5) !important;
+      color: var(--success) !important;
       animation: checkItemIn 0.3s ease both, matchFlash 0.5s ease;
     }
     @keyframes matchFlash {
-      0%   { box-shadow: 0 0 0 0 rgba(122,184,122,0.5); }
-      50%  { box-shadow: 0 0 12px 4px rgba(122,184,122,0.3); }
+      0%   { box-shadow: 0 0 0 0 rgba(5,150,105,0.5); }
+      50%  { box-shadow: 0 0 12px 4px rgba(5,150,105,0.3); }
       100% { box-shadow: none; }
     }
     .checklist-item.over {
-      background: linear-gradient(135deg, #f8e0e0, #f0c8c8) !important;
-      color: #8a4040 !important;
+      background: linear-gradient(135deg, var(--danger-bg), #fee2e2) !important;
+      color: var(--danger) !important;
     }
 
     /* ── Progress Bars ── */
@@ -1765,17 +1682,17 @@
       transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
     .remark-btn:hover, .remark-btn.selected {
-      background: linear-gradient(145deg, var(--pink-light), var(--pink)) !important;
-      color: var(--text) !important;
+      background: linear-gradient(145deg, var(--brand-600), var(--brand-700)) !important;
+      color: #ffffff !important;
       transform: scale(1.03);
     }
 
     /* ── Customer Remark Box ── */
     .remark-display-box {
-      background: linear-gradient(135deg, var(--bg-d), var(--pink-light)) !important;
-      border-color: var(--pink-light) !important;
-      border-left-color: var(--pink) !important;
-      color: #7a5820 !important;
+      background: linear-gradient(135deg, var(--warning-bg), var(--warning-bg)) !important;
+      border-color: var(--warning) !important;
+      border-left-color: var(--warning) !important;
+      color: var(--warning) !important;
       animation: fadeInUp 0.3s ease both, remarkBoxGlow 3s ease-in-out infinite;
     }
     @keyframes remarkBoxGlow {
@@ -1785,7 +1702,7 @@
 
     /* ── Modal ── */
     .modal-header {
-      background: linear-gradient(135deg, var(--pink-light), var(--pink)) !important;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700)) !important;
     }
     .modal-content {
       background: linear-gradient(145deg, var(--bg), var(--bg-d)) !important;
@@ -1842,7 +1759,7 @@
     .input-neu-wrap:focus-within {
       box-shadow: inset 4px 4px 10px var(--sd), inset -4px -4px 10px var(--sl), 0 0 0 3px rgba(var(--accent-rgb),0.15) !important;
     }
-    .input-neu-wrap input::placeholder { color: #c0b090 !important; }
+    .input-neu-wrap input::placeholder { color: var(--text3) !important; }
 
     /* ── Daily Target Progress ── */
     #dailyTargetWrap {
@@ -1871,7 +1788,7 @@
 
     /* ── Undo Toast ── */
     #undoToast {
-      background: rgba(122,100,60,0.92) !important;
+      background: rgba(28,27,25,0.92) !important;
     }
     #undoBtn {
       background: var(--pink) !important;
@@ -1904,38 +1821,39 @@
 
     /* ── Dark Mode Color Override ── */
     html.dark-mode {
-      --pink:        #d4a843;
-      --pink-light:  #4a3a1a;
-      --pink-pale:   #1a1917;
-      --text:        #f0e8d0;
-      --text2:       #c0b090;
-      --text3:       #887860;
-      --card-bg:     #2a2518;
-      --surface:     #302a1e;
-      --surface2:    #352e22;
-      --border:      rgba(90,75,40,0.45);
-      --border2:     #504525;
-      --brown:       #d4b870;
-      --bg:          #2a2518;
-      --bg-d:        #221e14;
-      --sd:          rgba(10,8,3,0.65);
-      --sl:          rgba(90,75,40,0.3);
-      background: #2a2518;
-      color: #f0e8d0;
+      --pink:        #ccac60;   /* brand-400 สีเน้นในโหมดมืด */
+      --pink-light:  #4a3a1d;   /* brand-900 */
+      --pink-pale:   #1c1b19;
+      --text-strong: #f5f5f4;
+      --text:        #e7e5e4;
+      --text2:       #a8a29e;
+      --text3:       #a8a29e;
+      --card-bg:     #2a2825;
+      --surface:     #2a2825;
+      --surface2:    #3a3833;
+      --border:      #3a3833;
+      --border2:     #3a3833;
+      --brown:       #d9bf7d;
+      --bg:          #1c1b19;
+      --bg-d:        #2a2825;
+      --sd:          rgba(0,0,0,0.55);
+      --sl:          rgba(58,56,51,0.35);
+      background: #1c1b19;
+      color: #e7e5e4;
     }
     html.dark-mode body {
-      background: #2a2518 !important;
+      background: #1c1b19 !important;
     }
     html.dark-mode .card,
     html.dark-mode .stat-card,
     html.dark-mode .dash-table-card,
     html.dark-mode .parcel-box,
     html.dark-mode .mp-option {
-      background: #2a2518 !important;
+      background: #2a2825 !important;
     }
     html.dark-mode #app-header,
     html.dark-mode #app-tabs {
-      background: #2a2518 !important;
+      background: #2a2825 !important;
     }
 
     /* ── Floating Dot Decor ── */
@@ -1947,9 +1865,9 @@
       pointer-events: none;
       z-index: -1;
       background: 
-        radial-gradient(circle at 15% 25%, rgba(245,224,160,0.15) 0%, transparent 40%),
-        radial-gradient(circle at 80% 70%, rgba(var(--accent-rgb),0.08) 0%, transparent 35%),
-        radial-gradient(circle at 50% 50%, rgba(248,216,176,0.06) 0%, transparent 50%);
+        radial-gradient(circle at 15% 25%, rgba(var(--accent-rgb),0.06) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(var(--accent-rgb),0.04) 0%, transparent 35%),
+        radial-gradient(circle at 50% 50%, rgba(var(--accent-rgb),0.02) 0%, transparent 50%);
     }
     html.dark-mode body::before {
       background: 
@@ -1961,19 +1879,19 @@
     * { scroll-behavior: smooth; }
 
     /* ── All Text Colors Pastel Adjustment ── */
-    h6 { color: #6a5830 !important; }
-    .form-text, .text-muted { color: #a09580 !important; }
-    .small { color: #8a7860; }
+    h6 { color: var(--text-strong) !important; }
+    .form-text, .text-muted { color: var(--text2) !important; }
+    .small { color: var(--text2); }
     .dash-count { color: var(--pink) !important; }
     .dash-rank { color: var(--pink) !important; }
     #parcelId { color: var(--pink) !important; }
     #checklistProgressLabel { color: var(--pink) !important; }
-    .topbar-title { color: #5a4820 !important; }
-    .topbar-sub { color: #a09580 !important; }
+    .topbar-title { color: var(--text-strong) !important; }
+    .topbar-sub { color: var(--text2) !important; }
 
     /* ── Action Bar ── */
     .action-bar-sticky {
-      border-top-color: #f0dda0 !important;
+      border-top-color: var(--border) !important;
       animation: actionBarSlide 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
     }
     @keyframes actionBarSlide {
@@ -1983,19 +1901,19 @@
 
     /* ── Save Button Ready Glow (pastel green) ── */
     @keyframes saveGlow {
-      0%,100% { box-shadow: 0 4px 16px rgba(122,184,122,0.3); }
-      50%     { box-shadow: 0 4px 28px rgba(122,184,122,0.6), 0 0 0 4px rgba(122,184,122,0.12); }
+      0%,100% { box-shadow: 0 4px 16px rgba(5,150,105,0.3); }
+      50%     { box-shadow: 0 4px 28px rgba(5,150,105,0.6), 0 0 0 4px rgba(5,150,105,0.12); }
     }
     #saveBtn.ready {
-      background: linear-gradient(135deg, #90d890, #7ab87a) !important;
-      color: #2a5a2a !important;
+      background: linear-gradient(135deg, var(--success), var(--success)) !important;
+      color: #ffffff !important;
       animation: saveGlow 1.6s ease-in-out infinite;
     }
 
     /* ── Dash Search Button ── */
     .dash-search-btn {
-      background: linear-gradient(135deg, var(--pink-light), var(--pink)) !important;
-      color: #5a4820 !important;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-700)) !important;
+      color: #ffffff !important;
       transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1) !important;
     }
     .dash-search-btn:hover { transform: scale(1.08); }
@@ -2019,11 +1937,11 @@
 
     /* ── Delete Button Pastel ── */
     .list-group-item .btn-delete-item {
-      color: #e08888 !important;
+      color: var(--danger) !important;
       transition: all 0.25s ease !important;
     }
     .list-group-item .btn-delete-item:hover { 
-      background: #fae8e8 !important;
+      background: var(--danger-bg) !important;
       transform: scale(1.1);
     }
 
@@ -2202,7 +2120,7 @@
     }
     @keyframes spinnerPulse {
       0%,100% { border-top-color: var(--text); transform-origin: center; }
-      50%     { border-top-color: #d4a843; }
+      50%     { border-top-color: var(--pink); }
     }
 
     /* ── DASHBOARD: Reset Button Wobble ── */
@@ -2276,7 +2194,7 @@
     }
     @keyframes fileInputGlow {
       0%   { box-shadow: inset 4px 4px 10px var(--sd), inset -4px -4px 10px var(--sl) !important; }
-      50%  { box-shadow: inset 4px 4px 10px var(--sd), inset -4px -4px 10px var(--sl), 0 0 16px rgba(122,184,122,0.4) !important; }
+      50%  { box-shadow: inset 4px 4px 10px var(--sd), inset -4px -4px 10px var(--sl), 0 0 16px rgba(5,150,105,0.4) !important; }
       100% { box-shadow: inset 4px 4px 10px var(--sd), inset -4px -4px 10px var(--sl) !important; }
     }
 
@@ -2353,9 +2271,9 @@
 <!-- Offline Banner -->
 <div id="offlineBanner" style="
   display:none; position:fixed; top:calc(var(--topbar-h) + 8px); right:12px; z-index:199;
-  background:linear-gradient(135deg,#d88888,#c07070);
+  background:linear-gradient(135deg,var(--danger),var(--danger));
   color:white; border-radius:12px;
-  padding:6px 14px; font-size:0.72rem; font-family:'Mitr',sans-serif;
+  padding:6px 14px; font-size:0.72rem; font-family:'Noto Sans Thai',sans-serif;
   box-shadow:0 3px 12px rgba(0,0,0,0.25); max-width:240px;
   animation:calFadeIn 0.3s ease;">
   <svg viewBox="0 0 10 10" fill="none" style="width:0.75em;height:0.75em;display:inline-block;vertical-align:0.05em;margin-right:3px"><circle cx="5" cy="5" r="4" fill="#e07a3a"/><line x1="3" y1="3" x2="7" y2="7" stroke="white" stroke-width="1.3" stroke-linecap="round"/><line x1="7" y1="3" x2="3" y2="7" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg> ออฟไลน์ <span id="offlineQueueCount" style="opacity:0.85;"></span>
@@ -2364,9 +2282,9 @@
 <!-- Queue Pending Banner (online แต่มี queue ค้าง) -->
 <div id="queueBanner" onclick="showQueueModal()" style="
   display:none; position:fixed; top:calc(var(--topbar-h) + 8px); right:12px; z-index:199;
-  background:linear-gradient(135deg,var(--pink),var(--day-accent,var(--pink)));
+  background:linear-gradient(135deg,var(--brand-600),var(--brand-700));
   color:white; cursor:pointer; border-radius:12px;
-  padding:6px 14px; font-size:0.72rem; font-family:'Mitr',sans-serif;
+  padding:6px 14px; font-size:0.72rem; font-family:'Noto Sans Thai',sans-serif;
   box-shadow:0 3px 12px rgba(0,0,0,0.25); max-width:220px;
   animation:calFadeIn 0.3s ease;">
   ⏳ รอ sync <span id="queueBannerCount">0</span> รายการ
@@ -2378,13 +2296,13 @@
     position:absolute; bottom:0; left:0; right:0;
     background:var(--bg); border-radius:24px 24px 0 0;
     padding:20px 16px 32px; max-height:70vh; display:flex; flex-direction:column;
-    box-shadow:0 -6px 20px var(--sd), 0 -1px 0 var(--sl); font-family:'Mitr',sans-serif;">
+    box-shadow:0 -6px 20px var(--sd), 0 -1px 0 var(--sl); font-family:'Noto Sans Thai',sans-serif;">
     <div style="width:40px; height:4px; background:var(--pink-light); border-radius:4px; margin:0 auto 14px;"></div>
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
       <div style="font-weight:700; font-size:0.95rem; color:var(--text);">⏳ รายการรอ Sync</div>
       <button onclick="syncAllNow()" style="
-        background:linear-gradient(135deg,var(--pink-light),var(--pink)); color:white; border:none;
-        border-radius:20px; padding:6px 18px; font-family:'Mitr',sans-serif;
+        background:linear-gradient(135deg,var(--brand-600),var(--brand-700)); color:white; border:none;
+        border-radius:20px; padding:6px 18px; font-family:'Noto Sans Thai',sans-serif;
         font-size:0.82rem; font-weight:600; cursor:pointer;"><svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:4px"><path d="M16.5 10 A6.5 6.5 0 1 1 13 4.2" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/><polyline points="13,1.5 13,4.8 16.3,4.8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Sync ทันที</button>
     </div>
     <div id="queueList" style="overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px;"></div>
@@ -2397,9 +2315,9 @@
 
 <!-- TOP APP BAR -->
 <div id="app-header">
-  <div class="topbar-logo" onclick="showDiagnostic()" title="ตรวจสอบระบบ" style="font-family:'Inter',sans-serif; font-weight:800; font-size:0.9rem; color:white; letter-spacing:-0.5px; cursor:pointer; position:relative;">LS<span id="lsAlertDot" style="display:none; position:absolute; top:-4px; right:-6px; width:10px; height:10px; border-radius:50%; background:#ff3b30; box-shadow:0 0 0 2px rgba(0,0,0,0.25); animation:lsAlertPulse 1.4s ease-in-out infinite;"></span></div>
+  <div class="topbar-logo" onclick="showDiagnostic()" title="ตรวจสอบระบบ" style="font-family:'Noto Sans Thai',sans-serif; font-weight:800; font-size:0.9rem; color:white; letter-spacing:-0.5px; cursor:pointer; position:relative;">LS<span id="lsAlertDot" style="display:none; position:absolute; top:-4px; right:-6px; width:10px; height:10px; border-radius:50%; background:#dc2626; box-shadow:0 0 0 2px rgba(0,0,0,0.25); animation:lsAlertPulse 1.4s ease-in-out infinite;"></span></div>
   <div style="flex:1; margin-left:10px;">
-    <div class="topbar-title" style="font-family:'Inter','Mitr',sans-serif; font-weight:800; letter-spacing:-0.3px;">LAMSANG <span style="font-weight:400; font-size:0.82em; opacity:0.7;">Scanner</span>
+    <div class="topbar-title" style="font-family:'Noto Sans Thai',sans-serif; font-weight:800; letter-spacing:-0.3px;">LAMSANG <span style="font-weight:400; font-size:0.82em; opacity:0.7;">Scanner</span>
       <span class="topbar-sub">ระบบแพ็กและตรวจสอบพัสดุ</span>
     </div>
   </div>
@@ -2464,7 +2382,7 @@
       <div id="cameraSelectorWrap" style="display:none; margin-bottom:8px;">
         <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.6); border-radius:16px; padding:6px 12px; box-shadow:2px 2px 8px var(--sd),-2px -2px 8px var(--sl);">
           <span style="font-size:0.75rem; color:var(--text3); white-space:nowrap;"><svg viewBox="0 0 20 20" fill="none" style="width:0.9em;height:0.9em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="1" y="5" width="18" height="13" rx="3.5" fill="#a8dadc"/><circle cx="10" cy="11.5" r="3.5" fill="#457b9d"/><circle cx="10" cy="11.5" r="2" fill="#e8f8f8"/><rect x="6" y="3" width="4" height="3" rx="1.5" fill="#cdb4db"/></svg> กล้อง</span>
-          <select id="cameraSelect" onchange="switchCamera(this.value)" style="flex:1; font-family:'Mitr',sans-serif; font-size:0.75rem; background:transparent; border:none; color:var(--text); outline:none; cursor:pointer;">
+          <select id="cameraSelect" onchange="switchCamera(this.value)" style="flex:1; font-family:'Noto Sans Thai',sans-serif; font-size:0.75rem; background:transparent; border:none; color:var(--text); outline:none; cursor:pointer;">
             <option value="">กำลังโหลด...</option>
           </select>
         </div>
@@ -2652,12 +2570,12 @@
       <button class="preset-btn" onclick="setPreset('last7',this)">7 วัน</button>
       <button class="preset-btn" onclick="setPreset('thisMonth',this)">เดือนนี้</button>
       <button class="preset-btn" onclick="setPreset('lastMonth',this)">เดือนก่อน</button>
-      <button class="preset-btn" onclick="showOrdersTable()" style="background:#457b9d; color:#fff; border-color:#457b9d;">📋 ตาราง</button>
+      <button class="preset-btn" onclick="showOrdersTable()" style="background:var(--brand-600); color:#fff; border-color:var(--brand-600);">📋 ตาราง</button>
     </div>
     <!-- Date Range Picker -->
     <div class="dash-datepicker mb-3">
       <input type="date" id="dashStart" class="dash-date-input">
-      <span style="color:#9a9085; font-size:0.85rem;">ถึง</span>
+      <span style="color:var(--text2); font-size:0.85rem;">ถึง</span>
       <input type="date" id="dashEnd" class="dash-date-input">
       <button onclick="fetchReport()" class="dash-search-btn"><svg viewBox="0 0 20 20" fill="none" style="width:1.1em;height:1.1em;display:block;margin:0 auto"><circle cx="8.5" cy="8.5" r="6" fill="#a8dadc"/><circle cx="8.5" cy="8.5" r="4.2" fill="#e8f8f8"/><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="#457b9d" stroke-width="1.6"/><line x1="13" y1="13" x2="18" y2="18" stroke="#457b9d" stroke-width="2.2" stroke-linecap="round"/></svg></button>
     </div>
@@ -2676,14 +2594,14 @@
         <div class="col-6">
           <div class="stat-card">
             <div style="width:1.8rem;height:1.8rem;margin:0 auto 4px"><svg viewBox="0 0 20 20" fill="none"><rect x="2" y="8" width="16" height="11" rx="3" fill="#f4a261"/><path d="M2 8 Q2 5 5 4.5L10 4.5L10 8Z" fill="#e9c46a"/><path d="M10 4.5L15 4.5 Q18 5 18 8L10 8Z" fill="#ffd166"/><path d="M7.5 4.5 Q10 2.5 12.5 4.5" fill="none" stroke="#e07a3a" stroke-width="1.4" stroke-linecap="round"/><rect x="5" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/><rect x="8.5" y="11" width="3" height="5" rx="1" fill="white" opacity="0.85"/><rect x="13" y="11" width="2" height="5" rx="1" fill="white" opacity="0.85"/></svg></div>
-            <div class="small mb-1" style="color:#9a9085;">ออเดอร์ (แพ็ค)</div>
+            <div class="small mb-1" style="color:var(--text2);">ออเดอร์ (แพ็ค)</div>
             <div id="d-box" class="stat-num">0</div>
           </div>
         </div>
         <div class="col-6">
           <div class="stat-card">
             <div style="width:1.8rem;height:1.8rem;margin:0 auto 4px"><svg viewBox="0 0 20 20" fill="none"><path d="M10 2 L12.5 7.5 L18.5 8 L14 12.5 L15.5 18.5 L10 15.5 L4.5 18.5 L6 12.5 L1.5 8 L7.5 7.5 Z" fill="#ffd166" stroke="#e9c46a" stroke-width="0.8" stroke-linejoin="round"/><circle cx="10" cy="10.5" r="2.5" fill="#fff" opacity="0.4"/></svg></div>
-            <div class="small mb-1" style="color:#9a9085;">สินค้า (ชิ้น)</div>
+            <div class="small mb-1" style="color:var(--text2);">สินค้า (ชิ้น)</div>
             <div id="d-item" class="stat-num">0</div>
           </div>
         </div>
@@ -2706,7 +2624,7 @@
             <input id="dailyTargetInput" type="number" min="0" max="999" placeholder="ชิ้น/วัน"
               oninput="saveDailyTarget(this.value)"
               style="width:80px; padding:5px 8px; border-radius:10px; border:none; outline:none;
-                     font-family:'Mitr',sans-serif; font-size:0.82rem; color:var(--text); text-align:center;
+                     font-family:'Noto Sans Thai',sans-serif; font-size:0.82rem; color:var(--text); text-align:center;
                      background:var(--bg); box-shadow:inset 3px 3px 7px var(--sd), inset -3px -3px 7px var(--sl);">
             <span style="font-size:0.72rem; color:var(--text3);">ชิ้น</span>
           </div>
@@ -2726,9 +2644,9 @@
         <h6 class="fw-bold mb-2" style="color:var(--pink);"><span class="section-emoji"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em"><rect x="1" y="3" width="18" height="15" rx="4" fill="#cdb4db"/><rect x="1" y="3" width="18" height="5" rx="4" fill="#d8c3e8"/><rect x="1" y="6" width="18" height="2" fill="#d8c3e8"/><rect x="4" y="13" width="3" height="4" rx="1.5" fill="#f4a261"/><rect x="8.5" y="10" width="3" height="7" rx="1.5" fill="#a8dadc"/><rect x="13" y="8" width="3" height="9" rx="1.5" fill="#b5ead7"/></svg></span> กราฟรายวัน</h6>
         <div id="dailyChartContainer" style="display:flex; align-items:flex-end; gap:3px; padding:0; overflow-x:auto;"></div>
         <div style="display:flex; gap:14px; justify-content:center; margin-top:6px;">
-          <span style="font-size:0.68rem; color:var(--text3);"><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#c8a84b; vertical-align:middle;"></span> ยังไม่ถึงเป้า</span>
-          <span style="font-size:0.68rem; color:var(--text3);"><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#7ab87a; vertical-align:middle;"></span> ถึงเป้า</span>
-          <span style="font-size:0.68rem; color:var(--text3);">🎯 <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:rgba(122,184,122,0.5); vertical-align:middle; border:1px dashed #7ab87a;"></span> เป้า</span>
+          <span style="font-size:0.68rem; color:var(--text3);"><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#a8853f; vertical-align:middle;"></span> ยังไม่ถึงเป้า</span>
+          <span style="font-size:0.68rem; color:var(--text3);"><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:#059669; vertical-align:middle;"></span> ถึงเป้า</span>
+          <span style="font-size:0.68rem; color:var(--text3);">🎯 <span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:rgba(5,150,105,0.5); vertical-align:middle; border:1px dashed #059669;"></span> เป้า</span>
         </div>
       </div>
       <!-- ✅ Calendar — ปฏิทินสถานะรายวัน -->
@@ -2775,7 +2693,7 @@
   <div id="upload" style="display:none" class="fade-in-up">
     <div class="card p-3">
       <div class="section-title" style="margin-top:4px;"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.15em;margin-right:4px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#bfdbfe"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.7"/></svg> เลือกไฟล์ (.xlsx, .csv) — เลือกหลายไฟล์ได้</div>
-      <div style="font-size:0.8rem; color:#a08a5a; margin-top:4px; margin-bottom:8px;">ระบบจะตรวจจับ Marketplace ให้อัตโนมัติจากหัวคอลัมน์</div>
+      <div style="font-size:0.8rem; color:var(--text2); margin-top:4px; margin-bottom:8px;">ระบบจะตรวจจับ Marketplace ให้อัตโนมัติจากหัวคอลัมน์</div>
       <div id="dropZone" class="drop-zone">
         <span class="dz-icon">📂</span>
         <div class="dz-text">ลากไฟล์มาวางที่นี่ หรือ <strong>คลิกเพื่อเลือกไฟล์</strong></div>
@@ -2784,7 +2702,7 @@
       </div>
       <div id="dzFileList" class="dz-filelist"></div>
       <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; font-size:0.78rem;">
-        <span style="color:#a08a5a;">📖 คู่มือ:</span>
+        <span style="color:var(--text2);">📖 คู่มือ:</span>
         <a href="TTindex.html" target="_blank" class="mp-guide-btn" style="position:static;">TikTok</a>
         <a href="SPindex.html" target="_blank" class="mp-guide-btn" style="position:static;">Shopee</a>
         <a href="LZindex.html" target="_blank" class="mp-guide-btn" style="position:static;">Lazada</a>
@@ -2819,9 +2737,9 @@
 <!-- Undo Toast -->
 <div id="undoToast" style="
   position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(20px);
-  background:rgba(122,100,60,0.95); color:white;
+  background:rgba(28,27,25,0.95); color:white;
   padding:10px 18px; border-radius:20px;
-  font-size:0.85rem; font-family:'Mitr',sans-serif;
+  font-size:0.85rem; font-family:'Noto Sans Thai',sans-serif;
   display:flex; align-items:center; gap:10px;
   box-shadow:0 4px 20px rgba(0,0,0,0.2);
   opacity:0; pointer-events:none;
@@ -2831,7 +2749,7 @@
   <button id="undoBtn" onclick="undoRemove()" style="
     background:var(--pink); border:none; color:white;
     padding:3px 12px; border-radius:12px;
-    font-family:'Mitr',sans-serif; font-size:0.82rem;
+    font-family:'Noto Sans Thai',sans-serif; font-size:0.82rem;
     font-weight:600; cursor:pointer;">↩ เลิกทำ</button>
 </div>
 
@@ -3158,7 +3076,7 @@ window.HubLogin = (function () {
 
   /**
    * ประตูกั้นเต็มจอ — ใช้แอปต่อไม่ได้จนกว่าจะเข้าสู่ระบบ
-   * **หน้าตาเดียวกับหน้าล็อกอิน HRIS** (ร้านสั่ง 30 ก.ย. 2569) พื้นดำ-ทอง · การ์ดขาวขอบทอง · ฟอนต์ Prompt
+   * **หน้าตาเดียวกับหน้าล็อกอิน HRIS** (ร้านสั่ง 30 ก.ย. 2569) พื้นดำ-ทอง · การ์ดขาวขอบทอง · ฟอนต์ Noto Sans Thai + ทอง #a8853f ตามธีมกลาง (4 ต.ค. 2569)
    * ชุดสีเดียวกับ `src/components/hris/HrisShell.tsx` ของเว็บร้าน — แก้ที่หนึ่งต้องตามไปแก้อีกที่
    */
   function lock(msg) {
@@ -3168,7 +3086,7 @@ window.HubLogin = (function () {
       if (!document.getElementById('hub-login-font')) {
         const f = document.createElement('link');
         f.id = 'hub-login-font'; f.rel = 'stylesheet';
-        f.href = 'https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap';
+        f.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap';
         document.head.appendChild(f);
       }
     } catch (e) {}
@@ -3176,15 +3094,15 @@ window.HubLogin = (function () {
     el.id = 'hub-login-gate';
     el.setAttribute('style', [
       'position:fixed', 'inset:0', 'z-index:2147483600', 'overflow:auto',
-      'background:#18181b',
-      'background-image:radial-gradient(circle at 5% 5%,rgba(234,179,8,.16),transparent 38%),' +
-        'radial-gradient(circle at 95% 95%,rgba(202,138,4,.16),transparent 38%)',
+      'background:#1c1b19',
+      'background-image:radial-gradient(circle at 5% 5%,rgba(168,133,63,.16),transparent 38%),' +
+        'radial-gradient(circle at 95% 95%,rgba(191,156,79,.16),transparent 38%)',
       'display:flex', 'flex-direction:column', 'align-items:center', 'justify-content:center',
-      'padding:24px 16px', "font-family:'Prompt',sans-serif", 'color:#27272a', 'text-align:center'
+      'padding:24px 16px', "font-family:'Noto Sans Thai',system-ui,-apple-system,sans-serif", 'color:#27272a', 'text-align:center'
     ].join(';'));
     el.innerHTML =
       '<div style="width:100%;max-width:448px;box-sizing:border-box;background:#fff;border-radius:16px;' +
-        'border-top:4px solid #eab308;padding:36px 32px;box-shadow:0 25px 50px -12px rgba(0,0,0,.5)">' +
+        'border-top:4px solid #a8853f;padding:36px 32px;box-shadow:0 25px 50px -12px rgba(0,0,0,.5)">' +
         '<img src="https://lh3.googleusercontent.com/d/1wFGzcl5Y3yEfd39sA2LTbrgeNkgVxm27" alt="Lamsang" ' +
           'style="height:112px;width:auto;margin:0 auto 16px;display:block;object-fit:contain">' +
         '<div style="font-size:30px;font-weight:700;letter-spacing:.025em;color:#27272a">Lamsang Group</div>' +
@@ -3193,7 +3111,7 @@ window.HubLogin = (function () {
           'border:1px solid #e4e4e7;font-size:14px;color:#52525b">' +
           '🔒 ' + (msg || 'ต้องเข้าสู่ระบบก่อนใช้งาน') + '</div>' +
         '<a href="' + loginHref() + '" style="display:flex;align-items:center;justify-content:center;gap:8px;' +
-          'padding:13px 16px;border-radius:12px;background:#eab308;color:#18181b;font-weight:700;font-size:16px;' +
+          'padding:13px 16px;border-radius:12px;background:#a8853f;color:#fff;font-weight:700;font-size:16px;' +
           'text-decoration:none;box-shadow:0 4px 6px -1px rgba(0,0,0,.1)">' +
           '<svg viewBox="0 0 512 512" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M217.9 105.9 340.7 228.7c7.2 7.2 11.3 17.1 11.3 27.3s-4.1 20.1-11.3 27.3L217.9 406.1c-6.4 6.4-15 9.9-24 9.9-18.7 0-33.9-15.2-33.9-33.9V320H32c-17.7 0-32-14.3-32-32v-64c0-17.7 14.3-32 32-32h128v-62.1c0-18.7 15.2-33.9 33.9-33.9 9 0 17.6 3.6 24 9.9zM352 416h64c17.7 0 32-14.3 32-32V128c0-17.7-14.3-32-32-32h-64c-17.7 0-32-14.3-32-32s14.3-32 32-32h64c53 0 96 43 96 96v256c0 53-43 96-96 96h-64c-17.7 0-32-14.3-32-32s14.3-32 32-32z"/></svg>' +
           'เข้าสู่ระบบ</a>' +
@@ -4396,7 +4314,7 @@ function showSyncToast(msg) {
   if (!toast) return;
   textEl.textContent = msg;
   if (undoBtn) undoBtn.style.display = 'none';
-  toast.style.background = 'rgba(122,184,122,0.95)';
+  toast.style.background = 'rgba(5,150,105,0.95)';
   toast.style.opacity = '1';
   toast.style.pointerEvents = 'none';
   toast.style.transform = 'translateX(-50%) translateY(0)';
@@ -4475,10 +4393,10 @@ async function showDiagnostic() {
     const json = await _hubGet(`${HUB_QUEUE_URL}?limit=1`, 10000);
     const ms = Date.now() - t0;
     fbStatus = `✅ ต่อ Hub ได้ (${ms} ms)\nคิวรอแพคในระบบ: ${json.count ?? '-'} ใบ`;
-    fbColor = '#2e7d32';
+    fbColor = '#059669';
   } catch(e) {
     fbStatus = `❌ ต่อ Hub ไม่ได้ — ${e.message}\nชื่อสินค้า/คิวรอแพคจะเป็นของเก่าในเครื่อง`;
-    fbColor = '#c62828';
+    fbColor = '#dc2626';
   }
 
   let videoFailedHtml = '';
@@ -4487,14 +4405,14 @@ async function showDiagnostic() {
       const t = v.at ? new Date(v.at).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
       return `<div style="font-size:0.8rem;">• ${escHtml(v.pId)} <span style="color:#999;">${t}</span></div>`;
     }).join('');
-    videoFailedHtml = `<div style="margin-top:8px; padding:8px 10px; background:#fde4e4; border-left:3px solid #d33; border-radius:6px;">
-      <b style="color:#a00;">🔴 วิดีโออัป Drive ไม่สำเร็จ: ${videoFailed.length} ใบ</b>
-      <div style="font-size:0.78rem; color:#a00; margin:3px 0 6px;">วิดีโอใบเหล่านี้หาย (ลองครบแล้ว)</div>
+    videoFailedHtml = `<div style="margin-top:8px; padding:8px 10px; background:#fef2f2; border-left:3px solid #dc2626; border-radius:6px;">
+      <b style="color:#dc2626;">🔴 วิดีโออัป Drive ไม่สำเร็จ: ${videoFailed.length} ใบ</b>
+      <div style="font-size:0.78rem; color:#dc2626; margin:3px 0 6px;">วิดีโอใบเหล่านี้หาย (ลองครบแล้ว)</div>
       <div style="max-height:120px; overflow-y:auto;">${items}</div>
-      <button onclick="_clearVideoFailedLog()" style="margin-top:6px; background:#d33; color:#fff; border:none; padding:4px 12px; border-radius:8px; font-family:'Mitr',sans-serif; font-size:0.78rem;">ล้างรายการ</button>
+      <button onclick="_clearVideoFailedLog()" style="margin-top:6px; background:#dc2626; color:#fff; border:none; padding:4px 12px; border-radius:8px; font-family:'Noto Sans Thai',sans-serif; font-size:0.78rem;">ล้างรายการ</button>
     </div>`;
   }
-  const inboxLine = `<b>📨 ใบแพครอส่งเข้า Hub:</b> ${hubQueued} ${hubQueued > 0 ? '<span style="color:#c62828;">(ค้าง — จะส่งเองเมื่อเน็ตกลับมา)</span>' : '<span style="color:#2e7d32;">(ไม่มีค้าง)</span>'}<br>`;
+  const inboxLine = `<b>📨 ใบแพครอส่งเข้า Hub:</b> ${hubQueued} ${hubQueued > 0 ? '<span style="color:#dc2626;">(ค้าง — จะส่งเองเมื่อเน็ตกลับมา)</span>' : '<span style="color:#059669;">(ไม่มีค้าง)</span>'}<br>`;
   const mpInboxLine = '';
   const mpRetryBtn = '';
 
@@ -4502,15 +4420,15 @@ async function showDiagnostic() {
     title: '🔧 ตรวจสอบระบบ',
     html: `<div style="text-align:left; font-size:0.9rem; line-height:1.9;">
       <div style="padding:8px 10px; background:${fbColor}15; border-left:3px solid ${fbColor}; border-radius:6px; white-space:pre-line; margin-bottom:8px;">${escHtml(fbStatus)}</div>
-      <b>📦 ออเดอร์รอ sync:</b> ${atRisk} ${atRisk > 0 ? '<span style="color:#c62828;">(ค้าง)</span>' : '<span style="color:#2e7d32;">(เคลียร์)</span>'}<br>
+      <b>📦 ออเดอร์รอ sync:</b> ${atRisk} ${atRisk > 0 ? '<span style="color:#dc2626;">(ค้าง)</span>' : '<span style="color:#059669;">(เคลียร์)</span>'}<br>
       <b>🎬 วิดีโอรออัป:</b> ${videoPending}<br>
       ${inboxLine}
       ${mpInboxLine}
       <b>📋 คิวทั้งหมด:</b> ${q.length}<br>
       <b>🌐 เน็ต:</b> ${navigator.onLine ? '✅ ออนไลน์' : '❌ ออฟไลน์'}<br>
       <b>📱 เครื่อง:</b> <span style="font-size:0.75rem;">${escHtml((DEVICE_ID||'').slice(0,8))}</span>
-      <div style="margin-top:10px; padding-top:8px; border-top:1px solid #e0d8c0;">
-        <button onclick="showAdminTools()" style="width:100%; background:#6b5010; color:#fff; border:none; padding:9px 12px; border-radius:10px; font-family:'Mitr',sans-serif; font-size:0.85rem; cursor:pointer;">🔧 เครื่องมือแอดมิน (เมนู Scanner Tools)</button>
+      <div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--border);">
+        <button onclick="showAdminTools()" style="width:100%; background:#6b5329; color:#fff; border:none; padding:9px 12px; border-radius:10px; font-family:'Noto Sans Thai',sans-serif; font-size:0.85rem; cursor:pointer;">🔧 เครื่องมือแอดมิน (เมนู Scanner Tools)</button>
       </div>
       ${mpRetryBtn}
       ${videoFailedHtml}
@@ -4518,7 +4436,7 @@ async function showDiagnostic() {
     confirmButtonText: 'ปิด',
     showDenyButton: true,
     denyButtonText: '🧹 ล้าง cache + อัปเดตแอป',
-    denyButtonColor: '#e07a5f',
+    denyButtonColor: '#b45309',
     showCancelButton: q.length > 0,
     cancelButtonText: '🔄 sync เดี๋ยวนี้',
   }).then(r => {
@@ -4537,7 +4455,7 @@ window._clearVideoFailedLog = function() {
 
 // ===== 🔧 เครื่องมือแอดมิน (เรียก GAS จากหน้าเว็บ) — เหมือนเมนู Scanner Tools ในชีต =====
 function showAdminTools() {
-  const btn = (fn, label, bg) => `<button onclick="${fn}" style="width:100%; text-align:left; padding:10px 12px; border:none; border-radius:10px; background:${bg || '#f3ece0'}; color:#4a3a10; font-family:'Mitr',sans-serif; font-size:0.86rem;">${label}</button>`;
+  const btn = (fn, label, bg) => `<button onclick="${fn}" style="width:100%; text-align:left; padding:10px 12px; border:none; border-radius:10px; background:${bg || '#f1f5f9'}; color:#334155; font-family:'Noto Sans Thai',sans-serif; font-size:0.86rem;">${label}</button>`;
   Swal.fire({
     title: '🔧 เครื่องมือแอดมิน',
     html: `<div style="display:flex; flex-direction:column; gap:7px; text-align:left;">
@@ -4696,7 +4614,7 @@ async function openManualEntry() {
     showCancelButton: true,
     confirmButtonText: 'ยืนยัน',
     cancelButtonText: 'ยกเลิก',
-    background: '#fff0f3',
+    background: '#ffffff',
     customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn', cancelButton: 'swal-btn' },
     confirmButtonColor: 'transparent',
     cancelButtonColor: 'transparent',
@@ -4772,14 +4690,14 @@ async function showHistoryDetail(pid) {
   } catch(e) {}
   await Swal.fire({
     title: 'พัสดุที่แพ็คแล้ว',
-    html: `<div style="text-align:left; line-height:1.7; color:#7a6440;">
+    html: `<div style="text-align:left; line-height:1.7; color:var(--text);">
       <div>📦 รหัส: <strong style="word-break:break-all;">${escHtml(pid)}</strong></div>
       <div>📋 สินค้า: <strong>${count} ชิ้น</strong></div>
       ${time ? `<div>🕐 เวลา: ${escHtml(time)}</div>` : ''}
       ${orderTag}
     </div>`,
     icon: 'info',
-    background: '#fff0f3',
+    background: '#ffffff',
     confirmButtonText: 'ปิด',
     confirmButtonColor: 'transparent',
     customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn' },
@@ -6154,11 +6072,11 @@ async function restartCurrentParcel() {
   }
   const r = await Swal.fire({
     title: '🔄 เริ่มใหม่?',
-    html: `<div style="font-size:0.88rem; color:#7a6440; text-align:left;">
+    html: `<div style="font-size:0.88rem; color:var(--text); text-align:left;">
       ล้างพัสดุปัจจุบัน <strong>${escHtml(currentP || '-')}</strong>
       ${items.length > 0 ? ` (${items.length} ชิ้น)` : ''}
       และยกเลิกวิดีโอที่บันทึก
-      <br><span style="color:#c44; font-size:0.78rem;">⚠ ข้อมูลที่ยังไม่ได้บันทึกจะหายไป</span>
+      <br><span style="color:#dc2626; font-size:0.78rem;">⚠ ข้อมูลที่ยังไม่ได้บันทึกจะหายไป</span>
     </div>`,
     icon: 'question',
     showCancelButton: true,
@@ -6166,7 +6084,7 @@ async function restartCurrentParcel() {
     cancelButtonText: 'ไม่เริ่ม',
     confirmButtonColor: 'transparent',
     cancelButtonColor: 'transparent',
-    background: '#fff0f3',
+    background: '#ffffff',
     customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn', cancelButton: 'swal-btn' },
     reverseButtons: true,
   });
@@ -6257,7 +6175,7 @@ async function showManualFinishConfirm() {
     const name = productMap[ex.sku] || ex.sku;
     const done = scanned >= ex.qty;
     const icon = done ? icoOk : icoWrn;
-    const color = done ? 'var(--text3)' : 'var(--warning,#c8860a)';
+    const color = done ? 'var(--text3)' : 'var(--warning)';
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 2px;border-bottom:1px solid var(--border2);font-size:0.82rem;">
       <span style="color:${color};">${icon} ${name}</span>
       <span style="color:${color};font-weight:600;white-space:nowrap;">${scanned}/${ex.qty}</span>
@@ -6636,8 +6554,8 @@ async function closeAppCompletely() {
   const card = document.querySelector('#scan .card');
   if (card) {
     card.style.transition = 'box-shadow 0.2s, border-color 0.2s';
-    card.style.boxShadow = '0 0 0 3px rgba(122,184,122,0.5)';
-    card.style.borderColor = 'rgba(122,184,122,0.6)';
+    card.style.boxShadow = '0 0 0 3px rgba(5,150,105,0.5)';
+    card.style.borderColor = 'rgba(5,150,105,0.6)';
     setTimeout(() => { card.style.boxShadow = ''; card.style.borderColor = ''; }, 800);
   }
   const startBtn = document.getElementById("startBtn");
@@ -6675,9 +6593,9 @@ function renderList() {
     const known = productMap[c];
     const label = known
       ? escHtml(known)
-      : `<span style="color:#e8b070;font-weight:600;"><svg viewBox="0 0 16 16" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:2px"><path d="M8 1.5 L14.5 13.5 H1.5 Z" fill="#ffd166" stroke="#e9c46a" stroke-width="0.8"/><rect x="7.3" y="6" width="1.4" height="4" rx="0.7" fill="#9b72cf"/><circle cx="8" cy="11.5" r="1" fill="#9b72cf"/></svg> ไม่รู้จัก</span> <span style="font-size:0.8em;color:#888;">${escHtml(c)}</span>`;
+      : `<span style="color:#b45309;font-weight:600;"><svg viewBox="0 0 16 16" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:2px"><path d="M8 1.5 L14.5 13.5 H1.5 Z" fill="#ffd166" stroke="#e9c46a" stroke-width="0.8"/><rect x="7.3" y="6" width="1.4" height="4" rx="0.7" fill="#9b72cf"/><circle cx="8" cy="11.5" r="1" fill="#9b72cf"/></svg> ไม่รู้จัก</span> <span style="font-size:0.8em;color:#888;">${escHtml(c)}</span>`;
     const realIdx = items.length - 1 - i;
-    const borderColor = known ? 'var(--pink-light)' : '#e8b070';
+    const borderColor = known ? 'var(--pink-light)' : '#b45309';
     html += `<div class="checklist-item" style="display:flex;align-items:center;justify-content:space-between;gap:6px;border-left-color:${borderColor};">
       ${_productThumb(c)}<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="7" width="14" height="11" rx="3.5" fill="#f4a261"/><path d="M7 7 Q7 3 10 3 Q13 3 13 7" fill="none" stroke="#e07a3a" stroke-width="1.5" stroke-linecap="round"/><rect x="8" y="10" width="4" height="1.5" rx="0.75" fill="white" opacity="0.7"/></svg> ${label}</span>
       <button class="btn-delete-item" onclick="removeItem(${realIdx})" title="ลบ" style="flex-shrink:0;">✕</button>
@@ -6835,13 +6753,13 @@ function showOrderNotFoundBanner(tracking) {
   if (!banner) {
     banner = document.createElement('div');
     banner.id = 'orderNotFoundBanner';
-    banner.style.cssText = 'margin-top:8px; padding:10px 12px; background:#eef5fc; border-left:4px solid #5a8fc5; border-radius:8px; font-size:0.82rem; color:#2c5285; text-align:left; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
+    banner.style.cssText = 'margin-top:8px; padding:10px 12px; background:#f0f9ff; border-left:4px solid #0369a1; border-radius:8px; font-size:0.82rem; color:#0369a1; text-align:left; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
     const statusEl = document.getElementById('statusLabel');
     if (statusEl && statusEl.parentNode) statusEl.parentNode.insertBefore(banner, statusEl.nextSibling);
   }
   banner.innerHTML = `
     <span style="flex:1; min-width:140px;">ℹ ไม่พบรายการสินค้าสำหรับพัสดุนี้ใน Marketplace</span>
-    <button onclick="retryFetchExpected('${escHtml(tracking)}')" style="background:#5a8fc5; color:white; border:none; padding:5px 12px; border-radius:8px; font-family:'Mitr',sans-serif; font-size:0.78rem; cursor:pointer; font-weight:600;">🔁 ค้นหาใหม่</button>
+    <button onclick="retryFetchExpected('${escHtml(tracking)}')" style="background:#0369a1; color:white; border:none; padding:5px 12px; border-radius:8px; font-family:'Noto Sans Thai',sans-serif; font-size:0.78rem; cursor:pointer; font-weight:600;">🔁 ค้นหาใหม่</button>
   `;
   banner.style.display = 'flex';
 }
@@ -6857,7 +6775,7 @@ function showAlreadyPackedBanner(tracking) {
   if (!b) {
     b = document.createElement('div');
     b.id = 'alreadyPackedBanner';
-    b.style.cssText = 'margin-top:8px; padding:11px 13px; background:#fde4e4; border-left:5px solid #d33; border-radius:8px; font-size:0.88rem; color:#a00; font-weight:700; text-align:left; display:flex; align-items:center; gap:8px;';
+    b.style.cssText = 'margin-top:8px; padding:11px 13px; background:#fef2f2; border-left:5px solid #dc2626; border-radius:8px; font-size:0.88rem; color:#dc2626; font-weight:700; text-align:left; display:flex; align-items:center; gap:8px;';
     const statusEl = document.getElementById('statusLabel');
     if (statusEl && statusEl.parentNode) statusEl.parentNode.insertBefore(b, statusEl.nextSibling);
   }
@@ -6874,11 +6792,11 @@ async function _confirmRepack(tracking) {
     const r = await Swal.fire({
       icon: 'warning',
       title: 'พัสดุนี้แพคไปแล้ว',
-      html: `<div style="font-size:0.95rem; line-height:1.6;"><strong>${escHtml(tracking)}</strong><br>ถูกแพค + บันทึกลงชีตไปแล้ว<br><span style="color:#a00;">ยืนยันจะแพคซ้ำหรือไม่?</span></div>`,
+      html: `<div style="font-size:0.95rem; line-height:1.6;"><strong>${escHtml(tracking)}</strong><br>ถูกแพค + บันทึกลงชีตไปแล้ว<br><span style="color:#dc2626;">ยืนยันจะแพคซ้ำหรือไม่?</span></div>`,
       showCancelButton: true,
       confirmButtonText: 'แพคซ้ำ',
       cancelButtonText: 'ยกเลิก',
-      confirmButtonColor: '#d33',
+      confirmButtonColor: '#dc2626',
       allowOutsideClick: false
     });
     return !!r.isConfirmed;
@@ -6891,13 +6809,13 @@ function showOrderFetchErrorBanner(tracking) {
   if (!banner) {
     banner = document.createElement('div');
     banner.id = 'orderFetchErrorBanner';
-    banner.style.cssText = 'margin-top:8px; padding:10px 12px; background:#fff4d6; border-left:4px solid #e9a23b; border-radius:8px; font-size:0.82rem; color:#7a4a10; text-align:left; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
+    banner.style.cssText = 'margin-top:8px; padding:10px 12px; background:#fffbeb; border-left:4px solid #b45309; border-radius:8px; font-size:0.82rem; color:#b45309; text-align:left; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
     const statusEl = document.getElementById('statusLabel');
     if (statusEl && statusEl.parentNode) statusEl.parentNode.insertBefore(banner, statusEl.nextSibling);
   }
   banner.innerHTML = `
     <span style="flex:1; min-width:140px;">⚠ ดึงรายการสินค้าไม่ได้ — เน็ตอาจสะดุดหรือ server ล่าช้า</span>
-    <button onclick="retryFetchExpected('${escHtml(tracking)}')" style="background:#e9a23b; color:white; border:none; padding:5px 12px; border-radius:8px; font-family:'Mitr',sans-serif; font-size:0.78rem; cursor:pointer; font-weight:600;">🔁 ลองใหม่</button>
+    <button onclick="retryFetchExpected('${escHtml(tracking)}')" style="background:#b45309; color:white; border:none; padding:5px 12px; border-radius:8px; font-family:'Noto Sans Thai',sans-serif; font-size:0.78rem; cursor:pointer; font-weight:600;">🔁 ลองใหม่</button>
   `;
   banner.style.display = 'flex';
 }
@@ -7144,7 +7062,7 @@ function updateChecklistUI() {
     lbl.textContent = `${totalScanned} / ${totalNeeded} ชิ้น`;
     bar.style.width = pct + '%';
     bar.style.background = pct >= 100
-      ? 'linear-gradient(90deg,#7ab87a,#90d890)'
+      ? 'linear-gradient(90deg,#059669,#059669)'
       : 'linear-gradient(90deg,var(--pink-light),var(--pink))';
   }
 
@@ -7290,7 +7208,7 @@ function _renderDzList() {
     return `<div class="dz-file">
       <span>📄</span>
       <span class="dz-name" title="${escHtml(f.name)}">${escHtml(f.name)}</span>
-      <span style="font-size:0.75rem; color:#a08a5a;">${kb} KB</span>
+      <span style="font-size:0.75rem; color:var(--text2);">${kb} KB</span>
       <button class="dz-remove" type="button" onclick="removeDzFile(${i})" title="ลบ">×</button>
     </div>`;
   }).join('');
@@ -7695,12 +7613,12 @@ async function _runWithLimit(items, limit, worker, onComplete) {
 function _progressBarHtml(label, done, total, currentName) {
   const pct = total ? Math.round((done / total) * 100) : 0;
   return `
-    <div style="font-size:1rem; font-weight:600; color:#7a6440; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
+    <div style="font-size:1rem; font-weight:600; color:var(--text); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
       <span>${label}</span>
-      <span style="font-size:0.85rem; color:#a08a5a;">${done}/${total} (${pct}%)</span>
+      <span style="font-size:0.85rem; color:var(--text2);">${done}/${total} (${pct}%)</span>
     </div>
     <div class="upload-progress-bar"><div style="width:${pct}%"></div></div>
-    <div style="font-size:0.78rem; color:#a08a5a; word-break:break-all; line-height:1.4; min-height:1.2em;">${escHtml(currentName || '')}</div>
+    <div style="font-size:0.78rem; color:var(--text2); word-break:break-all; line-height:1.4; min-height:1.2em;">${escHtml(currentName || '')}</div>
   `;
 }
 
@@ -7710,7 +7628,7 @@ function _showProgressDialog(label, total) {
     html: _progressBarHtml(label, 0, total, ''),
     allowOutsideClick: false,
     showConfirmButton: false,
-    background: '#fff0f3',
+    background: '#ffffff',
     customClass: { popup: 'swal-popup' },
   });
 }
@@ -7859,32 +7777,32 @@ function _chatFileHtml(r) {
   if (!c) {
     const token = (typeof HubLogin !== 'undefined' && HubLogin.token && HubLogin.token()) || '';
     return token
-      ? '<div style="font-size:0.78rem; color:#a08a5a; margin-top:3px;">ลูกค้าที่ทักแชท — ส่งไม่สำเร็จรอบนี้ (อัปไฟล์เดิมซ้ำได้ ไม่นับซ้ำ)</div>'
-      : '<div style="font-size:0.78rem; color:#c44; margin-top:3px;">⚠ ยังไม่ได้เข้าสู่ระบบ — รายชื่อลูกค้าที่ทักแชทไม่ได้ถูกส่งไปที่เว็บ</div>';
+      ? '<div style="font-size:0.78rem; color:var(--text2); margin-top:3px;">ลูกค้าที่ทักแชท — ส่งไม่สำเร็จรอบนี้ (อัปไฟล์เดิมซ้ำได้ ไม่นับซ้ำ)</div>'
+      : '<div style="font-size:0.78rem; color:#dc2626; margin-top:3px;">⚠ ยังไม่ได้เข้าสู่ระบบ — รายชื่อลูกค้าที่ทักแชทไม่ได้ถูกส่งไปที่เว็บ</div>';
   }
   if (c.skipped) return '';
   const added = c.added || 0, updated = c.updated || 0;
   const msg = (added || updated)
     ? `ลูกค้าที่ทักแชท — ใหม่ ${added} คน${updated ? ` · เพิ่มบิลให้คนเดิม ${updated} คน` : ''} · รวม ${(c.total || 0).toLocaleString('th-TH')} คน`
     : `ลูกค้าที่ทักแชท — ไม่มีคนใหม่ (บิลที่เคยนับแล้ว ${c.duplicateBills || 0} ใบ)`;
-  return `<div style="font-size:0.78rem; color:#4a7c59; margin-top:3px;">${msg}</div>`;
+  return `<div style="font-size:0.78rem; color:#059669; margin-top:3px;">${msg}</div>`;
 }
 
 function _amountFileHtml(r, parcelCount) {
   const info = r.amountInfo || {};
   if (!info.column) {
-    return `<div style="font-size:0.78rem; color:#a08a5a; margin-top:3px;">💰 ไฟล์นี้ยังไม่มีช่องราคาที่รู้จัก — ${parcelCount} ใบนี้จะไม่มียอดในรายงาน</div>`;
+    return `<div style="font-size:0.78rem; color:var(--text2); margin-top:3px;">💰 ไฟล์นี้ยังไม่มีช่องราคาที่รู้จัก — ${parcelCount} ใบนี้จะไม่มียอดในรายงาน</div>`;
   }
   const missing = parcelCount - (info.parcels || 0);
-  const missHtml = missing > 0 ? ` <span style="color:#c48a00;">· ไม่มีราคา ${missing} ใบ</span>` : '';
-  return `<div style="font-size:0.78rem; color:#7a6440; margin-top:3px;">💰 ${_baht(info.total)} จาก "${escHtml(info.column)}" · ${info.parcels} ใบ${missHtml}</div>`;
+  const missHtml = missing > 0 ? ` <span style="color:#b45309;">· ไม่มีราคา ${missing} ใบ</span>` : '';
+  return `<div style="font-size:0.78rem; color:var(--text); margin-top:3px;">💰 ${_baht(info.total)} จาก "${escHtml(info.column)}" · ${info.parcels} ใบ${missHtml}</div>`;
 }
 function _noAmountWarnHtml(results) {
   const names = { tiktok: 'TikTok', shopee: 'Shopee', lazada: 'Lazada', page365: 'Page365', thaimart: 'Thaimart' };
   const mps = [...new Set(results.filter(r => !(r.amountInfo?.column)).map(r => r.marketplace))];
   if (!mps.length) return '';
   const list = mps.map(m => names[m] || m).join(' · ');
-  return `<div style="margin-top:6px; padding:8px 10px; background:#fff3cd; border-left:3px solid #d4a017; border-radius:6px; font-size:0.84rem; color:#7a5a10;">💰 ยังอ่านราคาจากไฟล์ของ <strong>${escHtml(list)}</strong> ไม่ได้ — อัปได้ตามปกติ แค่ใบพวกนี้จะไม่มียอดใน "ยอดส่งออกรายวัน"</div>`;
+  return `<div style="margin-top:6px; padding:8px 10px; background:#fffbeb; border-left:3px solid #b45309; border-radius:6px; font-size:0.84rem; color:#b45309;">💰 ยังอ่านราคาจากไฟล์ของ <strong>${escHtml(list)}</strong> ไม่ได้ — อัปได้ตามปกติ แค่ใบพวกนี้จะไม่มียอดใน "ยอดส่งออกรายวัน"</div>`;
 }
 
 async function processFileUpload() {
@@ -7943,7 +7861,7 @@ async function processFileUpload() {
     r._crossDup = perFileCross;
   }
   const crossDupHtml = crossFileDups > 0
-    ? `<div style="margin-top:6px; padding:8px 10px; background:#fff3cd; border-left:3px solid #d4a017; border-radius:6px; font-size:0.84rem; color:#7a5a10;">⚠ พบรายการซ้ำระหว่างไฟล์ <strong>${crossFileDups} รายการ</strong> — ระบบจะเขียนเฉพาะรายการแรกที่พบ</div>`
+    ? `<div style="margin-top:6px; padding:8px 10px; background:#fffbeb; border-left:3px solid #b45309; border-radius:6px; font-size:0.84rem; color:#b45309;">⚠ พบรายการซ้ำระหว่างไฟล์ <strong>${crossFileDups} รายการ</strong> — ระบบจะเขียนเฉพาะรายการแรกที่พบ</div>`
     : '';
 
   // รายการต่อไฟล์ — badge สีตาม brand ของแต่ละ marketplace
@@ -7969,17 +7887,17 @@ async function processFileUpload() {
   const perFile = results.map(r => {
     const tCount = new Set(r.extractData.map(d => d.tracking)).size;
     const s = mpStyle[r.marketplace] || { bg: '#888' };
-    const bg = mpFileBg[r.marketplace] || '#f5f0e0';
+    const bg = mpFileBg[r.marketplace] || '#f8fafc';
     const skipCount = r.skipped?.count || 0;
     const total = r.totalDataRows || (r.extractData.length + skipCount);
     const rowSummary = skipCount > 0
-      ? `${tCount} ใบ · ${r.extractData.length} รายการ <span style="color:#a08a5a;">(${r.extractData.length + skipCount}/${total} แถว)</span>`
+      ? `${tCount} ใบ · ${r.extractData.length} รายการ <span style="color:var(--text2);">(${r.extractData.length + skipCount}/${total} แถว)</span>`
       : `${tCount} ใบ · ${r.extractData.length} รายการ`;
     const skipHtml = skipCount > 0 ? (() => {
       const parts = Object.entries(r.skipped.reasons)
         .map(([k, v]) => `${_skipReasonLabel[k] || k} ${v} แถว`)
         .join(', ');
-      return `<div style="font-size:0.78rem; color:#c44; margin-top:3px;">⚠ ข้าม ${skipCount} แถว — ${parts}</div>`;
+      return `<div style="font-size:0.78rem; color:#dc2626; margin-top:3px;">⚠ ข้าม ${skipCount} แถว — ${parts}</div>`;
     })() : '';
     const amtHtml = _amountFileHtml(r, tCount);
     const chatHtml = _chatFileHtml(r);
@@ -7988,23 +7906,23 @@ async function processFileUpload() {
         ${mpBadge(r.marketplace)}
         <strong style="font-size:0.88rem; word-break:break-all;">📄 ${escHtml(r.file.name)}</strong>
       </div>
-      <div style="font-size:0.82rem; color:#7a6440; margin-top:4px;">${rowSummary}</div>
+      <div style="font-size:0.82rem; color:var(--text); margin-top:4px;">${rowSummary}</div>
       ${amtHtml}
       ${chatHtml}
       ${skipHtml}
     </div>`;
   }).join('');
   const failHtml = readFailures.length
-    ? `<div style="margin-top:8px; padding-top:8px; border-top:1px solid #e0c0c0;">
-         <div style="color:#c44; font-weight:600;">ข้ามไฟล์ที่อ่านไม่ได้ (${readFailures.length}):</div>
-         ${readFailures.map(f => `<div style="font-size:0.8rem; color:#a55;">• ${escHtml(f.name)} — ${escHtml(f.reason)}</div>`).join('')}
+    ? `<div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border);">
+         <div style="color:#dc2626; font-weight:600;">ข้ามไฟล์ที่อ่านไม่ได้ (${readFailures.length}):</div>
+         ${readFailures.map(f => `<div style="font-size:0.8rem; color:#dc2626;">• ${escHtml(f.name)} — ${escHtml(f.reason)}</div>`).join('')}
        </div>`
     : '';
 
   const confirm = await Swal.fire({
     title: `ตรวจสอบข้อมูลก่อนอัปโหลด`,
     html: `
-      <div style="text-align:left; font-size:0.9rem; color:#7a6440; line-height:1.7;">
+      <div style="text-align:left; font-size:0.9rem; color:var(--text); line-height:1.7;">
         <div>📦 พัสดุรวม: <strong>${allTracking.size} ใบ</strong></div>
         <div>📋 รายการสินค้ารวม: <strong>${totalItems} รายการ</strong></div>
         <div>📝 หมายเหตุลูกค้า: <strong>${totalRemark} ใบ</strong></div>
@@ -8012,7 +7930,7 @@ async function processFileUpload() {
         <div>💰 ยอดที่ลูกค้าจ่าย: <strong>${_baht(_amountTotalOf(results))}</strong> <span style="font-size:0.82rem;">(รู้ราคา ${_amountParcelsOf(results)}/${allTracking.size} ใบ)</span></div>
         ${crossDupHtml}
         ${_noAmountWarnHtml(results)}
-        <div style="margin-top:8px; padding-top:8px; border-top:1px solid #e0d8c0;">
+        <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border);">
           ${perFile}
         </div>
         ${failHtml}
@@ -8023,7 +7941,7 @@ async function processFileUpload() {
     cancelButtonText: 'ยกเลิก',
     confirmButtonColor: 'transparent',
     cancelButtonColor: 'transparent',
-    background: '#fff0f3',
+    background: '#ffffff',
     customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn', cancelButton: 'swal-btn' },
     reverseButtons: true,
   });
@@ -8066,19 +7984,19 @@ async function processFileUpload() {
 
     if (agg.failures.length === 0) { lastFailures = []; break; }
 
-    const failHtml = agg.failures.map(f => `<div style="padding:6px 0; border-bottom:1px dashed #e0c0c0;">
+    const failHtml = agg.failures.map(f => `<div style="padding:6px 0; border-bottom:1px dashed var(--border);">
         <div>${mpBadge(f.result.marketplace)} <strong style="font-size:0.85rem; word-break:break-all;">${escHtml(f.result.file.name)}</strong></div>
-        <div style="font-size:0.78rem; color:#c44; margin-top:2px;">⚠ ${escHtml(f.reason)}</div>
+        <div style="font-size:0.78rem; color:#dc2626; margin-top:2px;">⚠ ${escHtml(f.reason)}</div>
       </div>`).join('');
     const dupMsg2 = totalDup > 0 ? ` (ข้ามซ้ำ ${totalDup})` : '';
     const bfMsg2  = totalBf > 0 ? ` (เติม OrderId ${totalBf})` : '';
     const ruMsg2  = totalRemarkUpd > 0 ? ` (อัปเดตหมายเหตุ ${totalRemarkUpd})` : '';
     const choice = await Swal.fire({
       title: 'อัปโหลดบางไฟล์ไม่สำเร็จ',
-      html: `<div style="text-align:left; font-size:0.88rem; color:#7a6440;">
+      html: `<div style="text-align:left; font-size:0.88rem; color:var(--text);">
         ✅ สำเร็จสะสม: <strong>${totalCount}</strong> รายการ${dupMsg2}${bfMsg2}${ruMsg2}<br>
         ❌ ล้มเหลว: <strong>${agg.failures.length}</strong> ไฟล์
-        <div style="margin-top:8px; padding-top:8px; border-top:1px solid #e0d8c0;">${failHtml}</div>
+        <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border);">${failHtml}</div>
       </div>`,
       icon: 'warning',
       showDenyButton: true,
@@ -8087,7 +8005,7 @@ async function processFileUpload() {
       denyButtonText: '🔁 ลองใหม่อีกครั้ง',
       cancelButtonText: 'ปิด',
       reverseButtons: true,
-      background: '#fff0f3',
+      background: '#ffffff',
       denyButtonColor: 'transparent',
       cancelButtonColor: 'transparent',
       customClass: { popup: 'swal-popup', title: 'swal-ttl', denyButton: 'swal-btn', cancelButton: 'swal-btn' },
@@ -8118,44 +8036,44 @@ async function processFileUpload() {
       const written = r._serverWritten ?? sent;
       const dup = r._serverDup ?? 0;
       const dupLine = dup > 0
-        ? `<div style="font-size:0.78rem;color:#a08a5a;">✏️ เข้าคิว ${written} · ⤴ ข้ามใบที่แพคแล้ว ${dup}</div>`
+        ? `<div style="font-size:0.78rem;color:var(--text2);">✏️ เข้าคิว ${written} · ⤴ ข้ามใบที่แพคแล้ว ${dup}</div>`
         : '';
       const amtLine = (r._serverAmount || 0) > 0
-        ? `<div style="font-size:0.78rem;color:#7a6440;">💰 ${_baht(r._serverAmount)} · ${r._serverWithAmount || 0} ใบ</div>`
+        ? `<div style="font-size:0.78rem;color:var(--text);">💰 ${_baht(r._serverAmount)} · ${r._serverWithAmount || 0} ใบ</div>`
         : '';
       const skipDetail = skipCount > 0 ? (() => {
         const parts = Object.entries(r.skipped.reasons)
           .map(([k, v]) => `${_skipReasonLabel[k] || k} ${v}`)
           .join(', ');
-        return `<div style="font-size:0.75rem;color:#c44;">⚠ ข้าม ${skipCount} — ${parts}</div>`;
+        return `<div style="font-size:0.75rem;color:#dc2626;">⚠ ข้าม ${skipCount} — ${parts}</div>`;
       })() : '';
       const mpName = (mpStyle[r.marketplace] || {}).name || r.marketplace;
       const totalRows = r.totalDataRows || (sent + skipCount);
       const rowInfo = skipCount > 0
-        ? `${tCount} ใบ · <span style="color:#7a6440;">${sent}/${totalRows} แถว</span>`
+        ? `${tCount} ใบ · <span style="color:var(--text);">${sent}/${totalRows} แถว</span>`
         : `${tCount} ใบ · ${sent} รายการ`;
-      return `<div style="font-size:0.82rem;color:#5a4a30;line-height:1.6;margin-bottom:6px;">[${mpName}] ${escHtml(r.file.name.replace(/\.[^.]+$/, ''))}<br>${rowInfo}${dupLine}${amtLine}${skipDetail}</div>`;
+      return `<div style="font-size:0.82rem;color:var(--text);line-height:1.6;margin-bottom:6px;">[${mpName}] ${escHtml(r.file.name.replace(/\.[^.]+$/, ''))}<br>${rowInfo}${dupLine}${amtLine}${skipDetail}</div>`;
     }).join('');
     const totalSent = results.reduce((s, r) => s + r.extractData.length, 0);
     /* ยอดเงินของใบที่เข้าคิวรอบนี้ — ที่มาของตัวเลขในรายงาน "ยอดส่งออกรายวัน" ตอนใบถูกแพค */
     const amountLine = totalWithAmount > 0
-      ? `<div style="margin-top:4px; padding:6px 10px; background:#e7f5ec; border-left:3px solid #1a9e82; border-radius:6px; font-size:0.84rem; color:#1a6b58;">💰 ยอดที่ลูกค้าจ่าย <strong>${_baht(totalAmount)}</strong> · รู้ราคา ${totalWithAmount} จาก ${totalParcels} ใบ${totalParcels > totalWithAmount ? ` <span style="color:#7a5a10;">(อีก ${totalParcels - totalWithAmount} ใบไม่มีราคาในไฟล์)</span>` : ''}</div>`
-      : `<div style="margin-top:4px; font-size:0.82rem; color:#a08a5a;">💰 ไฟล์รอบนี้ไม่มีราคาติดมา — ใบพวกนี้จะไม่มียอดใน "ยอดส่งออกรายวัน"</div>`;
+      ? `<div style="margin-top:4px; padding:6px 10px; background:#ecfdf5; border-left:3px solid #059669; border-radius:6px; font-size:0.84rem; color:#059669;">💰 ยอดที่ลูกค้าจ่าย <strong>${_baht(totalAmount)}</strong> · รู้ราคา ${totalWithAmount} จาก ${totalParcels} ใบ${totalParcels > totalWithAmount ? ` <span style="color:#b45309;">(อีก ${totalParcels - totalWithAmount} ใบไม่มีราคาในไฟล์)</span>` : ''}</div>`
+      : `<div style="margin-top:4px; font-size:0.82rem; color:var(--text2);">💰 ไฟล์รอบนี้ไม่มีราคาติดมา — ใบพวกนี้จะไม่มียอดใน "ยอดส่งออกรายวัน"</div>`;
     const dupLine = totalDup > 0
-      ? `<div style="margin-top:4px; padding:6px 10px; background:#fff3cd; border-left:3px solid #d4a017; border-radius:6px; font-size:0.84rem; color:#7a5a10;">⤴ ข้าม <strong>${totalDup}</strong> รายการ (พัสดุแพคไปแล้ว — ไม่เอากลับเข้าคิว)</div>`
+      ? `<div style="margin-top:4px; padding:6px 10px; background:#fffbeb; border-left:3px solid #b45309; border-radius:6px; font-size:0.84rem; color:#b45309;">⤴ ข้าม <strong>${totalDup}</strong> รายการ (พัสดุแพคไปแล้ว — ไม่เอากลับเข้าคิว)</div>`
       : '';
-    const bfLine    = totalBf  > 0 ? `<div style="font-size:0.8rem;color:#a08a5a;">เติม OrderId ย้อนหลัง ${totalBf} แถว</div>` : '';
+    const bfLine    = totalBf  > 0 ? `<div style="font-size:0.8rem;color:var(--text2);">เติม OrderId ย้อนหลัง ${totalBf} แถว</div>` : '';
     const ruLine = totalRemarkUpd > 0
-      ? `<div style="margin-top:4px; padding:6px 10px; background:#e7f5ec; border-left:3px solid #1a9e82; border-radius:6px; font-size:0.84rem; color:#1a6b58;">📝 อัปเดตหมายเหตุลูกค้า <strong>${totalRemarkUpd}</strong> รายการ (แถวมีอยู่แล้ว แต่หมายเหตุเปลี่ยน — เขียนทับให้)</div>`
+      ? `<div style="margin-top:4px; padding:6px 10px; background:#ecfdf5; border-left:3px solid #059669; border-radius:6px; font-size:0.84rem; color:#059669;">📝 อัปเดตหมายเหตุลูกค้า <strong>${totalRemarkUpd}</strong> รายการ (แถวมีอยู่แล้ว แต่หมายเหตุเปลี่ยน — เขียนทับให้)</div>`
       : '';
     Swal.fire({
       title: totalParseSkipped > 0 ? 'สำเร็จ (มีคำเตือน)' : 'สำเร็จ',
       html: `<div style="text-align:left;line-height:1.8;">
         <div>✅ <strong>เข้าคิวรอแพคที่ Hub: ${totalCount} รายการ</strong></div>
-        <div style="font-size:0.85rem;color:#7a6440;">จากที่อ่านได้ทั้งหมด ${totalSent} รายการ ใน ${results.length} ไฟล์</div>
+        <div style="font-size:0.85rem;color:var(--text);">จากที่อ่านได้ทั้งหมด ${totalSent} รายการ ใน ${results.length} ไฟล์</div>
         ${amountLine}
         ${dupLine}${bfLine}${ruLine}
-        <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e0d8c0;">${resultPerFile}</div>
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">${resultPerFile}</div>
       </div>`,
       icon: totalParseSkipped > 0 ? 'warning' : 'success',
       customClass: { popup: 'swal-popup' },
@@ -8173,13 +8091,13 @@ async function openTab(tab, btn) {
   if (tab !== 'scan' && currentP && !isFinishing) {
     const ok = await Swal.fire({
       title: 'กำลังสแกนพัสดุอยู่',
-      html: `<div style="font-size:0.9rem; color:#7a6440; line-height:1.6;">มีพัสดุค้างใน scan tab — ถ้าออกตอนนี้ <strong>กล้องจะหยุด</strong> แต่ข้อมูลพัสดุยังอยู่<br>กลับเข้ามา scan ใหม่ต้องกดเริ่มกล้องอีกครั้ง</div>`,
+      html: `<div style="font-size:0.9rem; color:var(--text); line-height:1.6;">มีพัสดุค้างใน scan tab — ถ้าออกตอนนี้ <strong>กล้องจะหยุด</strong> แต่ข้อมูลพัสดุยังอยู่<br>กลับเข้ามา scan ใหม่ต้องกดเริ่มกล้องอีกครั้ง</div>`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'ออกไป tab อื่น',
       cancelButtonText: 'อยู่ scan ต่อ',
       reverseButtons: true,
-      background: '#fff0f3',
+      background: '#ffffff',
       customClass: { popup: 'swal-popup' },
     });
     if (!ok.isConfirmed) return;
@@ -8321,7 +8239,7 @@ function animateDashboard() {
   }, 400);
 
   // Mini confetti on dashboard open
-  spawnMiniConfetti(3, ['#f5e0a0','#d4a843','#c8e8b8','#f0c8c8','#b8d8f0']);
+  spawnMiniConfetti(3, ['#e7d5a8','#a8853f','#bf9c4f','#d9bf7d','#f3ead4']);
 }
 
 function animateUpload() {
@@ -8432,12 +8350,12 @@ function spawnMiniConfetti(count, colors) {
    และบังคับล็อกอินหรือยัง (เว็บร้านเป็นคนตัดสิน) — ถ้าบังคับแล้วจะมีประตูกั้นเต็มจอ
    **เน็ตล่มไม่กั้น** ของที่แพคไว้ยังส่งเข้า Hub รอบหน้าได้เหมือนเดิม */
 document.addEventListener('DOMContentLoaded', () => {
-  /* ปุ่มบัญชีชุดสีเดียวกับแอป — วงกลมไล่สีเดียวกับโลโก้ LS (ตามสีประจำวัน) · ปุ่มนูนแบบป้าย "ออนไลน์" */
+  /* ปุ่มบัญชีชุดสีเดียวกับแอป — วงกลมไล่สีเดียวกับโลโก้ LS (ทองธีมกลาง) · ปุ่มนูนแบบป้าย "ออนไลน์" */
   HubLogin.mountAccount(document.getElementById('hub-account'), {
-    font: "'Mitr','Prompt',sans-serif",
+    font: "'Noto Sans Thai',sans-serif",
     trigger: { bg: 'var(--bg)', radius: '20px', shadow: '3px 3px 7px var(--sd), -3px -3px 7px var(--sl)',
                color: 'var(--text)', pad: '3px 11px 3px 3px', height: '30px' },
-    avatar: { size: 24, bg: 'linear-gradient(135deg, var(--pink), var(--day-accent, var(--pink)))', color: '#fff' },
+    avatar: { size: 24, bg: 'linear-gradient(135deg, var(--brand-600), var(--brand-700))', color: '#fff' },
     menu: { bg: 'var(--bg)', border: '1px solid var(--border2)', radius: 'var(--radius-sm)',
             shadow: '8px 8px 22px var(--sd), -6px -6px 16px var(--sl)', color: 'var(--text)', sub: 'var(--text3)',
             divider: 'var(--border)', danger: 'var(--danger)', badgeBg: 'var(--pink-light)', badgeColor: 'var(--brown)',
@@ -8487,7 +8405,7 @@ function refreshDash() {
       ? new Date(v.time).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
       : '';
     return `<div style="display:flex; justify-content:space-between; align-items:center;
-      padding:7px 8px; border-bottom:1px solid #f5e6a0; font-size:0.78rem; gap:8px;">
+      padding:7px 8px; border-bottom:1px solid var(--border); font-size:0.78rem; gap:8px;">
       <span style="color:var(--text2); font-size:0.7rem; flex-shrink:0;">${ts}</span>
       <span style="color:var(--text); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">${escHtml(pid)}</span>
       <span style="color:var(--pink); font-weight:600; flex-shrink:0;">${cnt} ชิ้น</span>
@@ -8612,11 +8530,11 @@ async function _askVoidPack(i) {
   const when = d.ts ? new Date(d.ts).toLocaleString('th-TH') : '';
   const r = await Swal.fire({
     title: 'ลบใบแพคนี้?',
-    html: `<div style="text-align:left;font-size:0.88rem;color:#7a6440;line-height:1.7;">
+    html: `<div style="text-align:left;font-size:0.88rem;color:var(--text);line-height:1.7;">
       <div><b>${escHtml(d.tk || '')}</b></div>
       <div>${escHtml(when)} · ${items.length} ชิ้น${d.mp ? ' · ' + escHtml(d.mp) : ''}</div>
       ${d.oid ? `<div>ออเดอร์ #${escHtml(d.oid)}</div>` : ''}
-      <div style="margin-top:8px;padding:8px 10px;background:#fff3cd;border-left:3px solid #d4a017;border-radius:6px;font-size:0.82rem;color:#7a5a10;">
+      <div style="margin-top:8px;padding:8px 10px;background:#fffbeb;border-left:3px solid #b45309;border-radius:6px;font-size:0.82rem;color:#b45309;">
         ใช้เฉพาะใบที่สแกนทดสอบหรือสแกนผิดใบ — ของในใบจะกลับเข้าคิวรอแพคให้เอง
         แพคใหม่ได้ตามปกติ · คลิปบน Google Drive ต้องไปลบเองต่างหาก
       </div>
@@ -8628,7 +8546,7 @@ async function _askVoidPack(i) {
     reverseButtons: true,
     confirmButtonColor: 'transparent',
     cancelButtonColor: 'transparent',
-    background: '#fff0f3',
+    background: '#ffffff',
     customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn', cancelButton: 'swal-btn' },
   });
   if (!r.isConfirmed) return;
@@ -8646,10 +8564,10 @@ async function _askVoidPack(i) {
     Swal.fire({
       icon: 'success',
       title: 'ลบแล้ว',
-      html: `<div style="font-size:0.88rem;color:#7a6440;">${escHtml(d.tk || '')}${res.requeued ? ' · คืนเข้าคิวรอแพคให้แล้ว' : ''}</div>`,
+      html: `<div style="font-size:0.88rem;color:var(--text);">${escHtml(d.tk || '')}${res.requeued ? ' · คืนเข้าคิวรอแพคให้แล้ว' : ''}</div>`,
       timer: 2200,
       showConfirmButton: false,
-      background: '#fff0f3',
+      background: '#ffffff',
       customClass: { popup: 'swal-popup' },
     });
   } catch (e) {
@@ -8686,7 +8604,7 @@ async function showOrdersTable() {
       : escHtml(d.tk || '');
     /* ปุ่มลบ — ใช้ตอนสแกนทดสอบหรือสแกนผิดใบ · ยืนยันก่อนเสมอ */
     const del = d.id
-      ? `<span onclick="event.stopPropagation();_askVoidPack(${i})" title="ลบใบนี้" style="color:#c44;cursor:pointer;font-size:0.95rem;">🗑</span>`
+      ? `<span onclick="event.stopPropagation();_askVoidPack(${i})" title="ลบใบนี้" style="color:#dc2626;cursor:pointer;font-size:0.95rem;">🗑</span>`
       : '<span style="color:#ddd;">–</span>';
     return `<tr class="ot-row ${i % 2 ? 'ot-odd' : 'ot-even'}" data-otrow="${i}" onclick="_toggleOrderRow(this)">
         <td class="ot-time">▸ ${tstr}</td>
@@ -8697,7 +8615,7 @@ async function showOrdersTable() {
         <td style="text-align:center;">${del}</td>
       </tr>
       <tr class="ot-detail" style="display:none;"><td colspan="6">
-        ${meta ? `<div style="font-size:0.74rem;color:#7a6440;margin-bottom:5px;">${meta}</div>` : ''}
+        ${meta ? `<div style="font-size:0.74rem;color:var(--text);margin-bottom:5px;">${meta}</div>` : ''}
         ${itemsHtml}
       </td></tr>`;
   }).join('');
@@ -8708,17 +8626,17 @@ async function showOrdersTable() {
       #otWrap thead th{position:sticky;top:0;z-index:2;background:var(--pink);color:#fff;padding:9px 7px;text-align:left;font-weight:600;letter-spacing:0.2px;}
       #otWrap thead th.c{text-align:center;}
       #otWrap td{padding:6px 7px;color:#333;}
-      #otWrap .ot-row{cursor:pointer;border-bottom:1px solid var(--pink-light);}
+      #otWrap .ot-row{cursor:pointer;border-bottom:1px solid var(--border);}
       #otWrap .ot-even{background:#fff;}
-      #otWrap .ot-odd{background:var(--pink-light);}
-      #otWrap .ot-row:hover,#otWrap .ot-row:active{background:var(--pink-light);filter:brightness(0.95);}
+      #otWrap .ot-odd{background:var(--pink-pale);}
+      #otWrap .ot-row:hover,#otWrap .ot-row:active{background:var(--brand-100);filter:brightness(0.95);}
       #otWrap .ot-time{white-space:nowrap;color:#888;}
       #otWrap .ot-tk{white-space:nowrap;font-weight:700;color:#222;}
-      #otWrap .ot-detail td{background:#faf6f8;border-left:3px solid var(--pink);padding:9px 12px 9px 14px;color:#444;line-height:1.5;}
+      #otWrap .ot-detail td{background:#faf6ec;border-left:3px solid var(--pink);padding:9px 12px 9px 14px;color:#444;line-height:1.5;}
     </style>
     <div style="text-align:left;">
       <div style="font-size:0.75rem;color:#999;margin-bottom:7px;">${total > MAX_SHOW ? `แสดง ${MAX_SHOW} ล่าสุด — กด Export เพื่อดูครบ ${total}` : `ทั้งหมด ${total} รายการ (ย้อนหลัง 90 วัน)`} · <b style="color:var(--pink);">แตะแถวเพื่อดูสินค้า</b></div>
-      <div id="otWrap" style="max-height:62vh;overflow:auto;border:1px solid #f0d8e4;border-radius:10px;box-shadow:0 1px 4px rgba(194,24,91,0.08);">
+      <div id="otWrap" style="max-height:62vh;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 1px 4px rgba(15,23,42,0.06);">
         <table>
           <thead><tr>
             <th>เวลา</th><th>Tracking</th><th>ร้าน</th><th class="c">ชิ้น</th><th class="c">คลิป</th><th class="c">ลบ</th>
@@ -8731,7 +8649,7 @@ async function showOrdersTable() {
     confirmButtonText: 'ปิด',
     showDenyButton: true,
     denyButtonText: '⬇️ Export CSV',
-    denyButtonColor: '#2e7d32',
+    denyButtonColor: '#059669',
     customClass: { popup: 'swal-popup' },
   }).then(r => { if (r.isDenied) _exportOrdersCsv(orders); });
 }
@@ -8770,7 +8688,7 @@ function _videoFileId(url) {
 window._playVideo = function(fileId) {
   if (!fileId) return;
   Swal.fire({
-    html: `<div style="font-size:0.85rem;color:var(--text2,#7a6440);margin-bottom:6px;">🎬 พรีวิววิดีโอ</div>
+    html: `<div style="font-size:0.85rem;color:var(--text2);margin-bottom:6px;">🎬 พรีวิววิดีโอ</div>
       <iframe src="https://drive.google.com/file/d/${fileId}/preview" style="width:100%;height:62vh;border:0;border-radius:10px;background:#000;" allow="autoplay" allowfullscreen></iframe>
       <div style="margin-top:8px;"><a href="https://drive.google.com/file/d/${fileId}/view" target="_blank" style="font-size:0.8rem;color:var(--pink);text-decoration:none;">เปิดใน Google Drive ↗</a></div>`,
     width: '94%',
@@ -8884,7 +8802,7 @@ async function _showLatestPackHint(container) {
     const last = docs.reduce((m, d) => (d.ts > (m?.ts || 0) ? d : m), null);
     if (!last) return;
     const t = new Date(last.ts).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-    container.innerHTML += `<div class="text-center small" style="color:#9a9085; padding-bottom:10px;">ใบล่าสุดที่แพคคือ ${t} — เลือกช่วงวันให้ครอบคลุมวันนั้นเพื่อดูตัวเลข</div>`;
+    container.innerHTML += `<div class="text-center small" style="color:var(--text2); padding-bottom:10px;">ใบล่าสุดที่แพคคือ ${t} — เลือกช่วงวันให้ครอบคลุมวันนั้นเพื่อดูตัวเลข</div>`;
   } catch(e) {}
 }
 
@@ -8918,7 +8836,7 @@ function renderReport(data, start, end) {
   if (products.length === 0) {
     /* ช่วงที่ไม่มีใบแพคเลยต้องบอกว่า "ยังไม่มีการแพค" พร้อมใบล่าสุดที่มี
        ไม่งั้นเลข 0 กับ −100% จะอ่านเหมือนหน้าพัง ทั้งที่แค่ยังไม่ได้แพควันนี้ */
-    container.innerHTML = '<div class="text-center small py-4" style="color:#9a9085;">😿 ยังไม่มีใบแพคในช่วงนี้</div>';
+    container.innerHTML = '<div class="text-center small py-4" style="color:var(--text2);">😿 ยังไม่มีใบแพคในช่วงนี้</div>';
     _showLatestPackHint(container);
     return;
   }
@@ -8928,10 +8846,10 @@ function renderReport(data, start, end) {
         <div class="dash-rank">${i+1}</div>
         <div style="overflow:hidden;">
           <div style="font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(item.sku ? _productName(item.sku) : item.name)}</div>
-          <div style="font-size:0.72rem; color:#b89840;">${escHtml(item.sku || '')}</div>
+          <div style="font-size:0.72rem; color:var(--brand-700);">${escHtml(item.sku || '')}</div>
         </div>
       </div>
-      <div class="dash-count">${escHtml(item.count)}<span style="font-size:0.7rem; font-weight:400; color:#9a9085;"> ชิ้น</span></div>
+      <div class="dash-count">${escHtml(item.count)}<span style="font-size:0.7rem; font-weight:400; color:var(--text2);"> ชิ้น</span></div>
     </div>
   `).join('');
 }
@@ -8951,7 +8869,7 @@ function renderMarketplaceBreakdown(byMp, totalOrders) {
     lazada:  { name: 'Lazada',  color: '#0f146d' },
     page365: { name: 'Page365', color: '#1877f2' },
     thaimart:{ name: 'Thaimart', color: '#ad1457' },
-    other:   { name: 'อื่นๆ',   color: '#a08a5a' },
+    other:   { name: 'อื่นๆ',   color: '#64748b' },
   };
   const sorted = entries
     .map(([mp, v]) => ({ mp, name: (mpStyle[mp] || {}).name || mp, color: (mpStyle[mp] || {}).color || '#888', orders: v.orders || 0, items: v.items || 0 }))
@@ -9020,7 +8938,7 @@ function _setCompareDelta(targetId, delta) {
   } else {
     const arrow = delta.pct > 0 ? '🔺' : '🔻';
     const sign  = delta.pct > 0 ? '+' : '';
-    color = delta.pct > 0 ? '#52b788' : '#e07a3a';
+    color = delta.pct > 0 ? '#059669' : '#dc2626';
     txt = `${arrow} ${sign}${delta.pct.toFixed(1)}% (จาก ${delta.prev})`;
   }
   span.style.cssText = `font-size:0.7rem; color:${color}; margin-top:2px; font-weight:500;`;
@@ -9032,10 +8950,10 @@ function _setCompareDelta(targetId, delta) {
 async function showDayDetail(dateStr) {
   Swal.fire({
     title: '',
-    html: `<div style="padding:20px; color:#7a6440;">⏳ กำลังโหลดรายละเอียดของวันที่ ${escHtml(dateStr)}...</div>`,
+    html: `<div style="padding:20px; color:var(--text);">⏳ กำลังโหลดรายละเอียดของวันที่ ${escHtml(dateStr)}...</div>`,
     showConfirmButton: false,
     allowOutsideClick: false,
-    background: '#fff0f3',
+    background: '#ffffff',
     customClass: { popup: 'swal-popup' },
   });
   try {
@@ -9048,7 +8966,7 @@ async function showDayDetail(dateStr) {
       lazada: { name: 'Lazada', color: '#0f146d' },
       page365:{ name: 'Page365', color: '#1877f2' },
       thaimart:{ name: 'Thaimart', color: '#ad1457' },
-      other:  { name: 'อื่นๆ',  color: '#a08a5a' },
+      other:  { name: 'อื่นๆ',  color: '#64748b' },
     };
     const mpEntries = Object.entries(data.byMarketplace || {})
       .map(([m, v]) => ({ m, ...v }))
@@ -9076,7 +8994,7 @@ async function showDayDetail(dateStr) {
     const fmtDate = new Date(dateStr).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     await Swal.fire({
       title: fmtDate,
-      html: `<div style="text-align:left; color:#7a6440;">
+      html: `<div style="text-align:left; color:var(--text);">
         <div style="display:flex; gap:8px; margin-bottom:10px;">
           <div style="flex:1; background:var(--bg); border-radius:10px; padding:8px; text-align:center;">
             <div style="font-size:0.7rem; color:var(--text3);">ออเดอร์</div>
@@ -9089,10 +9007,10 @@ async function showDayDetail(dateStr) {
         </div>
         <div style="margin-top:8px; font-size:0.78rem; color:var(--text3); font-weight:600;">แยกตามช่องทาง</div>
         <div style="margin-top:4px;">${mpHtml}</div>
-        <div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--border, #e0d8c0); font-size:0.78rem; color:var(--text3); font-weight:600;">สินค้าขายดี (Top 10)</div>
+        <div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--border); font-size:0.78rem; color:var(--text3); font-weight:600;">สินค้าขายดี (Top 10)</div>
         <div style="margin-top:4px;">${prodHtml}</div>
       </div>`,
-      background: '#fff0f3',
+      background: '#ffffff',
       confirmButtonText: 'ปิด',
       confirmButtonColor: 'transparent',
       customClass: { popup: 'swal-popup', title: 'swal-ttl', confirmButton: 'swal-btn' },
@@ -9112,7 +9030,7 @@ async function resetSession() {
     cancelButtonText: 'ยกเลิก',
     confirmButtonColor: 'transparent',
     cancelButtonColor: 'transparent',
-    background: '#fff0f3',
+    background: '#ffffff',
     reverseButtons: true,
   });
   if (r.isConfirmed) {
@@ -9277,7 +9195,7 @@ async function copyTracking(tracking, btnEl) {
     if (btnEl) {
       const orig = btnEl.innerHTML;
       btnEl.innerHTML = '✓ คัดลอกแล้ว';
-      btnEl.style.background = '#7ab87a';
+      btnEl.style.background = '#059669';
       btnEl.style.color = '#fff';
       setTimeout(() => {
         btnEl.innerHTML = orig;
@@ -9387,7 +9305,7 @@ function _renderSearchCards(rows) {
     const pColors = { shopee: '#ee4d2d', tiktok: '#010101', lazada: '#0f146d', page365: '#1877f2', thaimart: '#ad1457' };
     const pName = { shopee: 'Shopee', tiktok: 'TikTok', lazada: 'Lazada', page365: 'Page365', thaimart: 'Thaimart' };
     if (marketplace_raw) {
-      const color = pColors[marketplace_raw] || '#c8a84b';
+      const color = pColors[marketplace_raw] || '#a8853f';
       const name = pName[marketplace_raw] || marketplace_raw;
       orderBadge += `<span style="display:inline-block; background:${color}; color:#fff; font-size:0.68rem; padding:1px 8px; border-radius:10px; margin-left:6px; vertical-align:middle;">${name}</span>`;
     }
@@ -9396,7 +9314,7 @@ function _renderSearchCards(rows) {
     }
 
     const remarkHtml = remark
-      ? `<div style="font-size:0.73rem; color:#c06030; margin-top:4px;"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/></svg> ${escHtml(remark)}</div>`
+      ? `<div style="font-size:0.73rem; color:#b45309; margin-top:4px;"><svg viewBox="0 0 20 20" fill="none" style="width:0.85em;height:0.85em;display:inline-block;vertical-align:-0.1em;margin-right:3px"><rect x="3" y="2" width="14" height="16" rx="3.5" fill="#e9c46a"/><rect x="6" y="6" width="8" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="9" width="6" height="1.5" rx="0.75" fill="white" opacity="0.8"/><rect x="6" y="12" width="7" height="1.5" rx="0.75" fill="white" opacity="0.8"/></svg> ${escHtml(remark)}</div>`
       : '';
 
     const _vfid = hasVideo ? _videoFileId(videoUrl) : '';
@@ -9486,7 +9404,7 @@ async function editSearchRemark(tracking) {
 
   const { value, isConfirmed } = await Swal.fire({
     title: current ? 'แก้หมายเหตุ' : 'เพิ่มหมายเหตุ',
-    html: `<div style="font-size:0.8rem; color:#9a9085; word-break:break-all; margin-bottom:2px;">${escHtml(tk)}</div>`,
+    html: `<div style="font-size:0.8rem; color:var(--text2); word-break:break-all; margin-bottom:2px;">${escHtml(tk)}</div>`,
     input: 'textarea',
     inputValue: current,
     inputPlaceholder: 'พิมพ์หมายเหตุ เช่น ห่อกันกระแทก / ห้ามเคาะกล่อง',
@@ -9494,7 +9412,7 @@ async function editSearchRemark(tracking) {
     showCancelButton: true,
     confirmButtonText: 'บันทึก',
     cancelButtonText: 'ยกเลิก',
-    background: '#fff0f3',
+    background: '#ffffff',
     customClass: { popup: 'swal-popup' },
   });
   if (!isConfirmed) return;
@@ -9503,7 +9421,7 @@ async function editSearchRemark(tracking) {
   if (remark === current.trim()) return; // ไม่มีอะไรเปลี่ยน — ไม่ต้องยิง
 
   Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false,
-              background: '#fff0f3', customClass: { popup: 'swal-popup' } });
+              background: '#ffffff', customClass: { popup: 'swal-popup' } });
   const ok = await _hubSaveRemark(tk, remark);
   if (!ok) {
     Swal.fire('บันทึกไม่สำเร็จ', _remarkPushFailReason || 'ไม่ทราบสาเหตุ', 'error');
@@ -9517,8 +9435,8 @@ async function editSearchRemark(tracking) {
   Swal.fire({
     icon: 'success',
     title: remark ? 'บันทึกหมายเหตุแล้ว' : 'ลบหมายเหตุแล้ว',
-    html: `<div style="font-size:0.85rem; color:#7a6440;">ทุกเครื่องเห็นแล้ว${isPending ? ' — ระบบจะพูดหมายเหตุนี้ตอนสแกนแพ็ค' : ''}</div>`,
-    background: '#fff0f3', customClass: { popup: 'swal-popup' },
+    html: `<div style="font-size:0.85rem; color:var(--text);">ทุกเครื่องเห็นแล้ว${isPending ? ' — ระบบจะพูดหมายเหตุนี้ตอนสแกนแพ็ค' : ''}</div>`,
+    background: '#ffffff', customClass: { popup: 'swal-popup' },
     timer: 2200, showConfirmButton: false,
   });
 }
@@ -9655,25 +9573,17 @@ function dismissOnboarding() {
 
 
 // ===== DAY THEME =====
+// สีตามวันปิดแล้ว (4 ต.ค. 2569) — ทุกวันใช้ธีมกลาง Lamsang ยังใส่ class day-N ไว้เผื่ออ้างอิง
 const DAY_NAMES = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
-const DAY_THEME_COLORS = {
-  0: '#fef2f2', // อาทิตย์ — แดง
-  1: '#fdfaec', // จันทร์ — เหลือง
-  2: '#fef2f4', // อังคาร — ชมพู
-  3: '#f2faf2', // พุธ — เขียว
-  4: '#fef6ee', // พฤหัส — ส้ม
-  5: '#eef6fd', // ศุกร์ — ฟ้า
-  6: '#f5f0fc', // เสาร์ — ม่วง
-};
 function applyDayTheme() {
   const day = new Date().getDay(); // 0=อาทิตย์ … 6=เสาร์
   // ลบ class วันเก่าทั้งหมดก่อน
   [0,1,2,3,4,5,6].forEach(d => document.documentElement.classList.remove('day-' + d));
   document.documentElement.classList.add('day-' + day);
-  // อัพ theme-color meta (สีแถบ browser)
+  // อัพ theme-color meta (สีแถบ browser) — พื้นธีมกลาง สว่าง #f8fafc / มืด #1c1b19
   const isDark = document.documentElement.classList.contains('dark-mode');
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = isDark ? '#252320' : (DAY_THEME_COLORS[day] || '#fdf8ed');
+  if (meta) meta.content = isDark ? '#1c1b19' : '#f8fafc';
   console.log('[DayTheme] วัน' + DAY_NAMES[day] + ' → day-' + day);
 }
 
@@ -9693,7 +9603,7 @@ function applyDayTheme() {
     }
   } catch(e) { document.documentElement.classList.remove('dark-mode'); }
 })();
-applyDayTheme(); // ✅ ใช้โทนสีตามวัน
+applyDayTheme(); // ✅ ใส่ class วัน + สี theme-color ของแถบ browser
 function toggleDarkMode() {
   const isDark = document.documentElement.classList.toggle('dark-mode');
   document.getElementById('darkModeBtn').textContent = isDark ? '☀️' : '🌙';
@@ -9770,7 +9680,7 @@ function _showUpdateBanner() {
   b.id = 'appUpdateBanner';
   b.textContent = '🔄 มีเวอร์ชันใหม่ — แตะเพื่ออัปเดต';
   b.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:99999;' +
-    'background:#1d3557;color:#fff;padding:11px 22px;border-radius:24px;font-family:"Mitr",sans-serif;' +
+    'background:#1c1b19;color:#fff;padding:11px 22px;border-radius:24px;font-family:"Noto Sans Thai",sans-serif;' +
     'font-size:0.9rem;box-shadow:0 4px 16px rgba(0,0,0,0.35);cursor:pointer;animation:lsAlertPulse 1.6s ease-in-out infinite;';
   b.onclick = () => { try { _forceUpdateApp(); } catch(e) { location.reload(true); } };
   document.body.appendChild(b);
@@ -9892,7 +9802,7 @@ function updateDailyTargetUI() {
   progressEl.style.display = 'block';
   barEl.style.width = pct + '%';
   barEl.style.background = done
-    ? 'linear-gradient(90deg,#7ab87a,#90d890)'
+    ? 'linear-gradient(90deg,#059669,#059669)'
     : 'linear-gradient(90deg,var(--pink-light),var(--pink))';
 
   const targetLabel = currentReportDays === 1
@@ -9940,8 +9850,8 @@ function renderDailyChart(dailyBreakdown, startStr, endStr) {
 
   container.innerHTML = `<div style="display:flex; gap:3px; width:100%; position:relative;">
     ${target > 0 ? `<div style="position:absolute; left:0; right:0; bottom:${24 + targetPx}px;
-      border-top:1.5px dashed rgba(122,184,122,0.6); z-index:2; pointer-events:none;">
-      <span style="position:absolute; right:2px; top:-13px; font-size:0.52rem; color:#7ab87a; font-weight:600;">${target}</span>
+      border-top:1.5px dashed rgba(5,150,105,0.6); z-index:2; pointer-events:none;">
+      <span style="position:absolute; right:2px; top:-13px; font-size:0.52rem; color:#059669; font-weight:600;">${target}</span>
     </div>` : ''}
     ${days.map((dayKey, idx) => {
       const info = dailyBreakdown[dayKey] || { orders: 0, items: 0 };
@@ -9950,12 +9860,12 @@ function renderDailyChart(dailyBreakdown, startStr, endStr) {
       const isSun = dt.getDay() === 0;
       const itemH = info.items > 0 ? Math.max(20, (info.items / maxVal) * chartH) : 0;
       const delay = idx * 50;
-      const dateColor = isToday ? 'var(--pink)' : isSun ? '#d88' : 'var(--text3)';
+      const dateColor = isToday ? 'var(--pink)' : isSun ? '#dc2626' : 'var(--text3)';
       const dateBold = isToday ? '700' : '400';
       const metTarget = target > 0 && info.items >= target;
       const barBg = metTarget
-        ? 'linear-gradient(180deg, #7ab87a 0%, #90d890 100%)'
-        : 'linear-gradient(180deg, #c8a84b 0%, #e0c060 100%)';
+        ? 'linear-gradient(180deg, #059669 0%, #059669 100%)'
+        : 'linear-gradient(180deg, #a8853f 0%, #bf9c4f 100%)';
 
       const hasData = info.items > 0 || info.orders > 0;
       return `<div style="flex:1; min-width:${barMinW}px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; ${hasData ? 'cursor:pointer;' : ''}"
@@ -9971,7 +9881,7 @@ function renderDailyChart(dailyBreakdown, startStr, endStr) {
         </div>
         <div style="text-align:center; margin-top:3px; opacity:0; animation:calFadeIn 0.2s ${delay}ms ease forwards;">
           <div style="font-size:0.65rem; color:${dateColor}; font-weight:${dateBold}; line-height:1.1;">${dt.getDate()}</div>
-          <div style="font-size:0.5rem; color:${isSun ? '#d88' : 'var(--text3)'};">${dayNames[dt.getDay()]}</div>
+          <div style="font-size:0.5rem; color:${isSun ? '#dc2626' : 'var(--text3)'};">${dayNames[dt.getDay()]}</div>
         </div>
       </div>`;
     }).join('')}
@@ -10007,14 +9917,14 @@ function renderDailyChart(dailyBreakdown, startStr, endStr) {
 
     let bg = 'transparent';
     let border = '1px solid rgba(0,0,0,0.06)';
-    let dateColor = isSun ? '#d88' : 'var(--text3)';
+    let dateColor = isSun ? '#dc2626' : 'var(--text3)';
     let statusIcon = '';
 
     if (info && isInRange) {
       const met = target > 0 && info.items >= target;
-      bg = met ? 'rgba(122,184,122,0.13)' : 'rgba(200,168,75,0.1)';
-      border = met ? '1.5px solid rgba(122,184,122,0.45)' : '1.5px solid rgba(200,168,75,0.25)';
-      dateColor = isSun ? '#c66' : 'var(--text)';
+      bg = met ? 'rgba(5,150,105,0.13)' : 'rgba(168,133,63,0.1)';
+      border = met ? '1.5px solid rgba(5,150,105,0.45)' : '1.5px solid rgba(168,133,63,0.25)';
+      dateColor = isSun ? '#b91c1c' : 'var(--text)';
       statusIcon = met
         ? `<svg viewBox="0 0 12 12" fill="none" style="width:0.8em;height:0.8em;display:inline-block"><circle cx="6" cy="6" r="5" fill="#b5ead7"/><polyline points="3.5,6 5.2,7.8 8.5,4.2" fill="none" stroke="#52b788" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
         : `<svg viewBox="0 0 12 12" fill="none" style="width:0.8em;height:0.8em;display:inline-block"><circle cx="6" cy="6" r="5" fill="#ffd166"/><rect x="5.3" y="3.5" width="1.4" height="3" rx="0.7" fill="#9b72cf"/><circle cx="6" cy="8.5" r="0.9" fill="#9b72cf"/></svg>`;
