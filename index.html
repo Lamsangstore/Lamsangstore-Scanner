@@ -100,8 +100,115 @@
       --accent-rgb:    168,133,63;
     }
 
-    /* ===== DAY THEME — ปิดแล้ว (4 ต.ค. 2569) ทุกวันใช้ธีมกลาง Lamsang สีเดียวกัน
-       JS ยังใส่ class day-0…6 ให้ แต่ไม่มี CSS ผูกกับ class นี้แล้ว ===== */
+    /* ===== DAY THEME — โทนสีตามวัน (pastel) =====
+       ร้านให้เก็บไว้ (4 ต.ค. 2569) — วันละสีทับสีทองกลาง (--pink/--bg) · ปุ่มหลักยังเป็นทองทุกวัน */
+    /* จันทร์ — เหลือง */
+    html.day-1 {
+      --pink:        #c8a830;
+      --pink-light:  #f0e090;
+      --pink-pale:   #fdf9e8;
+      --bg:          #fdfaec;
+      --bg-d:        #f5f0d0;
+      --sd:          rgba(195,175,100,0.40);
+      --sl:          rgba(255,255,248,0.92);
+      --day-accent:  #c8a830;
+      --accent-rgb:  200,168,48;
+      background:    #fdfaec;
+    }
+    html.day-1 body { background: #fdfaec !important; }
+    /* อังคาร — ชมพู */
+    html.day-2 {
+      --pink:        #d4748a;
+      --pink-light:  #f5c0cc;
+      --pink-pale:   #fef0f3;
+      --bg:          #fef2f4;
+      --bg-d:        #f8dce2;
+      --sd:          rgba(210,140,155,0.38);
+      --sl:          rgba(255,250,252,0.92);
+      --day-accent:  #d4748a;
+      --accent-rgb:  212,116,138;
+      background:    #fef2f4;
+    }
+    html.day-2 body { background: #fef2f4 !important; }
+    /* พุธ — เขียว */
+    html.day-3 {
+      --pink:        #70a870;
+      --pink-light:  #b8e0b8;
+      --pink-pale:   #f0faf0;
+      --bg:          #f2faf2;
+      --bg-d:        #d8eed8;
+      --sd:          rgba(130,190,130,0.35);
+      --sl:          rgba(248,255,248,0.92);
+      --day-accent:  #70a870;
+      --accent-rgb:  112,168,112;
+      background:    #f2faf2;
+    }
+    html.day-3 body { background: #f2faf2 !important; }
+    /* พฤหัส — ส้ม */
+    html.day-4 {
+      --pink:        #d08040;
+      --pink-light:  #f5c898;
+      --pink-pale:   #fef6ee;
+      --bg:          #fef6ee;
+      --bg-d:        #f8e0c0;
+      --sd:          rgba(210,165,110,0.38);
+      --sl:          rgba(255,252,248,0.92);
+      --day-accent:  #d08040;
+      --accent-rgb:  208,128,64;
+      background:    #fef6ee;
+    }
+    html.day-4 body { background: #fef6ee !important; }
+    /* ศุกร์ — ฟ้า */
+    html.day-5 {
+      --pink:        #5090c0;
+      --pink-light:  #a8d0f0;
+      --pink-pale:   #eef6fc;
+      --bg:          #eef6fd;
+      --bg-d:        #cce4f5;
+      --sd:          rgba(110,170,215,0.35);
+      --sl:          rgba(245,252,255,0.92);
+      --day-accent:  #5090c0;
+      --accent-rgb:  80,144,192;
+      background:    #eef6fd;
+    }
+    html.day-5 body { background: #eef6fd !important; }
+    /* เสาร์ — ม่วง */
+    html.day-6 {
+      --pink:        #8870b8;
+      --pink-light:  #ccc0e8;
+      --pink-pale:   #f5f0fc;
+      --bg:          #f5f0fc;
+      --bg-d:        #e0d4f5;
+      --sd:          rgba(160,140,210,0.35);
+      --sl:          rgba(252,250,255,0.92);
+      --day-accent:  #8870b8;
+      --accent-rgb:  136,112,184;
+      background:    #f5f0fc;
+    }
+    html.day-6 body { background: #f5f0fc !important; }
+    /* อาทิตย์ — แดง */
+    html.day-0 {
+      --pink:        #c85858;
+      --pink-light:  #f0b0b0;
+      --pink-pale:   #fef2f2;
+      --bg:          #fef2f2;
+      --bg-d:        #f8d8d8;
+      --sd:          rgba(210,140,140,0.38);
+      --sl:          rgba(255,250,250,0.92);
+      --day-accent:  #c85858;
+      --accent-rgb:  200,88,88;
+      background:    #fef2f2;
+    }
+    html.day-0 body { background: #fef2f2 !important; }
+
+    /* dark-mode + day: ปรับ shadow ให้เข้มขึ้น รักษา dark bg */
+    html.dark-mode.day-1 { --pink: #c8a830; --pink-light: #3a3010; }
+    html.dark-mode.day-2 { --pink: #d4748a; --pink-light: #3a1820; }
+    html.dark-mode.day-3 { --pink: #70a870; --pink-light: #183018; }
+    html.dark-mode.day-4 { --pink: #d08040; --pink-light: #3a2010; }
+    html.dark-mode.day-5 { --pink: #5090c0; --pink-light: #102838; }
+    html.dark-mode.day-6 { --pink: #8870b8; --pink-light: #281840; }
+    html.dark-mode.day-0 { --pink: #c85858; --pink-light: #381818; }
 
     
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -9575,15 +9682,25 @@ function dismissOnboarding() {
 // ===== DAY THEME =====
 // สีตามวันปิดแล้ว (4 ต.ค. 2569) — ทุกวันใช้ธีมกลาง Lamsang ยังใส่ class day-N ไว้เผื่ออ้างอิง
 const DAY_NAMES = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
+const DAY_THEME_COLORS = {
+  0: '#fef2f2', // อาทิตย์ — แดง
+  1: '#fdfaec', // จันทร์ — เหลือง
+  2: '#fef2f4', // อังคาร — ชมพู
+  3: '#f2faf2', // พุธ — เขียว
+  4: '#fef6ee', // พฤหัส — ส้ม
+  5: '#eef6fd', // ศุกร์ — ฟ้า
+  6: '#f5f0fc', // เสาร์ — ม่วง
+};
+
 function applyDayTheme() {
   const day = new Date().getDay(); // 0=อาทิตย์ … 6=เสาร์
   // ลบ class วันเก่าทั้งหมดก่อน
   [0,1,2,3,4,5,6].forEach(d => document.documentElement.classList.remove('day-' + d));
   document.documentElement.classList.add('day-' + day);
-  // อัพ theme-color meta (สีแถบ browser) — พื้นธีมกลาง สว่าง #f8fafc / มืด #1c1b19
+  // อัพ theme-color meta (สีแถบ browser) — สว่าง = สีพื้นของวัน / มืด = พื้นธีมกลาง #1c1b19
   const isDark = document.documentElement.classList.contains('dark-mode');
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = isDark ? '#1c1b19' : '#f8fafc';
+  if (meta) meta.content = isDark ? '#1c1b19' : (DAY_THEME_COLORS[day] || '#f8fafc');
   console.log('[DayTheme] วัน' + DAY_NAMES[day] + ' → day-' + day);
 }
 
@@ -9603,7 +9720,7 @@ function applyDayTheme() {
     }
   } catch(e) { document.documentElement.classList.remove('dark-mode'); }
 })();
-applyDayTheme(); // ✅ ใส่ class วัน + สี theme-color ของแถบ browser
+applyDayTheme(); // ✅ ใช้โทนสีตามวัน
 function toggleDarkMode() {
   const isDark = document.documentElement.classList.toggle('dark-mode');
   document.getElementById('darkModeBtn').textContent = isDark ? '☀️' : '🌙';
