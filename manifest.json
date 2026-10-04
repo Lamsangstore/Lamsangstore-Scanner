@@ -4,8 +4,8 @@
   "description": "ระบบแพ็กและตรวจสอบพัสดุ",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#f8fafc",
+  "background_color": "#fdf8ed",
+  "theme_color": "#fdf8ed",
   "orientation": "portrait",
   "icons": [
     {
