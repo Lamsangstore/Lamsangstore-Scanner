@@ -2683,7 +2683,7 @@ function setupDailyCleanupTrigger() {
   const HANDLERS = ["cleanUpOldOrders", "backupOrdersDaily",
                     "cleanUpOldMarketplaceData", "reconcileSaveLogVsOrders",
                     "mergeDuplicateOrders", "nightlyStatsRebuild", "nightlyVideoReconcile",
-                    "sortOrdersByDate"];
+                    "sortOrdersByDate", "cleanUpOldPackVideos"];
   ScriptApp.getProjectTriggers().forEach(t => {
     if (HANDLERS.indexOf(t.getHandlerFunction()) !== -1) {
       ScriptApp.deleteTrigger(t);
@@ -2722,6 +2722,10 @@ function setupDailyCleanupTrigger() {
   ScriptApp.newTrigger("cleanUpOldMarketplaceData")
     .timeBased().everyDays(1).atHour(3).create();
 
+  // 🎬 ลบคลิปตอนแพคที่เก่ากว่า PACK_VIDEO_KEEP_DAYS — 07:00 (หลัง nightlyVideoReconcile ตอน 06:00)
+  ScriptApp.newTrigger("cleanUpOldPackVideos")
+    .timeBased().everyDays(1).atHour(7).create();
+
   Logger.log("✅ Daily triggers set:");
   Logger.log("   22:00 น. → mergeDuplicateOrders (รวม row ซ้ำจาก lock-free races)");
   Logger.log("   23:00 น. → reconcileSaveLogVsOrders (เปรียบเทียบ SaveLog vs Orders)");
@@ -2731,6 +2735,58 @@ function setupDailyCleanupTrigger() {
   Logger.log("   04:00 น. → nightlyStatsRebuild (rebuild Firebase stats 3 วันล่าสุด)");
   Logger.log("   05:00 น. → sortOrdersByDate (เรียง Orders ตาม Timestamp เก่า→ใหม่)");
   Logger.log("   06:00 น. → nightlyVideoReconcile (เติม videoUrl จาก Drive ให้ row no_video)");
+  Logger.log("   07:00 น. → cleanUpOldPackVideos (ลบคลิปตอนแพคที่เก่ากว่า " + PACK_VIDEO_KEEP_DAYS + " วัน)");
+}
+
+// ============================================================
+// cleanUpOldPackVideos — ลบคลิปตอนแพคที่เก่ากว่า PACK_VIDEO_KEEP_DAYS วัน (ร้านสั่ง 6 ต.ค. 2569)
+//   คลิปกินพื้นที่ Drive ไปเรื่อย ๆ · เคลมส่วนใหญ่มาภายในไม่กี่สัปดาห์หลังส่งของ
+//   · ย้ายลงถังขยะ (setTrashed) ไม่ลบถาวร — Drive ล้างถังเองหลัง 30 วัน ระหว่างนั้นกู้คืนได้
+//   · เฉพาะไฟล์วิดีโอในโฟลเดอร์คลิป ไฟล์อื่น (marketplace_version.txt · ไฟล์สำรอง) ไม่แตะ
+//   · Apps Script รันได้ 6 นาทีต่อครั้ง — หยุดที่ 4.5 นาที ที่เหลือรอบพรุ่งนี้ทำต่อ
+//   · หน้าเว็บร้านซ่อนคลิปที่เก่ากว่านี้ให้เอง (PACK_CLIP_KEEP_DAYS ใน pack-evidence.ts — ต้องตรงกัน)
+//   ลองดูก่อนว่าจะลบกี่ไฟล์: รัน previewOldPackVideos() ใน editor (ไม่ลบอะไร)
+// ============================================================
+const PACK_VIDEO_KEEP_DAYS = 90;
+const PACK_VIDEO_BUDGET_MS = 4.5 * 60 * 1000;
+
+function _oldPackVideoQuery() {
+  const cutoff = new Date(Date.now() - PACK_VIDEO_KEEP_DAYS * 86400000).toISOString();
+  return "'" + TARGET_FOLDER_ID + "' in parents and mimeType contains 'video/'" +
+         " and createdDate < '" + cutoff + "' and trashed = false";
+}
+
+function cleanUpOldPackVideos() {
+  const started = Date.now();
+  const files = DriveApp.searchFiles(_oldPackVideoQuery());
+  let trashed = 0, failed = 0, bytes = 0, more = false;
+  while (files.hasNext()) {
+    if (Date.now() - started > PACK_VIDEO_BUDGET_MS) { more = true; break; }
+    const f = files.next();
+    try { bytes += f.getSize(); f.setTrashed(true); trashed++; }
+    catch (e) { failed++; Logger.log("[cleanUpOldPackVideos] ลบไม่ได้ " + f.getName() + ": " + e.message); }
+  }
+  Logger.log("[cleanUpOldPackVideos] ย้ายลงถังขยะ " + trashed + " ไฟล์ (" +
+             (bytes / 1048576).toFixed(0) + " MB)" + (failed ? " · ลบไม่ได้ " + failed : "") +
+             (more ? " · ยังเหลือ รอบพรุ่งนี้ทำต่อ" : ""));
+  return { trashed: trashed, failed: failed, mb: Math.round(bytes / 1048576), more: more };
+}
+
+/** นับคลิปที่จะถูกลบ — ไม่ลบอะไร (รันใน editor ก่อนตั้ง trigger) */
+function previewOldPackVideos() {
+  const started = Date.now();
+  const files = DriveApp.searchFiles(_oldPackVideoQuery());
+  let n = 0, bytes = 0, oldest = null, more = false;
+  while (files.hasNext()) {
+    if (Date.now() - started > PACK_VIDEO_BUDGET_MS) { more = true; break; }
+    const f = files.next();
+    n++; bytes += f.getSize();
+    const d = f.getDateCreated();
+    if (!oldest || d < oldest) oldest = d;
+  }
+  Logger.log("[previewOldPackVideos] คลิปเก่ากว่า " + PACK_VIDEO_KEEP_DAYS + " วัน: " + n +
+             (more ? "+ (นับไม่ทัน)" : "") + " ไฟล์ · " + (bytes / 1048576).toFixed(0) + " MB" +
+             (oldest ? " · เก่าสุด " + oldest.toISOString().slice(0, 10) : ""));
 }
 
 // ============================================================
