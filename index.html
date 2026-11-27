@@ -1269,14 +1269,10 @@
       box-shadow: inset 2px 2px 5px var(--sd), inset -2px -2px 5px var(--sl);
     }
     /* ===== น้องกระดิ่ง — แจ้งเตือนของร้าน (สินค้าเพิ่งหมด) · ข้อมูลจาก Hub /store-alerts ===== */
-    #storeAlertBtn {
-      position: relative; background: var(--bg); border: none; border-radius: 8px; cursor: pointer;
-      font-size: 0.8rem; padding: 1px 6px; line-height: 1.25;
-      box-shadow: 2px 2px 5px var(--sd), -2px -2px 5px var(--sl); transition: all 0.15s;
-    }
-    #storeAlertBtn:hover { box-shadow: inset 2px 2px 5px var(--sd), inset -2px -2px 5px var(--sl); }
+    /* แถบ "แจ้งเตือน" ข้างอัพโหลด (ร้านสั่ง 27 พ.ย. 2569 — เดิมเป็นกระดิ่งบนหัวแอป ร้านว่าตำแหน่งแปลก) */
+    .tab-btn-alerts .tab-icon { position: relative; overflow: visible; }
     #storeAlertDot {
-      display: none; position: absolute; top: -4px; right: -4px; width: 9px; height: 9px; border-radius: 50%;
+      display: none; position: absolute; top: -2px; right: -5px; width: 10px; height: 10px; border-radius: 50%;
       background: #ff3b30; box-shadow: 0 0 0 2px var(--bg); animation: lsAlertPulse 1.4s ease-in-out infinite;
     }
     #storeAlertToast {
@@ -1286,7 +1282,9 @@
       box-shadow: 0 10px 28px rgba(0,0,0,0.28); padding: 10px 10px 10px 12px; cursor: pointer;
       font-family: 'Noto Sans Thai', sans-serif; animation: calFadeIn 0.3s ease;
     }
-    .sa-list { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 2px 2px 8px; }
+    /* ⚠️ ลูกในรายการต้อง flex-shrink:0 — ไม่งั้นการ์ดถูกบีบเหลือแค่หัวการ์ด (เคยเป็นบนจอคอมตอนอยู่ในแผ่นที่จำกัดความสูง) */
+    .sa-list { display: flex; flex-direction: column; gap: 10px; padding: 2px 0 8px; }
+    .sa-list > * { flex-shrink: 0; }
     .sa-day { text-align: center; font-size: 0.7rem; color: var(--text3); margin: 4px 0 -2px; }
     .sa-bubble { background: var(--surface); border-radius: 16px; overflow: hidden; border: 1px solid var(--border2); }
     .sa-head { display: flex; align-items: center; gap: 8px; background: #f59e0b; color: #fff; padding: 8px 12px; font-weight: 700; font-size: 0.85rem; }
@@ -2409,26 +2407,6 @@
 <!-- น้องกระดิ่ง: ป้ายเด้งตอนมีแจ้งเตือนใหม่ (แตะ = เปิดรายการ) -->
 <div id="storeAlertToast" role="status" onclick="StoreBell.open()"></div>
 
-<!-- น้องกระดิ่ง: รายการแจ้งเตือนของร้าน -->
-<div id="storeAlertModal" style="display:none; position:fixed; inset:0; z-index:1200; background:rgba(0,0,0,0.45); backdrop-filter:blur(4px);" onclick="StoreBell.close()">
-  <div onclick="event.stopPropagation()" style="
-    position:absolute; bottom:0; left:0; right:0; margin:0 auto; max-width:560px;
-    background:var(--bg); border-radius:24px 24px 0 0;
-    padding:16px 14px calc(20px + env(safe-area-inset-bottom)); max-height:82vh; display:flex; flex-direction:column;
-    box-shadow:0 -6px 20px var(--sd), 0 -1px 0 var(--sl); font-family:'Noto Sans Thai',sans-serif;">
-    <div style="width:40px; height:4px; background:var(--pink-light); border-radius:4px; margin:0 auto 12px;"></div>
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
-      <span style="width:38px; height:38px; border-radius:50%; background:#f59e0b; display:flex; align-items:center; justify-content:center; font-size:1.15rem; flex-shrink:0;">🔔</span>
-      <div style="flex:1; min-width:0;">
-        <div style="font-weight:700; font-size:0.95rem; color:var(--text);">น้องกระดิ่ง</div>
-        <div style="font-size:0.72rem; color:var(--text3);">แจ้งเตือนของร้าน · สินค้าเพิ่งหมด (เช็กสต๊อก Page365 ทุก 15 นาที)</div>
-      </div>
-      <button type="button" onclick="StoreBell.close()" aria-label="ปิด" style="background:none; border:none; font-size:1.3rem; color:var(--text3); cursor:pointer; padding:4px 8px;">✕</button>
-    </div>
-    <div id="storeAlertList" class="sa-list"></div>
-  </div>
-</div>
-
 <!-- Queue Modal -->
 <div id="queueModal" style="display:none; position:fixed; inset:0; z-index:1200; background:rgba(0,0,0,0.45); backdrop-filter:blur(4px);" onclick="closeQueueModal()">
   <div onclick="event.stopPropagation()" style="
@@ -2468,12 +2446,7 @@
       <button id="darkModeBtn" onclick="toggleDarkMode()" title="สลับธีม" style="font-size:1.1rem; padding:5px 7px;">🌙</button>
       <span id="networkBadge" style="font-size:0.72rem; font-weight:600; padding:4px 10px; letter-spacing:0.2px; color:var(--success); filter:sepia(0.3) saturate(1.2);"><svg viewBox="0 0 10 10" fill="none" style="width:0.75em;height:0.75em;display:inline-block;vertical-align:0.05em;margin-right:2px"><circle cx="5" cy="5" r="4" fill="#52b788"/><circle cx="5" cy="5" r="2.2" fill="#b5ead7"/></svg> ออนไลน์</span>
     </div>
-    <div style="display:flex; align-items:center; gap:8px;">
-      <!-- 🔔 น้องกระดิ่ง — อยู่แถวล่างโดยตั้งใจ: แถวบนเต็มแล้วบนจอ 375–390px (ปุ่มบัญชี + 🌙 + ออนไลน์) ใส่เพิ่มแล้วล้นจอ -->
-      <button id="storeAlertBtn" type="button" onclick="StoreBell.open()" title="น้องกระดิ่ง · แจ้งเตือนของร้าน"
-        aria-label="น้องกระดิ่ง แจ้งเตือนของร้าน" style="display:none;">🔔<span id="storeAlertDot"></span></button>
-      <span id="syncTimeBadge" style="font-size:0.72rem; color:var(--text3);">—</span>
-    </div>
+    <span id="syncTimeBadge" style="font-size:0.72rem; color:var(--text3);">—</span>
   </div>
 </div>
 
@@ -2490,6 +2463,9 @@
   </button>
   <button class="tab-btn tab-btn-upload" onclick="openTab('upload', this)">
     <span class="tab-icon"><svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="9.5" cy="16" r="5.5" fill="#bfdbfe"/><circle cx="16" cy="14.5" r="7" fill="#bfdbfe"/><circle cx="21" cy="17" r="4.5" fill="#bfdbfe"/><rect x="4" y="17" width="20" height="5" rx="0" fill="#bfdbfe"/><path d="M4 19.5 Q4 22 6 22 L22 22 Q24 22 24 19.5" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/><ellipse cx="11" cy="13" rx="3" ry="2" fill="white" opacity="0.4" transform="rotate(-15,11,13)"/><line x1="14" y1="25" x2="14" y2="14" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/><polyline points="9,19 14,13 19,19" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><line x1="9.5" y1="25" x2="18.5" y2="25" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-dasharray="2,2"/></svg></span>อัพโหลด
+  </button>
+  <button class="tab-btn tab-btn-alerts" onclick="StoreBell.open()" aria-label="แจ้งเตือน (น้องกระดิ่ง)">
+    <span class="tab-icon"><svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 3.5 C9.3 3.5 6.8 7 6.8 11.2 L6.8 15.6 C6.8 17.2 5.9 18.6 4.6 19.5 L4.6 20.6 L23.4 20.6 L23.4 19.5 C22.1 18.6 21.2 17.2 21.2 15.6 L21.2 11.2 C21.2 7 18.7 3.5 14 3.5 Z" fill="#ffd166"/><path d="M14 3.5 C9.3 3.5 6.8 7 6.8 11.2 L6.8 15.6 C6.8 17.2 5.9 18.6 4.6 19.5 L4.6 20.6 L23.4 20.6 L23.4 19.5 C22.1 18.6 21.2 17.2 21.2 15.6 L21.2 11.2 C21.2 7 18.7 3.5 14 3.5 Z" fill="none" stroke="#e9a23b" stroke-width="1.6" stroke-linejoin="round"/><ellipse cx="11" cy="9.5" rx="1.8" ry="3" fill="white" opacity="0.55" transform="rotate(20,11,9.5)"/><circle cx="14" cy="2.6" r="1.6" fill="#e9a23b"/><path d="M11 22 Q14 26 17 22 Z" fill="#e07a3a"/></svg><span id="storeAlertDot"></span></span>แจ้งเตือน
   </button>
 </div>
 
@@ -2864,6 +2840,20 @@
       <button onclick="processFileUpload()" class="btn-neu-gold w-100 mt-3" style="padding:12px; font-size:1rem;">
         <span class="upload-arrow"><svg viewBox="0 0 20 20" fill="none" style="width:1em;height:1em;display:inline-block;vertical-align:-0.12em"><circle cx="6.5" cy="12" r="4" fill="#bfdbfe"/><circle cx="11" cy="10.5" r="5" fill="#bfdbfe"/><circle cx="15" cy="12.5" r="3.2" fill="#bfdbfe"/><rect x="2.5" y="12.5" width="15" height="4" rx="0" fill="#bfdbfe"/><path d="M2.5 14 Q2.5 16.5 4.5 16.5 L15.5 16.5 Q17.5 16.5 17.5 14" fill="none" stroke="#60a5fa" stroke-width="1.3" stroke-linecap="round"/><line x1="10" y1="18" x2="10" y2="10" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/><polyline points="6.5,14 10,9.5 13.5,14" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></span> อัปโหลดข้อมูล
       </button>
+    </div>
+  </div>
+
+  <!-- TAB: ALERTS — น้องกระดิ่ง แจ้งเตือนของร้าน (สินค้าเพิ่งหมด) · ข้อมูลจาก Hub /store-alerts -->
+  <div id="alerts" style="display:none" class="fade-in-up">
+    <div class="card p-3">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+        <span style="width:40px; height:40px; border-radius:50%; background:#f59e0b; display:flex; align-items:center; justify-content:center; font-size:1.2rem; flex-shrink:0;">🔔</span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:700; font-size:1rem; color:var(--text);">น้องกระดิ่ง</div>
+          <div style="font-size:0.75rem; color:var(--text3);">แจ้งเตือนของร้าน · สินค้าเพิ่งหมด (เช็กสต๊อก Page365 ทุก 15 นาที) · ย้อนหลัง 7 วัน</div>
+        </div>
+      </div>
+      <div id="storeAlertList" class="sa-list"></div>
     </div>
   </div>
 
@@ -3592,6 +3582,8 @@ function navigateByHash() {
   } else if (hash === '#search') {
     const btn = document.querySelectorAll('.tab-btn')[1];
     openTab('search', btn);
+  } else if (hash === '#alerts') {
+    openTab('alerts', document.querySelector('.tab-btn-alerts'));
   }
 }
 window.addEventListener('hashchange', navigateByHash);
@@ -8260,7 +8252,7 @@ async function openTab(tab, btn) {
     try { _syncReaderScale(); } catch(e) {}
   }
 
-  document.querySelectorAll('#scan, #search, #dash, #upload').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('#scan, #search, #dash, #upload, #alerts').forEach(el => el.style.display = 'none');
   const target = document.getElementById(tab);
   target.style.display = 'block';
 
@@ -8287,6 +8279,9 @@ async function openTab(tab, btn) {
       if (stale || key !== lastReportParams) fetchReport();
     }
   }
+
+  // ── น้องกระดิ่ง: เปิดแถบ = ถือว่าเห็นแล้ว + โหลดรายการ ──
+  if (tab === 'alerts') StoreBell.shown();
 
   // ── Upload Animations ──
   if (tab === 'upload') {
@@ -8515,7 +8510,8 @@ document.addEventListener('DOMContentLoaded', () => {
    เรื่องแรก = สินค้าเพิ่งหมด (เว็บร้านเช็กสต๊อก Page365 ทุก 15 นาที แล้วแจ้งเอง)
    · ข้อมูลชุดเดียวกับห้องในหน้ารวมแชท (Hub GET /store-alerts) — แอปนี้แค่อ่าน ไม่ตัดสินเองว่าอะไรหมด
    · ถามข้อความล่าสุดทุก 1 นาทีเฉพาะตอนเปิดแอปอยู่ (ซ่อนแท็บ = หยุด) · กลับมาที่แท็บ = ถามทันที
-   · มีเรื่องใหม่ = จุดแดงบนกระดิ่ง + ป้ายเด้งใต้หัวแอป (ไม่พูด ไม่มีเสียง — ไม่แย่งเสียงตอนสแกน)
+   · แถบ "แจ้งเตือน" ข้างอัพโหลด (ร้านสั่ง 27 พ.ย. 2569 — รุ่นแรกเป็นกระดิ่งบนหัวแอป ร้านว่าตำแหน่งแปลก)
+   · มีเรื่องใหม่ = จุดแดงบนแถบ + ป้ายเด้งใต้หัวแอป (ไม่พูด ไม่มีเสียง — ไม่แย่งเสียงตอนสแกน)
    · ข้อความเก่ากว่า 30 นาทีไม่เด้ง (เปิดแอปตอนเช้าแล้วเด้งเรื่องเมื่อคืนไม่มีประโยชน์) แค่มีจุดแดง
    · ไม่มีข้อมูลลูกค้า (ชื่อรุ่น · สี · ไซซ์ · รูปสินค้า)
 ============================================================ */
@@ -8525,7 +8521,9 @@ window.StoreBell = (function () {
   const POLL_MS = 60000;
   const TOAST_FRESH_MS = 30 * 60000;
   const TOAST_SHOW_MS = 12000;
-  let latest = null, timer = null, toastTimer = null, polling = false, lastPollAt = 0, isOpen = false;
+  let latest = null, timer = null, toastTimer = null, polling = false, lastPollAt = 0;
+  /** แถบแจ้งเตือนเปิดอยู่ไหม (openTab สลับ display ของแต่ละแถบ) */
+  const isOpen = () => { const el = document.getElementById('alerts'); return !!el && el.style.display === 'block'; };
 
   const num = (k) => { try { return Number(localStorage.getItem(k)) || 0; } catch (e) { return 0; } };
   const setNum = (k, v) => { try { localStorage.setItem(k, String(v)); } catch (e) {} };
@@ -8581,18 +8579,16 @@ window.StoreBell = (function () {
     polling = true; lastPollAt = Date.now();
     try {
       const json = await _hubGet(HUB_ALERTS_URL + '?latest=1', 10000);
-      const btn = $('storeAlertBtn');
-      if (btn) btn.style.display = '';                           // ถามเว็บร้านได้แล้วค่อยโชว์กระดิ่ง
       const prevAt = latest ? latest.at : 0;
       latest = json && json.latest && typeof json.latest.at === 'number' ? json.latest : null;
       renderDot();
       if (!latest) return;
       const fresh = Date.now() - latest.at < TOAST_FRESH_MS;
-      if (fresh && latest.at > num(TOAST_KEY) && latest.at > num(SEEN_KEY) && !isOpen) {
+      if (fresh && latest.at > num(TOAST_KEY) && latest.at > num(SEEN_KEY) && !isOpen()) {
         setNum(TOAST_KEY, latest.at);
         showToast(latest);
       }
-      if (isOpen && latest.at > prevAt) loadList();              // เปิดรายการค้างไว้ = เติมเรื่องใหม่ให้เอง
+      if (isOpen() && latest.at > prevAt) shown();               // เปิดแถบค้างไว้ = เติมเรื่องใหม่ให้เอง
     } catch (e) {
       /* เน็ตสะดุด · เว็บร้านยังไม่มี endpoint นี้ — เงียบไว้ รอบหน้าค่อยถามใหม่ งานแพคต้องไม่สะดุด */
     } finally { polling = false; }
@@ -8649,19 +8645,21 @@ window.StoreBell = (function () {
     }
   }
 
-  function open() {
+  /** แถบแจ้งเตือนเพิ่งเปิด (openTab เรียก) — ถือว่าเห็นแล้ว + โหลดรายการ */
+  function shown() {
     hideToast();
-    isOpen = true;
     if (latest) { setNum(SEEN_KEY, Math.max(num(SEEN_KEY), latest.at)); renderDot(); }
     const list = $('storeAlertList');
-    if (list) list.innerHTML = '<div style="text-align:center; color:var(--text3); padding:28px 12px; font-size:0.85rem;">กำลังโหลด…</div>';
-    $('storeAlertModal').style.display = 'block';
+    if (list && !list.firstChild) {
+      list.innerHTML = '<div style="text-align:center; color:var(--text3); padding:28px 12px; font-size:0.85rem;">กำลังโหลด…</div>';
+    }
     loadList();
   }
 
-  function close() {
-    isOpen = false;
-    $('storeAlertModal').style.display = 'none';
+  /** กดแถบ / แตะป้ายเด้ง — ผ่าน openTab ทางเดียว (หยุดกล้อง · ถามก่อนถ้ามีพัสดุค้าง เหมือนแถบอื่น) */
+  function open() {
+    const btn = document.querySelector('.tab-btn-alerts');
+    if (btn) openTab('alerts', btn);
   }
 
   function startTimer() {
@@ -8687,13 +8685,10 @@ window.StoreBell = (function () {
     poll(true);
   }
 
-  return { start: start, open: open, close: close, dismiss: hideToast, poll: poll };
+  return { start: start, open: open, shown: shown, dismiss: hideToast, poll: poll };
 })();
 
 document.addEventListener('DOMContentLoaded', () => { StoreBell.start(); });
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.getElementById('storeAlertModal')?.style.display === 'block') StoreBell.close();
-});
 
 document.addEventListener('DOMContentLoaded', () => {
   const fi = document.getElementById('fileInput');
