@@ -1268,6 +1268,40 @@
     #darkModeBtn:hover {
       box-shadow: inset 2px 2px 5px var(--sd), inset -2px -2px 5px var(--sl);
     }
+    /* ===== น้องกระดิ่ง — แจ้งเตือนของร้าน (สินค้าเพิ่งหมด) · ข้อมูลจาก Hub /store-alerts ===== */
+    #storeAlertBtn {
+      position: relative; background: var(--bg); border: none; border-radius: 8px; cursor: pointer;
+      font-size: 0.8rem; padding: 1px 6px; line-height: 1.25;
+      box-shadow: 2px 2px 5px var(--sd), -2px -2px 5px var(--sl); transition: all 0.15s;
+    }
+    #storeAlertBtn:hover { box-shadow: inset 2px 2px 5px var(--sd), inset -2px -2px 5px var(--sl); }
+    #storeAlertDot {
+      display: none; position: absolute; top: -4px; right: -4px; width: 9px; height: 9px; border-radius: 50%;
+      background: #ff3b30; box-shadow: 0 0 0 2px var(--bg); animation: lsAlertPulse 1.4s ease-in-out infinite;
+    }
+    #storeAlertToast {
+      display: none; position: fixed; z-index: 1100; top: calc(var(--topbar-h) + 8px);
+      left: 50%; transform: translateX(-50%); width: calc(100% - 24px); max-width: 420px; box-sizing: border-box;
+      background: var(--bg); color: var(--text); border-radius: 16px; border-left: 5px solid #f59e0b;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.28); padding: 10px 10px 10px 12px; cursor: pointer;
+      font-family: 'Noto Sans Thai', sans-serif; animation: calFadeIn 0.3s ease;
+    }
+    .sa-list { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 2px 2px 8px; }
+    .sa-day { text-align: center; font-size: 0.7rem; color: var(--text3); margin: 4px 0 -2px; }
+    .sa-bubble { background: var(--surface); border-radius: 16px; overflow: hidden; border: 1px solid var(--border2); }
+    .sa-head { display: flex; align-items: center; gap: 8px; background: #f59e0b; color: #fff; padding: 8px 12px; font-weight: 700; font-size: 0.85rem; }
+    .sa-head time { margin-left: auto; font-size: 0.7rem; font-weight: 500; opacity: 0.9; flex-shrink: 0; }
+    .sa-row { display: flex; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); }
+    .sa-row:first-child { border-top: 0; }
+    .sa-img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: var(--surface2); }
+    .sa-ph { display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: var(--text3); }
+    .sa-title { font-weight: 700; font-size: 0.88rem; color: var(--text); }
+    .sa-chip { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 600; color: #fff; vertical-align: 1px; }
+    .sa-colors { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .sa-color { display: inline-flex; align-items: center; gap: 5px; background: var(--surface2); border-radius: 999px; padding: 2px 10px 2px 2px; font-size: 0.74rem; color: var(--text2); }
+    .sa-color img, .sa-color .sa-ph { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; font-size: 0.8rem; background: var(--bg); }
+    .sa-lines { padding: 8px 12px; font-size: 0.82rem; color: var(--text); line-height: 1.6; }
+    .sa-link { display: block; text-align: center; padding: 8px; font-size: 0.75rem; font-weight: 600; color: #b45309; border-top: 1px solid var(--border); text-decoration: none; }
     /* search tab layout */
     .search-bar-row {
       display: flex; gap: 8px; align-items: center;
@@ -2372,6 +2406,29 @@
   ⏳ รอ sync <span id="queueBannerCount">0</span> รายการ
 </div>
 
+<!-- น้องกระดิ่ง: ป้ายเด้งตอนมีแจ้งเตือนใหม่ (แตะ = เปิดรายการ) -->
+<div id="storeAlertToast" role="status" onclick="StoreBell.open()"></div>
+
+<!-- น้องกระดิ่ง: รายการแจ้งเตือนของร้าน -->
+<div id="storeAlertModal" style="display:none; position:fixed; inset:0; z-index:1200; background:rgba(0,0,0,0.45); backdrop-filter:blur(4px);" onclick="StoreBell.close()">
+  <div onclick="event.stopPropagation()" style="
+    position:absolute; bottom:0; left:0; right:0; margin:0 auto; max-width:560px;
+    background:var(--bg); border-radius:24px 24px 0 0;
+    padding:16px 14px calc(20px + env(safe-area-inset-bottom)); max-height:82vh; display:flex; flex-direction:column;
+    box-shadow:0 -6px 20px var(--sd), 0 -1px 0 var(--sl); font-family:'Noto Sans Thai',sans-serif;">
+    <div style="width:40px; height:4px; background:var(--pink-light); border-radius:4px; margin:0 auto 12px;"></div>
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+      <span style="width:38px; height:38px; border-radius:50%; background:#f59e0b; display:flex; align-items:center; justify-content:center; font-size:1.15rem; flex-shrink:0;">🔔</span>
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:700; font-size:0.95rem; color:var(--text);">น้องกระดิ่ง</div>
+        <div style="font-size:0.72rem; color:var(--text3);">แจ้งเตือนของร้าน · สินค้าเพิ่งหมด (เช็กสต๊อก Page365 ทุก 15 นาที)</div>
+      </div>
+      <button type="button" onclick="StoreBell.close()" aria-label="ปิด" style="background:none; border:none; font-size:1.3rem; color:var(--text3); cursor:pointer; padding:4px 8px;">✕</button>
+    </div>
+    <div id="storeAlertList" class="sa-list"></div>
+  </div>
+</div>
+
 <!-- Queue Modal -->
 <div id="queueModal" style="display:none; position:fixed; inset:0; z-index:1200; background:rgba(0,0,0,0.45); backdrop-filter:blur(4px);" onclick="closeQueueModal()">
   <div onclick="event.stopPropagation()" style="
@@ -2411,7 +2468,12 @@
       <button id="darkModeBtn" onclick="toggleDarkMode()" title="สลับธีม" style="font-size:1.1rem; padding:5px 7px;">🌙</button>
       <span id="networkBadge" style="font-size:0.72rem; font-weight:600; padding:4px 10px; letter-spacing:0.2px; color:var(--success); filter:sepia(0.3) saturate(1.2);"><svg viewBox="0 0 10 10" fill="none" style="width:0.75em;height:0.75em;display:inline-block;vertical-align:0.05em;margin-right:2px"><circle cx="5" cy="5" r="4" fill="#52b788"/><circle cx="5" cy="5" r="2.2" fill="#b5ead7"/></svg> ออนไลน์</span>
     </div>
-    <span id="syncTimeBadge" style="font-size:0.72rem; color:var(--text3);">—</span>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <!-- 🔔 น้องกระดิ่ง — อยู่แถวล่างโดยตั้งใจ: แถวบนเต็มแล้วบนจอ 375–390px (ปุ่มบัญชี + 🌙 + ออนไลน์) ใส่เพิ่มแล้วล้นจอ -->
+      <button id="storeAlertBtn" type="button" onclick="StoreBell.open()" title="น้องกระดิ่ง · แจ้งเตือนของร้าน"
+        aria-label="น้องกระดิ่ง แจ้งเตือนของร้าน" style="display:none;">🔔<span id="storeAlertDot"></span></button>
+      <span id="syncTimeBadge" style="font-size:0.72rem; color:var(--text3);">—</span>
+    </div>
   </div>
 </div>
 
@@ -2857,6 +2919,8 @@ const HUB_PACKS_URL = "https://lamsangstore.com/api/hub/v1/packs";
 const HUB_QUEUE_URL = "https://lamsangstore.com/api/hub/v1/pack-queue";
 /** ส่งไฟล์ Page365 ให้เว็บคัดลูกค้าที่ทักแชท — ดูหมายเหตุที่ _hubSendChatCustomers() */
 const HUB_CHAT_URL = "https://lamsangstore.com/api/hub/v1/chat-customers";
+/** น้องกระดิ่ง — แจ้งเตือนของร้าน (สินค้าเพิ่งหมด) · ดู StoreBell ข้างล่าง */
+const HUB_ALERTS_URL = "https://lamsangstore.com/api/hub/v1/store-alerts";
 
 /* ---------------------------------------------------------------------------
    คุยกับ Hub ของร้าน — ชื่อสินค้า · คิวรอแพค · ใบที่แพคแล้ว
@@ -8444,6 +8508,191 @@ document.addEventListener('DOMContentLoaded', () => {
             hover: 'var(--surface2)' }
   });
   HubLogin.enforce(HUB_KEY);
+});
+
+/* ============================================================
+   🔔 น้องกระดิ่ง — ห้องแจ้งเตือนของร้านจากหน้ารวมแชท มาขึ้นในแอปแพคของด้วย (ร้านสั่ง 27 พ.ย. 2569)
+   เรื่องแรก = สินค้าเพิ่งหมด (เว็บร้านเช็กสต๊อก Page365 ทุก 15 นาที แล้วแจ้งเอง)
+   · ข้อมูลชุดเดียวกับห้องในหน้ารวมแชท (Hub GET /store-alerts) — แอปนี้แค่อ่าน ไม่ตัดสินเองว่าอะไรหมด
+   · ถามข้อความล่าสุดทุก 1 นาทีเฉพาะตอนเปิดแอปอยู่ (ซ่อนแท็บ = หยุด) · กลับมาที่แท็บ = ถามทันที
+   · มีเรื่องใหม่ = จุดแดงบนกระดิ่ง + ป้ายเด้งใต้หัวแอป (ไม่พูด ไม่มีเสียง — ไม่แย่งเสียงตอนสแกน)
+   · ข้อความเก่ากว่า 30 นาทีไม่เด้ง (เปิดแอปตอนเช้าแล้วเด้งเรื่องเมื่อคืนไม่มีประโยชน์) แค่มีจุดแดง
+   · ไม่มีข้อมูลลูกค้า (ชื่อรุ่น · สี · ไซซ์ · รูปสินค้า)
+============================================================ */
+window.StoreBell = (function () {
+  const SEEN_KEY  = 'storeAlertSeenAt';    // เวลาของข้อความล่าสุดที่เครื่องนี้เปิดดูแล้ว
+  const TOAST_KEY = 'storeAlertToastAt';   // เวลาของข้อความล่าสุดที่เด้งบอกไปแล้ว (เปิดแอปใหม่ไม่เด้งซ้ำ)
+  const POLL_MS = 60000;
+  const TOAST_FRESH_MS = 30 * 60000;
+  const TOAST_SHOW_MS = 12000;
+  let latest = null, timer = null, toastTimer = null, polling = false, lastPollAt = 0, isOpen = false;
+
+  const num = (k) => { try { return Number(localStorage.getItem(k)) || 0; } catch (e) { return 0; } };
+  const setNum = (k, v) => { try { localStorage.setItem(k, String(v)); } catch (e) {} };
+  const https = (u) => (typeof u === 'string' && /^https:\/\/\S+$/.test(u) ? u : '');
+  const $ = (id) => document.getElementById(id);
+
+  const TH_TIME = new Intl.DateTimeFormat('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
+  const TH_DATE = new Intl.DateTimeFormat('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: 'numeric' });
+  const TH_DAYKEY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+  function img(src, cls, alt) {
+    const u = https(src);
+    if (!u) return '<span class="' + cls + ' sa-ph" aria-hidden="true">📦</span>';
+    /* ลิงก์รูปของ Page365/แอปคีย์ลัดเสียได้ — เสียแล้วขึ้นกล่องแทน ไม่ใช่รูปแตก */
+    return '<img class="' + cls + '" src="' + escHtml(u) + '" alt="' + escHtml(alt || '') + '" loading="lazy" referrerpolicy="no-referrer"' +
+      ' onerror="this.outerHTML=\'<span class=&quot;' + cls + ' sa-ph&quot; aria-hidden=&quot;true&quot;>📦</span>\'">';
+  }
+
+  function renderDot() {
+    const dot = $('storeAlertDot');
+    if (dot) dot.style.display = latest && latest.at > num(SEEN_KEY) ? 'block' : 'none';
+  }
+
+  function hideToast() {
+    const t = $('storeAlertToast');
+    if (t) t.style.display = 'none';
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+  }
+
+  function showToast(a) {
+    const t = $('storeAlertToast');
+    if (!t) return;
+    t.innerHTML =
+      '<div style="display:flex; align-items:center; gap:10px;">' +
+        img(a.image, 'sa-img', '') +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-size:0.72rem; font-weight:700; color:#b45309;">🔔 น้องกระดิ่ง · ' + escHtml(TH_TIME.format(new Date(a.at))) + ' น.</div>' +
+          '<div style="font-weight:700; font-size:0.86rem; line-height:1.35;">' + escHtml(a.title) + '</div>' +
+          (a.preview ? '<div style="font-size:0.74rem; color:var(--text2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escHtml(a.preview) + '</div>' : '') +
+        '</div>' +
+        '<button type="button" aria-label="ปิด" onclick="event.stopPropagation(); StoreBell.dismiss()" ' +
+          'style="background:none; border:none; font-size:1.1rem; color:var(--text3); cursor:pointer; padding:4px 6px; align-self:flex-start;">✕</button>' +
+      '</div>';
+    t.style.display = 'block';
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, TOAST_SHOW_MS);
+  }
+
+  async function poll(force) {
+    if (polling) return;
+    if (!force && Date.now() - lastPollAt < 5000) return;      // กันถามถี่ตอนสลับแท็บไปมา
+    if (window.HubLogin && HubLogin.locked && HubLogin.locked()) return;   // ประตูล็อกอินปิดอยู่
+    polling = true; lastPollAt = Date.now();
+    try {
+      const json = await _hubGet(HUB_ALERTS_URL + '?latest=1', 10000);
+      const btn = $('storeAlertBtn');
+      if (btn) btn.style.display = '';                           // ถามเว็บร้านได้แล้วค่อยโชว์กระดิ่ง
+      const prevAt = latest ? latest.at : 0;
+      latest = json && json.latest && typeof json.latest.at === 'number' ? json.latest : null;
+      renderDot();
+      if (!latest) return;
+      const fresh = Date.now() - latest.at < TOAST_FRESH_MS;
+      if (fresh && latest.at > num(TOAST_KEY) && latest.at > num(SEEN_KEY) && !isOpen) {
+        setNum(TOAST_KEY, latest.at);
+        showToast(latest);
+      }
+      if (isOpen && latest.at > prevAt) loadList();              // เปิดรายการค้างไว้ = เติมเรื่องใหม่ให้เอง
+    } catch (e) {
+      /* เน็ตสะดุด · เว็บร้านยังไม่มี endpoint นี้ — เงียบไว้ รอบหน้าค่อยถามใหม่ งานแพคต้องไม่สะดุด */
+    } finally { polling = false; }
+  }
+
+  function cardRow(c) {
+    const chip = c.allOut
+      ? '<span class="sa-chip" style="background:#dc2626;">หมดทั้งรุ่น</span>'
+      : (typeof c.left === 'number' ? '<span class="sa-chip" style="background:#059669;">ยังมีอีก ' + c.left + ' ตัวเลือก</span>' : '');
+    const colors = (c.colors || []).map(function (col) {
+      const sizes = (col.sizes || []).length ? ' <span style="color:var(--text3);">' + escHtml(col.sizes.join(' · ')) + '</span>' : '';
+      return '<span class="sa-color">' + img(col.image, '', col.color) +
+        '<b style="color:var(--text);">' + escHtml(col.color) + '</b>' + sizes + ' <span style="color:#dc2626;">หมด</span></span>';
+    }).join('');
+    return '<div class="sa-row">' + img(c.image, 'sa-img', c.title) +
+      '<div style="flex:1; min-width:0;"><div><span class="sa-title">' + escHtml(c.title) + '</span>' + chip + '</div>' +
+      '<div class="sa-colors">' + colors + '</div></div></div>';
+  }
+
+  function bubble(a) {
+    const body = (a.cards && a.cards.length)
+      ? a.cards.map(cardRow).join('')
+      : '<div class="sa-lines">' + (a.lines || []).map(function (l) { return '• ' + escHtml(l); }).join('<br>') + '</div>';
+    const link = https(a.url)
+      ? '<a class="sa-link" href="' + escHtml(a.url) + '" target="_blank" rel="noopener noreferrer">ดูประวัติสต๊อก ↗</a>' : '';
+    return '<div class="sa-bubble"><div class="sa-head"><span style="min-width:0;">📦 ' + escHtml(a.title) + '</span>' +
+      '<time>' + escHtml(TH_TIME.format(new Date(a.at))) + ' น.</time></div>' + body + link + '</div>';
+  }
+
+  async function loadList() {
+    const list = $('storeAlertList');
+    if (!list) return;
+    try {
+      const json = await _hubGet(HUB_ALERTS_URL + '?days=7', 20000);
+      const alerts = (json && json.alerts || []).slice().reverse();   // ใหม่สุดบนสุด
+      if (json && json.latest) { latest = json.latest; }
+      if (latest) setNum(SEEN_KEY, Math.max(num(SEEN_KEY), latest.at));
+      renderDot();
+      if (!alerts.length) {
+        list.innerHTML = '<div style="text-align:center; color:var(--text3); padding:28px 12px; font-size:0.85rem;">' +
+          'ยังไม่มีแจ้งเตือนใน 7 วันที่ผ่านมา<br>สินค้าตัวไหนเพิ่งหมด น้องกระดิ่งจะบอกที่นี่</div>';
+        return;
+      }
+      let day = '';
+      list.innerHTML = alerts.map(function (a) {
+        const d = TH_DAYKEY.format(new Date(a.at));
+        const sep = d !== day ? '<div class="sa-day">' + escHtml(TH_DATE.format(new Date(a.at))) + '</div>' : '';
+        day = d;
+        return sep + bubble(a);
+      }).join('');
+    } catch (e) {
+      list.innerHTML = '<div style="text-align:center; color:var(--danger); padding:28px 12px; font-size:0.85rem;">' +
+        'อ่านแจ้งเตือนไม่ได้ — เช็กเน็ตแล้วเปิดใหม่อีกครั้ง</div>';
+    }
+  }
+
+  function open() {
+    hideToast();
+    isOpen = true;
+    if (latest) { setNum(SEEN_KEY, Math.max(num(SEEN_KEY), latest.at)); renderDot(); }
+    const list = $('storeAlertList');
+    if (list) list.innerHTML = '<div style="text-align:center; color:var(--text3); padding:28px 12px; font-size:0.85rem;">กำลังโหลด…</div>';
+    $('storeAlertModal').style.display = 'block';
+    loadList();
+  }
+
+  function close() {
+    isOpen = false;
+    $('storeAlertModal').style.display = 'none';
+  }
+
+  function startTimer() {
+    if (timer) clearInterval(timer);
+    timer = setInterval(function () { poll(true); }, POLL_MS);
+  }
+
+  function start() {
+    if (document.visibilityState === 'visible') startTimer();
+    const onVisible = function () {
+      if (document.visibilityState !== 'visible') { if (timer) { clearInterval(timer); timer = null; } return; }
+      startTimer();
+      poll(false);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    /* ล็อกอินเสร็จ/ชื่อเปลี่ยน = ถามใหม่ (ตอนประตูปิดอยู่ไม่ได้ถาม) · onChange เรียกทันทีครั้งแรก — ข้ามครั้งนั้น */
+    let first = true;
+    HubLogin.onChange(function () {
+      if (first) { first = false; return; }
+      setTimeout(function () { poll(true); }, 500);
+    });
+    poll(true);
+  }
+
+  return { start: start, open: open, close: close, dismiss: hideToast, poll: poll };
+})();
+
+document.addEventListener('DOMContentLoaded', () => { StoreBell.start(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('storeAlertModal')?.style.display === 'block') StoreBell.close();
 });
 
 document.addEventListener('DOMContentLoaded', () => {
